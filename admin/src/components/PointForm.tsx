@@ -21,6 +21,7 @@ interface Props {
   onUploadFile: (file: File) => Promise<string | null>;
   onFinishPath: () => void;
   onUndoVertex: () => void;
+  onAddPoints: () => void;
   saving: boolean;
   uploading: boolean;
   error: string | null;
@@ -114,7 +115,12 @@ export default function PointForm(props: Props) {
             </span>
           </div>
         ) : (
-          <p className="geo-status ok">{draft.path.length} points · drag markers to adjust</p>
+          <div className="geo-status ok">
+            <span>{draft.path.length} points · drag to adjust</span>
+            <button type="button" className="btn btn-ghost small" onClick={props.onAddPoints}>
+              + Add points
+            </button>
+          </div>
         )
       ) : draft.center ? (
         <p className="geo-status ok">Placed · drag the marker to adjust</p>

@@ -151,6 +151,10 @@ export default function App() {
   const undoVertex = () =>
     setDraft((d) => (d && d.path.length > 0 ? { ...d, path: d.path.slice(0, -1) } : d));
 
+  // Resume adding vertices to an existing path (map clicks append to the end).
+  const addPoints = () =>
+    setDraft((d) => (d && isPathType(d.type) ? { ...d, drawingPath: true } : d));
+
   const anchorDrag = (coord: Coordinates) =>
     setDraft((d) => (d ? { ...d, center: coord } : d));
 
@@ -296,6 +300,7 @@ export default function App() {
                   onUploadFile={uploadFile}
                   onFinishPath={finishPath}
                   onUndoVertex={undoVertex}
+                  onAddPoints={addPoints}
                   saving={saving}
                   uploading={uploading}
                   error={formError}
