@@ -7,8 +7,33 @@ import type {
   UploadResult,
 } from '@audioworld/shared';
 
-const BASE =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+export const BASE = (
+  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001'
+).replace(/\/$/, '');
+
+/** Server-relative audio paths (`/uploads/...`) become absolute against the API host. */
+export function absoluteAudioUrl(url: string): string {
+  return url.startsWith('/') ? `${BASE}${url}` : url;
+}
+
+/** Offset (ms) to add to Date.now() to match the server clock (for global points). */
+export async function syncServerTime(samples = 3): Promise<number> {
+  let best: { offset: number; rtt: number } | null = null;
+  for (let i = 0; i < samples; i++) {
+    try {
+      const t0 = Date.now();
+      const res = await fetch(`${BASE}/api/time`);
+      const { now } = (await res.json()) as { now: number };
+      const t1 = Date.now();
+      const rtt = t1 - t0;
+      const offset = now + rtt / 2 - t1;
+      if (!best || rtt < best.rtt) best = { offset, rtt };
+    } catch {
+      /* try next sample */
+    }
+  }
+  return best ? best.offset : 0;
+}
 
 /** Perform a request and unwrap the ApiResponse envelope, throwing on failure. */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

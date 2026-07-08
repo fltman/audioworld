@@ -10,6 +10,7 @@ import {
 import type { DraftState } from '../draft';
 import { draftAudibleRadius } from '../draft';
 import { POINT_TYPE_META, POINT_TYPE_ORDER, isPathType } from '../pointTypes';
+import type { PreviewEngine } from '../services/previewEngine';
 
 const ACCENT = '#7c5cff';
 const DEFAULT_CENTER: [number, number] = [59.3293, 18.0686];
@@ -24,6 +25,8 @@ interface Props {
   onAnchorDrag: (c: Coordinates) => void;
   onPathVertexDrag: (index: number, c: Coordinates) => void;
   onSelectPoint: (id: string) => void;
+  /** When set, the map hosts a draggable virtual listener for the playtest. */
+  preview: PreviewEngine | null;
 }
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
@@ -45,6 +48,15 @@ function vertexIcon(): L.DivIcon {
     html: `<div class="aw-vertex" style="--c:${ACCENT}"></div>`,
     iconSize: [s, s],
     iconAnchor: [s / 2, s / 2],
+  });
+}
+
+function listenerIcon(): L.DivIcon {
+  return L.divIcon({
+    className: 'aw-listener',
+    html: '<div class="aw-listener__cone"></div><div class="aw-listener__dot"></div>',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
   });
 }
 
@@ -136,9 +148,14 @@ export default function MapView(props: Props) {
     draftLayerRef.current = L.layerGroup().addTo(map);
 
     map.on('click', (e: L.LeafletMouseEvent) => {
+      const c = toCoord(e.latlng);
+      // In playtest mode a map click moves the virtual listener instead of placing points.
+      if (stateRef.current.preview) {
+        stateRef.current.preview.setListener(c);
+        return;
+      }
       const d = stateRef.current.draft;
       const drawing = !!d && isPathType(d.type) && d.drawingPath;
-      const c = toCoord(e.latlng);
       if (drawing) {
         // Debounce so the two clicks of a double-click don't add stray vertices.
         if (clickTimer.current) window.clearTimeout(clickTimer.current);
@@ -163,6 +180,44 @@ export default function MapView(props: Props) {
       draftLayerRef.current = null;
     };
   }, []);
+
+  // Playtest: a draggable virtual listener. A loop keeps the marker synced to the
+  // engine (which the keyboard also drives) and rotates its cone to the heading.
+  useEffect(() => {
+    const map = mapRef.current;
+    const preview = props.preview;
+    if (!map || !preview) return;
+
+    const marker = L.marker([preview.listener.lat, preview.listener.lng], {
+      icon: listenerIcon(),
+      draggable: true,
+      zIndexOffset: 1000,
+    }).addTo(map);
+    map.setView([preview.listener.lat, preview.listener.lng], map.getZoom());
+
+    let dragging = false;
+    marker.on('dragstart', () => {
+      dragging = true;
+    });
+    marker.on('dragend', () => {
+      dragging = false;
+      preview.setListener(toCoord(marker.getLatLng()));
+    });
+
+    let raf = 0;
+    const loop = () => {
+      if (!dragging) marker.setLatLng([preview.listener.lat, preview.listener.lng]);
+      const cone = marker.getElement()?.querySelector<HTMLElement>('.aw-listener__cone');
+      if (cone) cone.style.transform = `rotate(${preview.heading}deg)`;
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      marker.remove();
+    };
+  }, [props.preview]);
 
   // Redraw existing points (hiding the one being edited, shown as the draft).
   useEffect(() => {

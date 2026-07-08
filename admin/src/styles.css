@@ -521,3 +521,73 @@ input[type='range'] {
 .leaflet-container {
   font-family: inherit;
 }
+
+/* ---------- Playtest (in-admin simulation) ---------- */
+.playtest-btn {
+  width: 100%;
+  margin: 4px 0 4px;
+  justify-content: center;
+}
+.preview .actions {
+  margin-top: 10px;
+}
+.preview-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preview-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.preview-list__arrow {
+  color: var(--accent);
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+}
+.preview-list__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-list__meta {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+/* Virtual listener marker on the map */
+.aw-listener__cone {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+}
+.aw-listener__cone::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid #7c5cff;
+  filter: drop-shadow(0 0 4px rgba(124, 92, 255, 0.85));
+}
+.aw-listener__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px 2px #7c5cff;
+}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AudioPoint, Coordinates, Course, PointType } from '@audioworld/shared';
+import { anchorOf } from '@audioworld/shared';
 import { api } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
 import { isPathType } from './pointTypes';
@@ -7,7 +8,9 @@ import CourseBar from './components/CourseBar';
 import Toolbar from './components/Toolbar';
 import PointForm from './components/PointForm';
 import PointList from './components/PointList';
+import PreviewPanel from './components/PreviewPanel';
 import MapView from './components/MapView';
+import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -22,6 +25,26 @@ export default function App() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<PreviewEngine | null>(null);
+
+  const startPreview = async () => {
+    const start = points[0] ? anchorOf(points[0]) : { lat: 59.3293, lng: 18.0686 };
+    const engine = new PreviewEngine(points, start);
+    await engine.start();
+    setDraft(null);
+    setPreview(engine);
+  };
+
+  const stopPreview = () => {
+    preview?.dispose();
+    setPreview(null);
+  };
+
+  // Keep the running playtest fed with the latest points; tear it down on unmount.
+  useEffect(() => {
+    preview?.setPoints(points);
+  }, [points, preview]);
+  useEffect(() => () => preview?.dispose(), [preview]);
 
   const loadPoints = async (id: string) => {
     try {
@@ -54,6 +77,7 @@ export default function App() {
 
   const selectCourse = (id: string) => {
     if (!id || id === courseId) return;
+    setPreview(null);
     setCourseId(id);
     localStorage.setItem(LS_KEY, id);
     setDraft(null);
@@ -227,33 +251,45 @@ export default function App() {
           </div>
         )}
 
-        {courseId && (
-          <>
-            <Toolbar
-              activeType={activeType}
-              placing={placing}
-              disabled={false}
-              onPick={pickType}
-              onCancel={cancelDraft}
-            />
-            {draft ? (
-              <PointForm
-                draft={draft}
-                onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
-                onSave={save}
+        {courseId && preview ? (
+          <PreviewPanel engine={preview} onStop={stopPreview} />
+        ) : (
+          courseId && (
+            <>
+              <button
+                type="button"
+                className="btn btn-accent playtest-btn"
+                onClick={() => void startPreview()}
+                disabled={points.length === 0}
+              >
+                &#9654; Playtest this course
+              </button>
+              <Toolbar
+                activeType={activeType}
+                placing={placing}
+                disabled={false}
+                onPick={pickType}
                 onCancel={cancelDraft}
-                onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
-                onUpload={uploadAudio}
-                onFinishPath={finishPath}
-                onUndoVertex={undoVertex}
-                saving={saving}
-                uploading={uploading}
-                error={formError}
               />
-            ) : (
-              <PointList points={points} onEdit={editPoint} onDelete={deletePoint} />
-            )}
-          </>
+              {draft ? (
+                <PointForm
+                  draft={draft}
+                  onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+                  onSave={save}
+                  onCancel={cancelDraft}
+                  onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
+                  onUpload={uploadAudio}
+                  onFinishPath={finishPath}
+                  onUndoVertex={undoVertex}
+                  saving={saving}
+                  uploading={uploading}
+                  error={formError}
+                />
+              ) : (
+                <PointList points={points} onEdit={editPoint} onDelete={deletePoint} />
+              )}
+            </>
+          )
         )}
       </aside>
 
@@ -266,6 +302,7 @@ export default function App() {
         onAnchorDrag={anchorDrag}
         onPathVertexDrag={pathVertexDrag}
         onSelectPoint={selectPoint}
+        preview={preview}
       />
     </div>
   );
