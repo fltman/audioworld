@@ -3,6 +3,7 @@ import L from 'leaflet';
 import {
   anchorOf,
   audibleRadiusOf,
+  pathVertexTimes,
   triggerRadiusOf,
   type AudioPoint,
   type Coordinates,
@@ -48,6 +49,36 @@ function vertexIcon(): L.DivIcon {
     html: `<div class="aw-vertex" style="--c:${ACCENT}"></div>`,
     iconSize: [s, s],
     iconAnchor: [s / 2, s / 2],
+  });
+}
+
+function fmtTime(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function timeIcon(text: string, isStop: boolean): L.DivIcon {
+  return L.divIcon({
+    className: 'aw-time',
+    html: `<span class="aw-time__label${isStop ? ' is-stop' : ''}">${text}</span>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+/** Add arrival-time labels at each vertex of a path (accounts for stop dwells). */
+function drawPathTimes(
+  layer: L.LayerGroup,
+  path: Coordinates[],
+  speed: number,
+  stops: { index: number; dwellSec: number }[] | undefined
+): void {
+  if (path.length < 2 || speed <= 0) return;
+  const times = pathVertexTimes(path, speed, stops);
+  path.forEach((c, i) => {
+    const isStop = !!stops?.some((s) => s.index === i && s.dwellSec > 0);
+    L.marker([c.lat, c.lng], { icon: timeIcon(fmtTime(times[i] ?? 0), isStop), interactive: false })
+      .addTo(layer);
   });
 }
 
@@ -108,6 +139,9 @@ function drawPoint(layer: L.LayerGroup, p: AudioPoint, onClick: () => void): voi
       p.path.map((c) => [c.lat, c.lng] as [number, number]),
       { color: meta.color, weight: 3, opacity: 0.85, interactive: false }
     ).addTo(layer);
+  }
+  if (p.type === 'path') {
+    drawPathTimes(layer, p.path, p.speed, p.stops);
   }
 
   L.marker([a.lat, a.lng], { icon: markerIcon(meta.color, false, meta.short) })
@@ -250,6 +284,9 @@ export default function MapView(props: Props) {
         d.path.map((c) => [c.lat, c.lng] as [number, number]),
         { color: ACCENT, weight: 3, dashArray: d.drawingPath ? '6 6' : undefined, interactive: false }
       ).addTo(layer);
+      if (d.type === 'path' && !d.drawingPath) {
+        drawPathTimes(layer, d.path, d.speed, d.stops);
+      }
       const start = d.path[0]!;
       if (radius > 0) {
         L.circle([start.lat, start.lng], {

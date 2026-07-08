@@ -91,10 +91,27 @@ export interface StaticCirclingPoint extends BaseAudioPoint {
   radius: number;
 }
 
-/** Source that continuously travels a polyline at `speed` m/s. */
+/**
+ * A stop along a path: the source pauses at a vertex and (optionally) plays its
+ * own clip — a guided-tour waypoint. `dwellSec` should be >= the clip length so
+ * the narration finishes before the guide moves on (the admin shows arrival times
+ * to help set this).
+ */
+export interface PathStop {
+  /** Index of the path vertex this stop sits on (0..path.length-1). */
+  index: number;
+  /** Seconds the source pauses here. */
+  dwellSec: number;
+  /** Clip played once during the dwell; if omitted, the traveling audio continues. */
+  audio?: AudioSource;
+}
+
+/** Source that travels a polyline at `speed` m/s, optionally pausing at stops. */
 export interface PathAudioPoint extends BaseAudioPoint {
   type: 'path';
   path: Coordinates[];
+  /** Guided-tour waypoints (pause + optional narration). Empty/absent = plain path. */
+  stops?: PathStop[];
   radius: number;
   speed: number;
   endBehavior: PathEndBehavior;

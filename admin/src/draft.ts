@@ -4,6 +4,7 @@ import type {
   AudioSource,
   Coordinates,
   PathEndBehavior,
+  PathStop,
   PlaybackOptions,
   PointType,
   SyncMode,
@@ -33,6 +34,8 @@ export interface DraftState {
   center: Coordinates | null;
   /** Vertices for path types. */
   path: Coordinates[];
+  /** Guided-tour stops (dwell + optional clip) for `path`. */
+  stops: PathStop[];
   /** True while the user is still adding path vertices. */
   drawingPath: boolean;
   radius: number;
@@ -63,6 +66,7 @@ export function freshDraft(type: PointType, courseId: string): DraftState {
     sync: 'individual',
     center: null,
     path: [],
+    stops: [],
     drawingPath: isPathType(type),
     ...NUMERIC_DEFAULTS,
     endBehavior: 'loop',
@@ -82,6 +86,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     startAt: point.startAt,
     center: null,
     path: [],
+    stops: [],
     drawingPath: false,
     ...NUMERIC_DEFAULTS,
     endBehavior: 'loop',
@@ -102,6 +107,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
       return {
         ...base,
         path: [...point.path],
+        stops: point.stops ? point.stops.map((s) => ({ ...s })) : [],
         radius: point.radius,
         speed: point.speed,
         endBehavior: point.endBehavior,
@@ -182,6 +188,7 @@ export function draftToInput(d: DraftState): DraftResult {
           ...common,
           type: 'path',
           path: d.path,
+          stops: d.stops.filter((s) => s.dwellSec > 0 && s.index < d.path.length),
           radius: d.radius,
           speed: d.speed,
           endBehavior: d.endBehavior,

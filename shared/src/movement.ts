@@ -1,4 +1,4 @@
-import type { AudioPoint, Coordinates, PathEndBehavior } from './types';
+import type { AudioPoint, Coordinates, PathEndBehavior, PathStop } from './types';
 import { calculateBearing, calculateDistance, destinationPoint } from './geo';
 
 /** Total length of a polyline in meters. */
@@ -58,6 +58,89 @@ export function pointAlongPath(
     remaining -= segLen;
   }
   return { position: path[path.length - 1]!, done };
+}
+
+function stopAt(stops: PathStop[] | undefined, index: number): PathStop | null {
+  if (!stops) return null;
+  for (const s of stops) if (s.index === index && s.dwellSec > 0) return s;
+  return null;
+}
+
+/**
+ * Position of a source travelling a polyline that pauses at `stops`, honoring the
+ * end behavior. Returns the current position and, if the source is currently
+ * dwelling at a stop, that stop (so the caller can play its clip).
+ */
+export function pathStateAtTime(
+  path: Coordinates[],
+  speed: number,
+  endBehavior: PathEndBehavior,
+  stops: PathStop[] | undefined,
+  tSec: number
+): { position: Coordinates; atStop: PathStop | null; done: boolean } {
+  if (path.length === 0) return { position: { lat: 0, lng: 0 }, atStop: null, done: true };
+  if (path.length === 1 || speed <= 0) return { position: path[0]!, atStop: null, done: true };
+
+  // Ordered phases: [dwell@0?, travel 0->1, dwell@1?, travel 1->2, ..., dwell@last?].
+  type Phase = { dur: number; a: Coordinates; b: Coordinates; stop: PathStop | null };
+  const phases: Phase[] = [];
+  for (let i = 0; i < path.length; i++) {
+    const s = stopAt(stops, i);
+    if (s) phases.push({ dur: s.dwellSec, a: path[i]!, b: path[i]!, stop: s });
+    if (i < path.length - 1) {
+      const segLen = calculateDistance(path[i]!, path[i + 1]!);
+      if (segLen > 0) phases.push({ dur: segLen / speed, a: path[i]!, b: path[i + 1]!, stop: null });
+    }
+  }
+  const cycle = phases.reduce((sum, p) => sum + p.dur, 0);
+  if (cycle <= 0) return { position: path[0]!, atStop: null, done: true };
+
+  let t = tSec;
+  let done = false;
+  if (endBehavior === 'loop') {
+    t = ((t % cycle) + cycle) % cycle;
+  } else if (endBehavior === 'reverse') {
+    const period = cycle * 2;
+    t = ((t % period) + period) % period;
+    if (t > cycle) t = period - t; // mirror the forward timeline
+  } else {
+    if (t >= cycle) return { position: path[path.length - 1]!, atStop: null, done: true };
+    if (t < 0) t = 0;
+  }
+
+  let acc = 0;
+  for (let k = 0; k < phases.length; k++) {
+    const p = phases[k]!;
+    if (t < acc + p.dur || k === phases.length - 1) {
+      const frac = p.dur > 0 ? Math.max(0, Math.min(1, (t - acc) / p.dur)) : 0;
+      const position = p.stop ? p.a : lerp(p.a, p.b, frac);
+      return { position, atStop: p.stop, done };
+    }
+    acc += p.dur;
+  }
+  return { position: path[path.length - 1]!, atStop: null, done };
+}
+
+/**
+ * Arrival time (seconds from start) at each path vertex, accounting for dwells at
+ * earlier stops. Used by the admin to label the map so audio clips can be timed.
+ */
+export function pathVertexTimes(
+  path: Coordinates[],
+  speed: number,
+  stops: PathStop[] | undefined
+): number[] {
+  const times: number[] = [];
+  let t = 0;
+  for (let i = 0; i < path.length; i++) {
+    times.push(t);
+    const s = stopAt(stops, i);
+    if (s) t += s.dwellSec;
+    if (i < path.length - 1 && speed > 0) {
+      t += calculateDistance(path[i]!, path[i + 1]!) / speed;
+    }
+  }
+  return times;
 }
 
 /** Position of a source orbiting `center` at radius `circleRadius`, `speed` m/s, at time `tSec`. */
@@ -144,6 +227,8 @@ export interface ResolveOutput {
   audible: boolean;
   /** Possibly-updated trigger memory — the caller must persist this for the next frame. */
   triggeredAtSec: number | null;
+  /** For a path with stops: the stop the source is currently dwelling at, else null. */
+  atStop?: PathStop | null;
 }
 
 /**
@@ -155,12 +240,17 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
   const { user, clockSec } = input;
   let triggeredAtSec = input.triggeredAtSec;
 
-  const out = (position: Coordinates, audible: boolean): ResolveOutput => ({
+  const out = (
+    position: Coordinates,
+    audible: boolean,
+    atStop: PathStop | null = null
+  ): ResolveOutput => ({
     position,
     bearing: calculateBearing(user, position),
     distance: calculateDistance(user, position),
     audible,
     triggeredAtSec,
+    atStop,
   });
 
   switch (point.type) {
@@ -176,9 +266,16 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
     }
 
     case 'path': {
-      const { position } = pointAlongPath(point.path, point.speed * clockSec, point.endBehavior);
-      const d = calculateDistance(user, position);
-      return out(position, d <= point.radius);
+      const st =
+        point.stops && point.stops.length > 0
+          ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, clockSec)
+          : {
+              position: pointAlongPath(point.path, point.speed * clockSec, point.endBehavior)
+                .position,
+              atStop: null as PathStop | null,
+            };
+      const d = calculateDistance(user, st.position);
+      return out(st.position, d <= point.radius, st.atStop);
     }
 
     case 'follow_user': {

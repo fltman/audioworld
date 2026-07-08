@@ -2,6 +2,7 @@ import type {
   AudioPoint,
   Coordinates,
   PathEndBehavior,
+  PathStop,
   PlaybackOptions,
   PointType,
   SyncMode,
@@ -169,13 +170,16 @@ function configForType(
         speed: num(body.speed, 'speed'),
         radius: num(body.radius, 'radius'),
       };
-    case 'path':
+    case 'path': {
+      const path = coordArray(body.path, 'path');
       return {
-        path: coordArray(body.path, 'path'),
+        path,
+        stops: pathStops(body.stops, path.length),
         radius: num(body.radius, 'radius'),
         speed: num(body.speed, 'speed'),
         endBehavior: endBehavior(body.endBehavior),
       };
+    }
     case 'follow_user':
       return {
         center: coord(body.center, 'center'),
@@ -231,4 +235,34 @@ function coordArray(value: unknown, field: string): Coordinates[] {
 function endBehavior(value: unknown): PathEndBehavior {
   if (value === 'loop' || value === 'reverse' || value === 'stop') return value;
   throw new ValidationError('endBehavior must be "loop", "reverse" or "stop"');
+}
+
+function pathStops(value: unknown, pathLen: number): PathStop[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new ValidationError('"stops" must be an array');
+  return value.map((s, i) => {
+    const o = asObject(s, `stops[${i}]`);
+    const index = num(o.index, `stops[${i}].index`);
+    if (!Number.isInteger(index) || index < 0 || index >= pathLen) {
+      throw new ValidationError(`stops[${i}].index is out of range`);
+    }
+    const dwellSec = num(o.dwellSec, `stops[${i}].dwellSec`);
+    if (dwellSec < 0) throw new ValidationError(`stops[${i}].dwellSec must be >= 0`);
+    const stop: PathStop = { index, dwellSec };
+    if (o.audio != null) {
+      const a = asObject(o.audio, `stops[${i}].audio`);
+      if (a.kind !== 'url' && a.kind !== 'upload') {
+        throw new ValidationError(`stops[${i}].audio.kind must be "url" or "upload"`);
+      }
+      if (typeof a.url !== 'string' || a.url.trim() === '') {
+        throw new ValidationError(`stops[${i}].audio.url is required`);
+      }
+      stop.audio = {
+        kind: a.kind,
+        url: a.url,
+        title: typeof a.title === 'string' ? a.title : undefined,
+      };
+    }
+    return stop;
+  });
 }

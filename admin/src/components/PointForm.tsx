@@ -1,7 +1,14 @@
 import type { ChangeEvent } from 'react';
-import type { PathEndBehavior, PlaybackOptions } from '@audioworld/shared';
+import type { PathEndBehavior, PathStop, PlaybackOptions } from '@audioworld/shared';
+import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
+
+/** Seconds -> m:ss. */
+function fmtTime(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 interface Props {
   draft: DraftState;
@@ -10,6 +17,8 @@ interface Props {
   onCancel: () => void;
   onDelete: () => void;
   onUpload: (file: File) => void;
+  /** Upload a file and return its URL (for per-stop clips). */
+  onUploadFile: (file: File) => Promise<string | null>;
   onFinishPath: () => void;
   onUndoVertex: () => void;
   saving: boolean;
@@ -60,6 +69,17 @@ export default function PointForm(props: Props) {
   const { audio, playback } = draft;
   // Global (shared) timing only makes sense for the continuously-moving types.
   const canSync = draft.type === 'path' || draft.type === 'static_circling';
+
+  const vertexTimes =
+    draft.type === 'path' ? pathVertexTimes(draft.path, draft.speed, draft.stops) : [];
+
+  const upsertStop = (index: number, patch: Partial<PathStop>) => {
+    const exists = draft.stops.some((s) => s.index === index);
+    const stops = exists
+      ? draft.stops.map((s) => (s.index === index ? { ...s, ...patch } : s))
+      : [...draft.stops, { index, dwellSec: 0, ...patch }];
+    onChange({ stops });
+  };
 
   return (
     <section className="section form">
@@ -221,6 +241,67 @@ export default function PointForm(props: Props) {
           </label>
         )}
       </div>
+
+      {draft.type === 'path' && draft.path.length >= 2 && (
+        <div className="form-field">
+          <span className="label">Stops · pause &amp; narrate (arrival time shown)</span>
+          <div className="stops">
+            {draft.path.map((_, i) => {
+              const stop = draft.stops.find((s) => s.index === i);
+              return (
+                <div key={i} className="stop-row">
+                  <span className="stop-row__t">
+                    #{i + 1}
+                    <em>{fmtTime(vertexTimes[i] ?? 0)}</em>
+                  </span>
+                  <input
+                    className="input stop-row__dwell"
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="0s"
+                    value={stop?.dwellSec ?? ''}
+                    onChange={(e) =>
+                      upsertStop(i, {
+                        dwellSec: Number.isFinite(e.currentTarget.valueAsNumber)
+                          ? e.currentTarget.valueAsNumber
+                          : 0,
+                      })
+                    }
+                  />
+                  <input
+                    className="input stop-row__url"
+                    type="text"
+                    placeholder="clip URL"
+                    value={stop?.audio?.url ?? ''}
+                    onChange={(e) =>
+                      upsertStop(i, {
+                        audio: e.currentTarget.value
+                          ? { kind: 'url', url: e.currentTarget.value }
+                          : undefined,
+                      })
+                    }
+                  />
+                  <label className="stop-row__up" title="Upload clip">
+                    &#8593;
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      hidden
+                      onChange={async (e) => {
+                        const f = e.currentTarget.files?.[0];
+                        if (!f) return;
+                        const url = await props.onUploadFile(f);
+                        if (url) upsertStop(i, { audio: { kind: 'upload', url, title: f.name } });
+                      }}
+                    />
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {canSync && (
         <div className="form-field">

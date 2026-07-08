@@ -199,6 +199,20 @@ export default function App() {
     }
   };
 
+  // Upload and return the URL (for per-stop clips on a path).
+  const uploadFile = async (file: File): Promise<string | null> => {
+    setUploading(true);
+    setFormError(null);
+    try {
+      return (await api.uploadAudio(file)).url;
+    } catch (e) {
+      setFormError(msg(e));
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const save = async () => {
     if (!draft) return;
     const result = draftToInput(draft);
@@ -279,6 +293,7 @@ export default function App() {
                   onCancel={cancelDraft}
                   onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
                   onUpload={uploadAudio}
+                  onUploadFile={uploadFile}
                   onFinishPath={finishPath}
                   onUndoVertex={undoVertex}
                   saving={saving}

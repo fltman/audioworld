@@ -591,3 +591,66 @@ input[type='range'] {
   background: #fff;
   box-shadow: 0 0 10px 2px #7c5cff;
 }
+
+/* ---------- Path vertex time labels ---------- */
+.aw-time { pointer-events: none; }
+.aw-time__label {
+  display: inline-block;
+  transform: translate(6px, -14px);
+  background: rgba(15, 15, 22, 0.85);
+  color: #cbbcff;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+.aw-time__label.is-stop {
+  color: #fff;
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.4);
+}
+
+/* ---------- Stops editor ---------- */
+.stops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stop-row {
+  display: grid;
+  grid-template-columns: auto 52px 1fr 28px;
+  gap: 6px;
+  align-items: center;
+}
+.stop-row__t {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+.stop-row__t em {
+  color: var(--accent);
+  font-style: normal;
+  margin-left: 4px;
+}
+.stop-row__dwell,
+.stop-row__url {
+  padding: 5px 6px;
+}
+.stop-row__up {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.stop-row__up:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}

@@ -234,17 +234,45 @@ export class ExperienceEngine {
         gain,
         audibleRadius: radius,
       });
-      frame.push({
-        id: point.id,
-        url: absoluteAudioUrl(point.audio.url),
-        playback: point.playback,
-        audible: r.audible,
-        az,
-        gain,
-        // For a global source, seek playback to the shared loop position so all
-        // devices hear the same moment; undefined for individual points (start at 0).
-        startOffsetSec: startAt != null ? clockSec : undefined,
-      });
+      // For a global source, seek playback to the shared loop position; undefined = start at 0.
+      const startOffsetSec = startAt != null ? clockSec : undefined;
+
+      if (point.type === 'path' && point.stops && point.stops.length > 0) {
+        // Guided tour: the traveling voice plays while moving (and during silent
+        // dwells); it yields to a stop's narration while dwelling there. Each stop's
+        // clip is its own voice, audible only during its dwell, and plays once.
+        const narrating = !!(r.atStop && r.atStop.audio);
+        frame.push({
+          id: point.id,
+          url: absoluteAudioUrl(point.audio.url),
+          playback: point.playback,
+          audible: r.audible && !narrating,
+          az,
+          gain,
+          startOffsetSec,
+        });
+        for (const s of point.stops) {
+          if (!s.audio) continue;
+          frame.push({
+            id: `${point.id}::stop::${s.index}`,
+            url: absoluteAudioUrl(s.audio.url),
+            playback: { loop: false, stopAfter: false, reload: false },
+            audible: r.audible && r.atStop?.index === s.index,
+            az,
+            gain,
+          });
+        }
+      } else {
+        frame.push({
+          id: point.id,
+          url: absoluteAudioUrl(point.audio.url),
+          playback: point.playback,
+          audible: r.audible,
+          az,
+          gain,
+          startOffsetSec,
+        });
+      }
     }
 
     this.audio?.update(frame);

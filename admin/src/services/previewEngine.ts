@@ -115,15 +115,40 @@ export class PreviewEngine {
       if (r.audible) {
         audible.push({ id: point.id, name: point.name, distance: r.distance, az, gain });
       }
-      frame.push({
-        id: point.id,
-        url: absoluteAudioUrl(point.audio.url),
-        playback: point.playback,
-        audible: r.audible,
-        az,
-        gain,
-        startOffsetSec: startAt != null ? clockSec : undefined,
-      });
+      const startOffsetSec = startAt != null ? clockSec : undefined;
+      if (point.type === 'path' && point.stops && point.stops.length > 0) {
+        const narrating = !!(r.atStop && r.atStop.audio);
+        frame.push({
+          id: point.id,
+          url: absoluteAudioUrl(point.audio.url),
+          playback: point.playback,
+          audible: r.audible && !narrating,
+          az,
+          gain,
+          startOffsetSec,
+        });
+        for (const s of point.stops) {
+          if (!s.audio) continue;
+          frame.push({
+            id: `${point.id}::stop::${s.index}`,
+            url: absoluteAudioUrl(s.audio.url),
+            playback: { loop: false, stopAfter: false, reload: false },
+            audible: r.audible && r.atStop?.index === s.index,
+            az,
+            gain,
+          });
+        }
+      } else {
+        frame.push({
+          id: point.id,
+          url: absoluteAudioUrl(point.audio.url),
+          playback: point.playback,
+          audible: r.audible,
+          az,
+          gain,
+          startOffsetSec,
+        });
+      }
     }
 
     this.audio?.update(frame);
