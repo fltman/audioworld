@@ -113,6 +113,17 @@ export function anchorOf(point: AudioPoint): Coordinates {
   }
 }
 
+/**
+ * Whether a point's motion + audio is driven by the shared global clock (vs the
+ * per-device clock). Only the continuously-moving types can be globally synced.
+ */
+export function isGloballyTimed(point: AudioPoint): boolean {
+  return (
+    point.sync === 'global' &&
+    (point.type === 'path' || point.type === 'static_circling')
+  );
+}
+
 export interface ResolveInput {
   /** Current user position. */
   user: Coordinates;

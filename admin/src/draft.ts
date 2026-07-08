@@ -6,6 +6,7 @@ import type {
   PathEndBehavior,
   PlaybackOptions,
   PointType,
+  SyncMode,
 } from '@audioworld/shared';
 import { DEFAULT_PLAYBACK } from '@audioworld/shared';
 import { isPathType } from './pointTypes';
@@ -24,6 +25,10 @@ export interface DraftState {
   audio: AudioSource;
   volume: number;
   playback: PlaybackOptions;
+  /** Individual (per-device) vs global (shared, server-synced) timing. */
+  sync: SyncMode;
+  /** Global anchor (epoch ms); undefined lets the server set it to "now" on save. */
+  startAt?: number;
   /** Anchor for single-anchor types. */
   center: Coordinates | null;
   /** Vertices for path types. */
@@ -55,6 +60,7 @@ export function freshDraft(type: PointType, courseId: string): DraftState {
     audio: { kind: 'url', url: '' },
     volume: 1,
     playback: { ...DEFAULT_PLAYBACK },
+    sync: 'individual',
     center: null,
     path: [],
     drawingPath: isPathType(type),
@@ -72,6 +78,8 @@ export function pointToDraft(point: AudioPoint): DraftState {
     audio: { ...point.audio },
     volume: point.volume,
     playback: { ...point.playback },
+    sync: point.sync,
+    startAt: point.startAt,
     center: null,
     path: [],
     drawingPath: false,
@@ -147,6 +155,8 @@ export function draftToInput(d: DraftState): DraftResult {
     audio: { ...d.audio, url },
     playback: d.playback,
     volume: d.volume,
+    sync: d.sync,
+    startAt: d.startAt,
   };
 
   switch (d.type) {

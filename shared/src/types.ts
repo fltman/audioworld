@@ -24,6 +24,17 @@ export type PathEndBehavior = 'loop' | 'reverse' | 'stop';
 export type AudioSourceKind = 'url' | 'upload';
 
 /**
+ * How a point's motion + audio timing is clocked.
+ * - individual: each device clocks the source from when it entered the experience
+ *               (and triggers per-user). The default — every user gets their own run.
+ * - global:     all devices clock the source from a shared, server-synced wall clock
+ *               anchored at `startAt`, so a moving source is in the same world position
+ *               AND at the same point in its audio loop for everyone. A shared guide.
+ *               Only meaningful for the continuously-moving types (path, static_circling).
+ */
+export type SyncMode = 'individual' | 'global';
+
+/**
  * Playback options (per the spec).
  * - loop:      keep looping while audible
  * - stopAfter: play once, then stay silent even if still in range (until re-armed)
@@ -55,6 +66,10 @@ export interface BaseAudioPoint {
   playback: PlaybackOptions;
   /** Maximum gain 0..1 at the source. */
   volume: number;
+  /** Individual (per-device) or global (shared, server-synced) timing. */
+  sync: SyncMode;
+  /** For global points: epoch ms when the shared motion/audio clock starts (t=0). */
+  startAt?: number;
   createdAt: string;
   updatedAt: string;
 }

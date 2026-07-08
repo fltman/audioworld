@@ -21,6 +21,11 @@ async function main(): Promise<void> {
     res.json({ status: 'ok' });
   });
 
+  // Server clock, for the client's time-sync handshake (global/shared points).
+  app.get('/api/time', (_req, res) => {
+    res.json({ now: Date.now() });
+  });
+
   // Serve uploaded/synthesized audio: CORS-enabled, HTTP range requests supported.
   app.use(
     '/uploads',

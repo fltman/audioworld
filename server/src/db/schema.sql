@@ -22,8 +22,15 @@ CREATE TABLE IF NOT EXISTS audio_points (
   volume            double precision NOT NULL DEFAULT 1 CHECK (volume >= 0 AND volume <= 1),
   playback          jsonb NOT NULL DEFAULT '{"loop":true,"stopAfter":false,"reload":false}',
   config            jsonb NOT NULL DEFAULT '{}',
+  sync              text NOT NULL DEFAULT 'individual' CHECK (sync IN ('individual','global')),
+  start_at          timestamptz,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
+
+-- Migrate existing tables (columns added after the first release).
+ALTER TABLE audio_points
+  ADD COLUMN IF NOT EXISTS sync text NOT NULL DEFAULT 'individual' CHECK (sync IN ('individual','global')),
+  ADD COLUMN IF NOT EXISTS start_at timestamptz;
 
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);

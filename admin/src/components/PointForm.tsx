@@ -58,6 +58,8 @@ export default function PointForm(props: Props) {
   const { draft, onChange, onSave, onCancel, onDelete, onUpload, saving, uploading, error } = props;
   const meta = POINT_TYPE_META[draft.type];
   const { audio, playback } = draft;
+  // Global (shared) timing only makes sense for the continuously-moving types.
+  const canSync = draft.type === 'path' || draft.type === 'static_circling';
 
   return (
     <section className="section form">
@@ -219,6 +221,42 @@ export default function PointForm(props: Props) {
           </label>
         )}
       </div>
+
+      {canSync && (
+        <div className="form-field">
+          <span className="label">Timing</span>
+          <div className="seg">
+            <button
+              type="button"
+              className={draft.sync === 'individual' ? 'active' : ''}
+              onClick={() => onChange({ sync: 'individual', startAt: undefined })}
+            >
+              Individual
+            </button>
+            <button
+              type="button"
+              className={draft.sync === 'global' ? 'active' : ''}
+              onClick={() => onChange({ sync: 'global' })}
+            >
+              Global
+            </button>
+          </div>
+          {draft.sync === 'global' && (
+            <>
+              <p className="geo-status ok">
+                Shared timeline — same position &amp; the same moment in the loop for every listener.
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                onClick={() => onChange({ startAt: Date.now() })}
+              >
+                Sync start to now
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {error && <div className="error">{error}</div>}
 

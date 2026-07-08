@@ -4,6 +4,7 @@ import type {
   PathEndBehavior,
   PlaybackOptions,
   PointType,
+  SyncMode,
 } from '@audioworld/shared';
 import { DEFAULT_PLAYBACK } from '@audioworld/shared';
 
@@ -29,6 +30,8 @@ export interface PointRow {
   volume: number | string;
   playback: PlaybackOptions;
   config: Record<string, unknown>;
+  sync: string | null;
+  start_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -46,6 +49,8 @@ export interface PointColumns {
   volume: number;
   playback: PlaybackOptions;
   config: Record<string, unknown>;
+  sync: SyncMode;
+  start_at: Date | null;
 }
 
 const POINT_TYPES: readonly PointType[] = [
@@ -75,6 +80,8 @@ export function rowToPoint(row: PointRow): AudioPoint {
     },
     playback: row.playback,
     volume: Number(row.volume),
+    sync: (row.sync as SyncMode) ?? 'individual',
+    startAt: row.start_at ? row.start_at.getTime() : undefined,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     ...row.config,
@@ -123,6 +130,14 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
     }
   }
 
+  const sync: SyncMode = body.sync === 'global' ? 'global' : 'individual';
+  // A global point needs a shared clock anchor. Honor a client-supplied startAt
+  // (e.g. to re-sync a journey), otherwise anchor it at creation time.
+  let startAt: Date | null = null;
+  if (sync === 'global') {
+    startAt = body.startAt != null ? new Date(num(body.startAt, 'startAt')) : new Date();
+  }
+
   return {
     course_id: courseId,
     name: body.name,
@@ -135,6 +150,8 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
     volume,
     playback: normalizePlayback(body.playback),
     config: configForType(pointType, body),
+    sync,
+    start_at: startAt,
   };
 }
 

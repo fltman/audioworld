@@ -59,6 +59,7 @@ function seedPoints(courseId: string): AudioPointInput[] {
     courseId,
     playback: { loop: true, stopAfter: false, reload: false },
     volume: 1,
+    sync: 'individual',
   } as const;
   const url = (file: string) => ({ kind: 'url' as const, url: `/uploads/${file}` });
 
@@ -83,9 +84,10 @@ function seedPoints(courseId: string): AudioPointInput[] {
     },
     {
       ...common,
-      name: 'Path walker',
+      name: 'Shared guide (global)',
       type: 'path',
-      audio: { ...url('tone-330.wav'), title: 'Path walker' },
+      sync: 'global',
+      audio: { ...url('tone-330.wav'), title: 'Shared guide' },
       path: [
         destinationPoint(CENTER, 200, 70),
         destinationPoint(CENTER, 170, 40),
