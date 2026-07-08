@@ -11,33 +11,48 @@ export interface FrameSource {
   az: number;
   /** Target loudness 0..1. */
   gain: number;
+  /** For global/shared points: seconds into the shared timeline, so playback starts
+   *  at the same point in the loop on every device. Undefined = start at 0. */
+  startOffsetSec?: number;
 }
 
 interface SourceNode {
-  el: HTMLAudioElement;
-  source: MediaElementAudioSourceNode;
+  url: string;
   panner: PannerNode;
   gain: GainNode;
+  /** Transient — AudioBufferSourceNodes are one-shot, recreated on each (re)start. */
+  src: AudioBufferSourceNode | null;
+  loop: boolean;
+  stopAfter: boolean;
+  reload: boolean;
   wasAudible: boolean;
+  /** A one-shot (stopAfter) source has finished and should stay silent until re-entry. */
   ended: boolean;
-  playing: boolean;
-  pauseTimer: number | null;
 }
 
 const POS_TC = 0.05; // panner glide
 const GAIN_TC = 0.08; // loudness glide
-const PAUSE_DELAY_MS = 220;
 
 /**
- * Web Audio spatializer. One HRTF panner + gain per point. We drive loudness
- * ourselves (panner rolloff = 0) so distance attenuation exactly matches the HUD.
- * The listener stays at the origin facing -Z; sources are placed on the unit
- * circle by relative azimuth so the mix rotates as the user turns.
+ * Web Audio spatializer built on decoded AudioBuffers.
+ *
+ * We deliberately avoid HTMLAudioElement + createMediaElementSource: iOS Safari
+ * will only play ONE media-element-backed source at a time, so a soundscape with
+ * several audible points collapses to a single voice on iPhone. Decoding each clip
+ * to an AudioBuffer and playing it through an AudioBufferSourceNode lets iOS mix
+ * many spatialized voices at once.
+ *
+ * Each point keeps a persistent HRTF panner + gain (panner rolloff = 0; we drive
+ * loudness ourselves so distance attenuation matches the HUD). The listener stays
+ * at the origin facing -Z and sources sit on the unit circle by relative azimuth,
+ * so the mix rotates as the user turns.
  */
 export class AudioEngine {
   private readonly ctx: AudioContext;
   private readonly master: GainNode;
   private readonly nodes = new Map<string, SourceNode>();
+  private readonly buffers = new Map<string, AudioBuffer>();
+  private readonly loading = new Set<string>();
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -52,30 +67,53 @@ export class AudioEngine {
 
   /** Reconcile the audio graph with this frame's sources. */
   update(sources: FrameSource[]): void {
-    for (const fs of sources) {
-      // Lazy: never load media for a source the user hasn't reached yet.
-      if (!fs.audible && !this.nodes.has(fs.id)) continue;
-      const node = this.ensure(fs);
-      node.el.loop = fs.playback.loop && !fs.playback.stopAfter;
+    const t = this.ctx.currentTime;
 
-      if (fs.audible) this.drive(node, fs);
-      else this.silence(node);
+    for (const fs of sources) {
+      // Lazy: never fetch/build audio for a source the user hasn't reached yet.
+      if (!fs.audible && !this.nodes.has(fs.id)) continue;
+
+      const node = this.ensure(fs);
+      node.loop = fs.playback.loop && !fs.playback.stopAfter;
+      node.stopAfter = fs.playback.stopAfter;
+      node.reload = fs.playback.reload;
+
+      // Direction: place on the unit circle by relative azimuth.
+      const rad = (fs.az * Math.PI) / 180;
+      this.position(node.panner, Math.sin(rad), -Math.cos(rad), t);
+
+      if (fs.audible) {
+        const entering = !node.wasAudible;
+        if (entering && node.ended) node.ended = false; // re-arm a one-shot on re-entry
+
+        if (!node.ended) {
+          if (!node.src) {
+            this.startSource(node, fs.startOffsetSec); // first play (seeks global sources into sync)
+          } else if (entering && node.reload) {
+            this.startSource(node, fs.startOffsetSec); // reload: restart
+          }
+        }
+        node.gain.gain.setTargetAtTime(node.ended ? 0 : fs.gain, t, GAIN_TC);
+        node.wasAudible = true;
+      } else {
+        node.gain.gain.setTargetAtTime(0, t, GAIN_TC);
+        // A looping source keeps running (silently) to preserve its phase; one-shot /
+        // reload sources are stopped so the next entry starts fresh / re-armed.
+        if (!node.loop) this.stopSource(node);
+        node.wasAudible = false;
+      }
     }
   }
 
   dispose(): void {
-    for (const n of this.nodes.values()) {
-      if (n.pauseTimer !== null) clearTimeout(n.pauseTimer);
+    for (const node of this.nodes.values()) {
+      this.stopSource(node);
       try {
-        n.el.pause();
-        n.source.disconnect();
-        n.panner.disconnect();
-        n.gain.disconnect();
+        node.panner.disconnect();
+        node.gain.disconnect();
       } catch {
         /* already torn down */
       }
-      n.el.removeAttribute('src');
-      n.el.load();
     }
     this.nodes.clear();
     try {
@@ -89,13 +127,6 @@ export class AudioEngine {
     const existing = this.nodes.get(fs.id);
     if (existing) return existing;
 
-    const el = new Audio(fs.url);
-    el.crossOrigin = 'anonymous';
-    el.preload = 'auto';
-    el.loop = fs.playback.loop && !fs.playback.stopAfter;
-
-    // createMediaElementSource may run only once per element.
-    const source = this.ctx.createMediaElementSource(el);
     const panner = this.ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'linear';
@@ -106,79 +137,72 @@ export class AudioEngine {
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
 
-    source.connect(panner);
     panner.connect(gain);
     gain.connect(this.master);
 
     const node: SourceNode = {
-      el,
-      source,
+      url: fs.url,
       panner,
       gain,
+      src: null,
+      loop: fs.playback.loop && !fs.playback.stopAfter,
+      stopAfter: fs.playback.stopAfter,
+      reload: fs.playback.reload,
       wasAudible: false,
       ended: false,
-      playing: false,
-      pauseTimer: null,
     };
-    el.addEventListener('ended', () => {
-      node.ended = true;
-      node.playing = false;
-    });
-
     this.nodes.set(fs.id, node);
+    void this.loadBuffer(fs.url);
     return node;
   }
 
-  private drive(node: SourceNode, fs: FrameSource): void {
-    if (node.pauseTimer !== null) {
-      clearTimeout(node.pauseTimer);
-      node.pauseTimer = null;
-    }
+  /**
+   * (Re)start playback for a node. `offsetSec` seeks into the buffer so global/shared
+   * sources begin at the same point in the loop on every device. No-op until decoded.
+   */
+  private startSource(node: SourceNode, offsetSec = 0): void {
+    const buffer = this.buffers.get(node.url);
+    if (!buffer) return; // not decoded yet — retried on the next audible frame
+    this.stopSource(node);
 
-    const entering = !node.wasAudible;
-    if (entering) {
-      if (fs.playback.reload) this.rewind(node);
-      // stopAfter re-arms only after leaving and returning.
-      if (fs.playback.stopAfter && node.ended) {
-        node.ended = false;
-        this.rewind(node);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = node.loop;
+    src.connect(node.panner);
+    src.onended = () => {
+      if (src === node.src) {
+        node.src = null;
+        if (!node.loop) node.ended = true; // a one-shot finished
       }
+    };
+    node.src = src;
+    const dur = buffer.duration;
+    const off = dur > 0 ? ((offsetSec % dur) + dur) % dur : 0;
+    try {
+      src.start(0, off);
+    } catch {
+      /* start races */
     }
-
-    this.position(node, fs.az);
-
-    const silent = fs.playback.stopAfter && node.ended;
-    node.gain.gain.setTargetAtTime(silent ? 0 : fs.gain, this.ctx.currentTime, GAIN_TC);
-
-    if (!silent && !node.playing) {
-      node.el.play().catch(() => {
-        /* autoplay races; retried next frame */
-      });
-      node.playing = true;
-    }
-    node.wasAudible = true;
   }
 
-  private silence(node: SourceNode): void {
-    if (node.wasAudible) {
-      node.gain.gain.setTargetAtTime(0, this.ctx.currentTime, GAIN_TC);
-      if (node.pauseTimer === null) {
-        node.pauseTimer = window.setTimeout(() => {
-          node.el.pause();
-          node.playing = false;
-          node.pauseTimer = null;
-        }, PAUSE_DELAY_MS);
-      }
+  private stopSource(node: SourceNode): void {
+    const src = node.src;
+    if (!src) return;
+    node.src = null;
+    try {
+      src.onended = null;
+      src.stop();
+    } catch {
+      /* already stopped */
     }
-    node.wasAudible = false;
+    try {
+      src.disconnect();
+    } catch {
+      /* noop */
+    }
   }
 
-  private position(node: SourceNode, az: number): void {
-    const rad = (az * Math.PI) / 180;
-    const x = Math.sin(rad);
-    const z = -Math.cos(rad);
-    const t = this.ctx.currentTime;
-    const p = node.panner;
+  private position(p: PannerNode, x: number, z: number, t: number): void {
     if (p.positionX) {
       p.positionX.setTargetAtTime(x, t, POS_TC);
       p.positionY.setTargetAtTime(0, t, POS_TC);
@@ -188,11 +212,26 @@ export class AudioEngine {
     }
   }
 
-  private rewind(node: SourceNode): void {
+  private async loadBuffer(url: string): Promise<void> {
+    if (this.buffers.has(url) || this.loading.has(url)) return;
+    this.loading.add(url);
     try {
-      node.el.currentTime = 0;
+      const res = await fetch(url, { mode: 'cors' });
+      const arr = await res.arrayBuffer();
+      const buffer = await this.decode(arr);
+      this.buffers.set(url, buffer);
     } catch {
-      /* not seekable yet */
+      /* leave unloaded; ensure() will retry on the next encounter */
+    } finally {
+      this.loading.delete(url);
     }
+  }
+
+  /** decodeAudioData with a callback fallback for older Safari. */
+  private decode(arr: ArrayBuffer): Promise<AudioBuffer> {
+    return new Promise((resolve, reject) => {
+      const maybe = this.ctx.decodeAudioData(arr, resolve, reject);
+      if (maybe && typeof maybe.then === 'function') maybe.then(resolve, reject);
+    });
   }
 }

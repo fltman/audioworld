@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AudioPoint, Coordinates } from '@audioworld/shared';
+import type { AudioPoint, Coordinates, PointType } from '@audioworld/shared';
 import {
   anchorOf,
   attenuation,
   audibleRadiusOf,
   destinationPoint,
+  isGloballyTimed,
   relativeBearing,
   resolveSource,
 } from '@audioworld/shared';
-import { absoluteAudioUrl } from '../api';
+import { absoluteAudioUrl, syncServerTime } from '../api';
 import { AudioEngine, type FrameSource } from './audioEngine';
 import { geoErrorMessage, isSecureEnough, watchUserPosition, type GeoWatch } from './geolocation';
 import { requestOrientationPermission, watchHeading, type OrientationWatch } from './orientation';
@@ -24,12 +25,25 @@ export interface Blip {
   gain: number;
 }
 
+/** A source projected onto the geographic map (all points, audible or not). */
+export interface MapSource {
+  id: string;
+  name: string;
+  type: PointType;
+  /** Current world position of the sound, or null for a degenerate/empty path. */
+  position: Coordinates | null;
+  audible: boolean;
+  gain: number;
+  audibleRadius: number;
+}
+
 /** Everything the HUD renders for one animation frame. */
 export interface FrameState {
   user: Coordinates | null;
   headingDeg: number | null;
   accuracy: number | null;
   blips: Blip[];
+  sources: MapSource[];
   audibleCount: number;
 }
 
@@ -79,6 +93,8 @@ export class ExperienceEngine {
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
   private startedAtPerf = 0;
+  /** ms to add to Date.now() to match the server clock (for global/shared points). */
+  private serverOffset = 0;
 
   private geoWatch: GeoWatch | null = null;
   private orientationWatch: OrientationWatch | null = null;
@@ -109,13 +125,30 @@ export class ExperienceEngine {
   /** MUST be called synchronously from a user gesture (creates the AudioContext,
    *  starts geolocation and requests the compass permission — in that order). */
   async start(): Promise<void> {
+    // iOS 16.4+: route to the "playback" audio session so sound comes out of the
+    // speaker even when the physical ring/silent switch is set to silent. The default
+    // ("auto" → ambient) session is muted by that switch, so Web Audio would otherwise
+    // only be audible through headphones.
+    const nav = navigator as unknown as { audioSession?: { type: string } };
+    if (nav.audioSession) nav.audioSession.type = 'playback';
+
     const Ctx =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.ctx = new Ctx();
-    const resume = this.ctx.resume();
+    // Resume in the background — the context is created inside the user gesture, so it
+    // will unlock. Do NOT await it: on a first-visit HTTPS origin resume() can stay
+    // pending until the gesture fully settles, which would block opening the experience.
+    void this.ctx.resume().catch(() => {});
     this.audio = new AudioEngine(this.ctx);
     this.startedAtPerf = performance.now();
+
+    // Sync to the server clock so global/shared points are timed identically on
+    // every device. Non-blocking: global points use the device clock until this
+    // resolves (a fraction of a second), then snap into shared sync.
+    void syncServerTime().then((offset) => {
+      this.serverOffset = offset;
+    });
 
     if (this.sim) {
       this.initSim();
@@ -148,27 +181,37 @@ export class ExperienceEngine {
         );
       });
     }
+  }
 
-    await resume;
+  /** Current server-synced wall-clock time in ms (for global/shared points). */
+  private syncedNow(): number {
+    return Date.now() + this.serverOffset;
   }
 
   /** Resolve every point for now, update audio, return the drawable frame. */
   tick(): FrameState {
-    const clockSec = (performance.now() - this.startedAtPerf) / 1000;
+    const deviceClockSec = (performance.now() - this.startedAtPerf) / 1000;
     const user = this.sim ? this.userSim : this.userLive;
     const headingDeg = this.sim ? this.headingSim : this.headingLive;
     const accuracy = this.sim ? null : this.accuracy;
 
     if (!user) {
       this.audio?.update([]);
-      return { user: null, headingDeg, accuracy, blips: [], audibleCount: 0 };
+      return { user: null, headingDeg, accuracy, blips: [], sources: [], audibleCount: 0 };
     }
 
     const heading = headingDeg ?? 0;
     const frame: FrameSource[] = [];
     const blips: Blip[] = [];
+    const sources: MapSource[] = [];
 
     for (const point of this.points) {
+      // Global/shared points are clocked from the server-synced wall clock (anchored
+      // at startAt) so every device computes the same position AND the same point in
+      // the audio loop. Individual points use this device's own clock.
+      const startAt = isGloballyTimed(point) ? point.startAt : undefined;
+      const clockSec = startAt != null ? (this.syncedNow() - startAt) / 1000 : deviceClockSec;
+
       const memory = this.triggerMemory.get(point.id) ?? null;
       const r = resolveSource(point, { user, clockSec, triggeredAtSec: memory });
       this.triggerMemory.set(point.id, r.triggeredAtSec);
@@ -182,11 +225,30 @@ export class ExperienceEngine {
       if (r.audible) {
         blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
       }
-      frame.push({ id: point.id, url: absoluteAudioUrl(point.audio.url), playback: point.playback, audible: r.audible, az, gain });
+      sources.push({
+        id: point.id,
+        name: point.name,
+        type: point.type,
+        position: r.position,
+        audible: r.audible,
+        gain,
+        audibleRadius: radius,
+      });
+      frame.push({
+        id: point.id,
+        url: absoluteAudioUrl(point.audio.url),
+        playback: point.playback,
+        audible: r.audible,
+        az,
+        gain,
+        // For a global source, seek playback to the shared loop position so all
+        // devices hear the same moment; undefined for individual points (start at 0).
+        startOffsetSec: startAt != null ? clockSec : undefined,
+      });
     }
 
     this.audio?.update(frame);
-    return { user, headingDeg, accuracy, blips, audibleCount: blips.length };
+    return { user, headingDeg, accuracy, blips, sources, audibleCount: blips.length };
   }
 
   getStatus(): EngineStatus {
@@ -294,6 +356,7 @@ export function useExperience(engine: ExperienceEngine) {
     headingDeg: null,
     accuracy: null,
     blips: [],
+    sources: [],
     audibleCount: 0,
   });
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>
