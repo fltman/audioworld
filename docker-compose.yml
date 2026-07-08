@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: audioworld-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: audioworld
+      POSTGRES_PASSWORD: audioworld
+      POSTGRES_DB: audioworld
+    ports:
+      - "5434:5432"
+    volumes:
+      - audioworld_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audioworld -d audioworld"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  audioworld_pgdata:

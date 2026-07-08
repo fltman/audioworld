@@ -1,0 +1,304 @@
+:root {
+  --bg: #0a0a12;
+  --bg-soft: #12121f;
+  --panel: rgba(255, 255, 255, 0.04);
+  --border: rgba(124, 92, 255, 0.18);
+  --accent: #7c5cff;
+  --accent-soft: rgba(124, 92, 255, 0.16);
+  --text: #ece9ff;
+  --muted: #8b88a8;
+  --danger: #ff6b7a;
+  --warn: #ffd479;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(120% 90% at 50% -10%, #16162a 0%, var(--bg) 60%);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.screen {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(env(safe-area-inset-top), 16px) 18px max(env(safe-area-inset-bottom), 16px);
+}
+
+/* --- Notices ------------------------------------------------------------- */
+.notice {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.notice--error {
+  border-color: rgba(255, 107, 122, 0.4);
+  color: var(--danger);
+}
+.notice--warn {
+  border-color: rgba(255, 212, 121, 0.35);
+  color: var(--warn);
+}
+
+.pill {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+/* --- Course picker ------------------------------------------------------- */
+.screen--picker {
+  gap: 22px;
+  overflow-y: auto;
+}
+.brand h1 {
+  font-size: 30px;
+  margin: 8px 0 6px;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, #fff, var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 30ch;
+}
+.course-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.course-card {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(124, 92, 255, 0.08), var(--panel));
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.2s ease;
+}
+.course-card:active {
+  transform: scale(0.985);
+  border-color: var(--accent);
+}
+.course-card__name {
+  font-size: 18px;
+  font-weight: 650;
+}
+.course-card__desc {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* --- Start gate ---------------------------------------------------------- */
+.screen--gate {
+  justify-content: space-between;
+}
+.link-back,
+.link-sim {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.link-sim {
+  color: var(--accent);
+  align-self: center;
+}
+.gate-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+}
+.gate-title {
+  font-size: 28px;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.gate-desc {
+  margin: 0;
+  color: var(--muted);
+  max-width: 32ch;
+}
+.gate-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 28ch;
+}
+.btn-primary {
+  margin-top: 8px;
+  padding: 18px 40px;
+  font-size: 17px;
+  font-weight: 650;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #9a7dff, var(--accent));
+  box-shadow: 0 12px 40px rgba(124, 92, 255, 0.45);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* --- Experience ---------------------------------------------------------- */
+.screen--experience {
+  padding: max(env(safe-area-inset-top), 12px) 14px max(env(safe-area-inset-bottom), 12px);
+  gap: 10px;
+}
+.topbar {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+.topbar__title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.topbar__course {
+  font-size: 16px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar__count {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.topbar__count[data-active='true'] {
+  color: var(--accent);
+}
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.icon-btn--on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.radar-stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.radar {
+  width: min(92vw, 68vh);
+  height: min(92vw, 68vh);
+  touch-action: none;
+}
+.radar--draggable {
+  cursor: grab;
+}
+.radar--draggable:active {
+  cursor: grabbing;
+}
+
+/* --- Sim controls -------------------------------------------------------- */
+.sim-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sim-controls__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.sim-controls__dial {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(92vw, 420px);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--accent);
+}
+.sim-controls__dial input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+/* --- Readout ------------------------------------------------------------- */
+.readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.readout__stats {
+  display: flex;
+  gap: 16px;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.readout__notices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}

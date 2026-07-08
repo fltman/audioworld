@@ -1,0 +1,28 @@
+{
+  "name": "audioworld",
+  "version": "0.1.0",
+  "description": "Geolocation-based spatial audio experience — walk into a soundscape and hear where each source is and how far away.",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "admin",
+    "client"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace=shared",
+    "dev": "npm run build:shared && concurrently -n server,admin,client -c blue,green,magenta \"npm:dev:server\" \"npm:dev:admin\" \"npm:dev:client\"",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:admin": "npm run dev --workspace=admin",
+    "dev:client": "npm run dev --workspace=client",
+    "typecheck": "npm run build:shared && npm run typecheck --workspaces --if-present",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:setup": "npm run db:setup --workspace=server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  }
+}

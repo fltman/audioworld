@@ -1,0 +1,330 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AudioPoint, Coordinates } from '@audioworld/shared';
+import {
+  anchorOf,
+  attenuation,
+  audibleRadiusOf,
+  destinationPoint,
+  relativeBearing,
+  resolveSource,
+} from '@audioworld/shared';
+import { absoluteAudioUrl } from '../api';
+import { AudioEngine, type FrameSource } from './audioEngine';
+import { geoErrorMessage, isSecureEnough, watchUserPosition, type GeoWatch } from './geolocation';
+import { requestOrientationPermission, watchHeading, type OrientationWatch } from './orientation';
+
+/** A single audible source, projected for the radar. */
+export interface Blip {
+  id: string;
+  name: string;
+  /** Relative azimuth, degrees clockwise from the user's heading. */
+  az: number;
+  distance: number;
+  audibleRadius: number;
+  gain: number;
+}
+
+/** Everything the HUD renders for one animation frame. */
+export interface FrameState {
+  user: Coordinates | null;
+  headingDeg: number | null;
+  accuracy: number | null;
+  blips: Blip[];
+  audibleCount: number;
+}
+
+export interface EngineStatus {
+  mode: 'live' | 'sim';
+  geoError: string | null;
+  compass: 'ok' | 'unavailable' | 'denied' | 'sim';
+  insecure: boolean;
+}
+
+/** React-friendly digest pushed a few times a second for the surrounding chrome. */
+export interface Snapshot extends EngineStatus {
+  audibleCount: number;
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  headingDeg: number | null;
+}
+
+const FALLBACK_ORIGIN: Coordinates = { lat: 59.3293, lng: 18.0686 };
+const SIM_STEP_M = 4;
+const SIM_TURN_DEG = 15;
+const SIM_DRAG_M_PER_PX = 0.6;
+const HEADING_SMOOTH = 0.25;
+
+function smoothHeading(prev: number | null, next: number): number {
+  if (prev === null) return next;
+  const delta = ((next - prev + 540) % 360) - 180;
+  return (prev + delta * HEADING_SMOOTH + 360) % 360;
+}
+
+export interface EngineOptions {
+  points: AudioPoint[];
+  sim: boolean;
+}
+
+/**
+ * Owns the live inputs (GPS + compass, or simulated), the trigger memory and the
+ * audio graph. `tick()` resolves every point for the current instant, updates the
+ * audio and returns the frame the HUD should draw — a single source of truth.
+ */
+export class ExperienceEngine {
+  private readonly points: AudioPoint[];
+  private readonly sim: boolean;
+  private readonly triggerMemory = new Map<string, number | null>();
+
+  private ctx: AudioContext | null = null;
+  private audio: AudioEngine | null = null;
+  private startedAtPerf = 0;
+
+  private geoWatch: GeoWatch | null = null;
+  private orientationWatch: OrientationWatch | null = null;
+  private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  // Live inputs.
+  private userLive: Coordinates | null = null;
+  private headingLive: number | null = null;
+  private accuracy: number | null = null;
+
+  // Simulated inputs.
+  private userSim: Coordinates = FALLBACK_ORIGIN;
+  private headingSim = 0;
+
+  private status: EngineStatus;
+
+  constructor(opts: EngineOptions) {
+    this.points = opts.points;
+    this.sim = opts.sim;
+    this.status = {
+      mode: opts.sim ? 'sim' : 'live',
+      geoError: null,
+      compass: opts.sim ? 'sim' : 'unavailable',
+      insecure: false,
+    };
+  }
+
+  /** MUST be called synchronously from a user gesture (creates the AudioContext,
+   *  starts geolocation and requests the compass permission — in that order). */
+  async start(): Promise<void> {
+    const Ctx =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    this.ctx = new Ctx();
+    const resume = this.ctx.resume();
+    this.audio = new AudioEngine(this.ctx);
+    this.startedAtPerf = performance.now();
+
+    if (this.sim) {
+      this.initSim();
+    } else {
+      this.status.insecure = !isSecureEnough();
+      this.geoWatch = watchUserPosition(
+        (fix) => {
+          this.userLive = fix.coords;
+          this.accuracy = fix.accuracy;
+          this.status.geoError = null;
+        },
+        (err) => {
+          this.status.geoError = geoErrorMessage(err);
+        }
+      );
+      // Kick off the compass; on iOS this consumes the gesture activation.
+      requestOrientationPermission().then((result) => {
+        if (result === 'denied') {
+          this.status.compass = 'denied';
+          return;
+        }
+        this.orientationWatch = watchHeading(
+          (deg) => {
+            this.headingLive = smoothHeading(this.headingLive, deg);
+            this.status.compass = 'ok';
+          },
+          (s) => {
+            if (s !== 'ok') this.status.compass = s;
+          }
+        );
+      });
+    }
+
+    await resume;
+  }
+
+  /** Resolve every point for now, update audio, return the drawable frame. */
+  tick(): FrameState {
+    const clockSec = (performance.now() - this.startedAtPerf) / 1000;
+    const user = this.sim ? this.userSim : this.userLive;
+    const headingDeg = this.sim ? this.headingSim : this.headingLive;
+    const accuracy = this.sim ? null : this.accuracy;
+
+    if (!user) {
+      this.audio?.update([]);
+      return { user: null, headingDeg, accuracy, blips: [], audibleCount: 0 };
+    }
+
+    const heading = headingDeg ?? 0;
+    const frame: FrameSource[] = [];
+    const blips: Blip[] = [];
+
+    for (const point of this.points) {
+      const memory = this.triggerMemory.get(point.id) ?? null;
+      const r = resolveSource(point, { user, clockSec, triggeredAtSec: memory });
+      this.triggerMemory.set(point.id, r.triggeredAtSec);
+
+      const radius = audibleRadiusOf(point);
+      // A distance of 0 means the source rides on the user (follow_user): keep it
+      // centered rather than panning off the placeholder bearing.
+      const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
+      const gain = r.audible ? attenuation(r.distance, radius, point.volume) : 0;
+
+      if (r.audible) {
+        blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
+      }
+      frame.push({ id: point.id, url: absoluteAudioUrl(point.audio.url), playback: point.playback, audible: r.audible, az, gain });
+    }
+
+    this.audio?.update(frame);
+    return { user, headingDeg, accuracy, blips, audibleCount: blips.length };
+  }
+
+  getStatus(): EngineStatus {
+    return this.status;
+  }
+
+  setMuted(muted: boolean): void {
+    this.audio?.setMuted(muted);
+  }
+
+  dispose(): void {
+    this.geoWatch?.stop();
+    this.orientationWatch?.stop();
+    if (this.keyHandler) window.removeEventListener('keydown', this.keyHandler);
+    this.audio?.dispose();
+    this.ctx?.close().catch(() => {});
+    this.ctx = null;
+    this.audio = null;
+  }
+
+  // --- Simulation controls -------------------------------------------------
+
+  isSim(): boolean {
+    return this.sim;
+  }
+
+  getHeadingSim(): number {
+    return this.headingSim;
+  }
+
+  setHeadingSim(deg: number): void {
+    this.headingSim = ((deg % 360) + 360) % 360;
+  }
+
+  /** Translate the simulated user by a screen-space drag on the radar (heading-up). */
+  nudgeScreen(dxPx: number, dyPx: number): void {
+    if (!this.sim) return;
+    const meters = Math.hypot(dxPx, dyPx) * SIM_DRAG_M_PER_PX;
+    if (meters === 0) return;
+    const screenAngle = (Math.atan2(dxPx, -dyPx) * 180) / Math.PI; // clockwise from up
+    const bearing = (this.headingSim + screenAngle + 360) % 360;
+    this.userSim = destinationPoint(this.userSim, bearing, meters);
+  }
+
+  private initSim(): void {
+    const anchor = this.points.length > 0 ? anchorOf(this.points[0]) : FALLBACK_ORIGIN;
+    this.userSim = anchor;
+    this.headingSim = 0;
+
+    this.keyHandler = (e: KeyboardEvent) => {
+      let bearing: number | null = null;
+      switch (e.key.toLowerCase()) {
+        case 'w':
+        case 'arrowup':
+          bearing = this.headingSim;
+          break;
+        case 's':
+        case 'arrowdown':
+          bearing = this.headingSim + 180;
+          break;
+        case 'a':
+        case 'arrowleft':
+          bearing = this.headingSim - 90;
+          break;
+        case 'd':
+        case 'arrowright':
+          bearing = this.headingSim + 90;
+          break;
+        case 'q':
+          this.setHeadingSim(this.headingSim - SIM_TURN_DEG);
+          e.preventDefault();
+          return;
+        case 'e':
+          this.setHeadingSim(this.headingSim + SIM_TURN_DEG);
+          e.preventDefault();
+          return;
+        default:
+          return;
+      }
+      this.userSim = destinationPoint(this.userSim, ((bearing % 360) + 360) % 360, SIM_STEP_M);
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', this.keyHandler);
+  }
+}
+
+function toSnapshot(f: FrameState, status: EngineStatus): Snapshot {
+  return {
+    ...status,
+    audibleCount: f.audibleCount,
+    lat: f.user?.lat ?? null,
+    lng: f.user?.lng ?? null,
+    accuracy: f.accuracy,
+    headingDeg: f.headingDeg,
+  };
+}
+
+/**
+ * Drives the engine's animation frame loop. The high-rate frame lives in a ref
+ * (read by the canvas radar) while a throttled digest feeds React chrome.
+ */
+export function useExperience(engine: ExperienceEngine) {
+  const frameRef = useRef<FrameState>({
+    user: null,
+    headingDeg: null,
+    accuracy: null,
+    blips: [],
+    audibleCount: 0,
+  });
+  const [snapshot, setSnapshot] = useState<Snapshot>(() =>
+    toSnapshot(frameRef.current, engine.getStatus())
+  );
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    let raf = 0;
+    let lastPush = 0;
+    const loop = () => {
+      const frame = engine.tick();
+      frameRef.current = frame;
+      const now = performance.now();
+      if (now - lastPush > 150) {
+        lastPush = now;
+        setSnapshot(toSnapshot(frame, engine.getStatus()));
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [engine]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      engine.setMuted(next);
+      return next;
+    });
+  }, [engine]);
+
+  return { frameRef, snapshot, muted, toggleMute };
+}
