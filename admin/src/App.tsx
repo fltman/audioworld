@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { AudioPoint, Coordinates, Course, PointType } from '@audioworld/shared';
+import type { AudioPoint, Coordinates, Course, PointType, User } from '@audioworld/shared';
 import { anchorOf } from '@audioworld/shared';
-import { api } from './api';
+import { api, getToken, setToken } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
 import { isPathType } from './pointTypes';
 import CourseBar from './components/CourseBar';
@@ -10,12 +10,17 @@ import PointForm from './components/PointForm';
 import PointList from './components/PointList';
 import PreviewPanel from './components/PreviewPanel';
 import MapView from './components/MapView';
+import Login from './components/Login';
+import UsersPanel from './components/UsersPanel';
 import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [showUsers, setShowUsers] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [points, setPoints] = useState<AudioPoint[]>([]);
@@ -57,13 +62,33 @@ export default function App() {
     }
   };
 
+  // Validate any stored token on load.
   useEffect(() => {
+    (async () => {
+      if (!getToken()) {
+        setAuthReady(true);
+        return;
+      }
+      try {
+        setUser(await api.me());
+      } catch {
+        setToken(null);
+      } finally {
+        setAuthReady(true);
+      }
+    })();
+  }, []);
+
+  // Once an authoring user is known, load their courses (admins see all, superusers their own).
+  useEffect(() => {
+    if (!user || user.role === 'basic') return;
     (async () => {
       try {
         const cs = await api.listCourses();
         setCourses(cs);
+        const mine = user.role === 'admin' ? cs : cs.filter((c) => c.ownerId === user.id);
         const saved = localStorage.getItem(LS_KEY);
-        const initial = cs.find((c) => c.id === saved)?.id ?? cs[0]?.id ?? null;
+        const initial = mine.find((c) => c.id === saved)?.id ?? mine[0]?.id ?? null;
         if (initial) {
           setCourseId(initial);
           void loadPoints(initial);
@@ -73,7 +98,18 @@ export default function App() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
+
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    setShowUsers(false);
+    setPreview(null);
+    setCourses([]);
+    setCourseId(null);
+    setPoints([]);
+    setDraft(null);
+  };
 
   const selectCourse = (id: string) => {
     if (!id || id === courseId) return;
@@ -244,6 +280,42 @@ export default function App() {
 
   const activeType = draft?.type ?? null;
   const placing = !!draft && draft.editingId === null;
+  const visibleCourses =
+    user?.role === 'admin' ? courses : courses.filter((c) => c.ownerId === user?.id);
+
+  if (!authReady) {
+    return (
+      <div className="app">
+        <aside className="sidebar">
+          <header className="brand">
+            AudioWorld<span>Admin</span>
+          </header>
+          <p className="section muted">Loading…</p>
+        </aside>
+        <div className="mapwrap" />
+      </div>
+    );
+  }
+  if (!user) return <Login onAuthed={setUser} />;
+  if (user.role === 'basic') {
+    return (
+      <div className="login">
+        <div className="login-card">
+          <div className="brand" style={{ padding: 0 }}>
+            AudioWorld<span>Admin</span>
+          </div>
+          <h2>No access yet</h2>
+          <p className="muted">
+            Signed in as {user.email}. Your account has no authoring access — ask an admin to grant
+            you a role.
+          </p>
+          <button className="btn btn-ghost" onClick={logout}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -252,8 +324,27 @@ export default function App() {
           AudioWorld<span>Admin</span>
         </header>
 
+        <div className="account">
+          <span className="account__email" title={user.email}>
+            {user.email}
+          </span>
+          <span className="account__role">{user.role}</span>
+          {user.role === 'admin' && (
+            <button type="button" className="icon-btn" onClick={() => setShowUsers((s) => !s)}>
+              {showUsers ? 'Courses' : 'Users'}
+            </button>
+          )}
+          <button type="button" className="icon-btn" onClick={logout}>
+            Sign out
+          </button>
+        </div>
+
+        {showUsers && user.role === 'admin' ? (
+          <UsersPanel me={user} />
+        ) : (
+          <>
         <CourseBar
-          courses={courses}
+          courses={visibleCourses}
           selectedId={courseId}
           onSelect={selectCourse}
           onCreate={createCourse}
@@ -310,6 +401,8 @@ export default function App() {
               )}
             </>
           )
+        )}
+          </>
         )}
       </aside>
 

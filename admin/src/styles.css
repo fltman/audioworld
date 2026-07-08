@@ -654,3 +654,89 @@ input[type='range'] {
   border-color: var(--accent);
   color: var(--text);
 }
+
+/* ---------- Auth ---------- */
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 20px;
+}
+.login-card {
+  width: min(360px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-card h2 {
+  margin: 4px 0 6px;
+  font-size: 18px;
+}
+.link-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+  font-family: inherit;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.account__email {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.account__role {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.16);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.user-row__email {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-row__you {
+  color: var(--muted);
+  font-size: 11px;
+}
+.user-row .select {
+  width: auto;
+}

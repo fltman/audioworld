@@ -146,8 +146,37 @@ export interface Course {
   id: string;
   name: string;
   description?: string;
+  /** The superuser who owns/authored this course (null for legacy/admin-created). */
+  ownerId?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * User role.
+ * - basic:     registered, no authoring privileges yet (awaiting promotion).
+ * - superuser: creates and manages their OWN courses + points.
+ * - admin:     manages ALL courses + points, and user accounts/roles.
+ */
+export type Role = 'basic' | 'superuser' | 'admin';
+
+/** An account (never carries the password hash to the client). */
+export interface User {
+  id: string;
+  email: string;
+  role: Role;
+  createdAt: string;
+}
+
+export interface Credentials {
+  email: string;
+  password: string;
+}
+
+/** Returned by /api/auth/login and /api/auth/register. */
+export interface AuthResult {
+  token: string;
+  user: User;
 }
 
 /** Distribute `Omit` across a union so each member is narrowed individually. */

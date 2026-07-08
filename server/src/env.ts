@@ -16,3 +16,10 @@ export const UPLOAD_DIR = resolve(process.env.UPLOAD_DIR ?? './uploads');
 
 /** Allowed CORS origin ('*' for any). */
 export const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
+
+/** Secret for signing JWTs. MUST be set in production. */
+export const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-insecure-secret-change-me';
+
+if (JWT_SECRET === 'dev-insecure-secret-change-me') {
+  console.warn('[env] JWT_SECRET not set — using an insecure dev default.');
+}

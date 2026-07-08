@@ -4,8 +4,12 @@ import { Router } from 'express';
 import multer from 'multer';
 import type { UploadResult } from '@audioworld/shared';
 import { UPLOAD_DIR } from '../env';
+import { requireRole } from '../lib/auth';
 
 export const uploadRouter = Router();
+
+// Only authors may upload audio.
+uploadRouter.use(requireRole('superuser', 'admin'));
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),

@@ -6,6 +6,9 @@ import { applySchema } from './db/pool';
 import { coursesRouter } from './routes/courses';
 import { pointsRouter } from './routes/points';
 import { uploadRouter } from './routes/upload';
+import { authRouter } from './routes/auth';
+import { usersRouter } from './routes/users';
+import { attachUser } from './lib/auth';
 import { errorHandler } from './lib/http';
 
 async function main(): Promise<void> {
@@ -15,6 +18,7 @@ async function main(): Promise<void> {
   const app = express();
   app.use(cors({ origin: CORS_ORIGIN }));
   app.use(express.json());
+  app.use(attachUser); // populates req.user from a Bearer token when present
 
   // Raw health check (not wrapped in the ApiResponse envelope).
   app.get('/api/health', (_req, res) => {
@@ -33,6 +37,8 @@ async function main(): Promise<void> {
     express.static(UPLOAD_DIR, { acceptRanges: true })
   );
 
+  app.use('/api/auth', authRouter);
+  app.use('/api/users', usersRouter);
   app.use('/api/courses', coursesRouter);
   app.use('/api/points', pointsRouter);
   app.use('/api/upload', uploadRouter);

@@ -1,10 +1,19 @@
 -- AudioWorld schema. Idempotent: safe to run on every boot.
 -- gen_random_uuid() is built into Postgres 13+ core; no extension needed.
 
+CREATE TABLE IF NOT EXISTS users (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  role          text NOT NULL DEFAULT 'basic' CHECK (role IN ('basic','superuser','admin')),
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS courses (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name        text NOT NULL,
   description text,
+  owner_id    uuid REFERENCES users(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
@@ -33,4 +42,8 @@ ALTER TABLE audio_points
   ADD COLUMN IF NOT EXISTS sync text NOT NULL DEFAULT 'individual' CHECK (sync IN ('individual','global')),
   ADD COLUMN IF NOT EXISTS start_at timestamptz;
 
+ALTER TABLE courses
+  ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
+CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);

@@ -5,6 +5,7 @@ interface CourseRow {
   id: string;
   name: string;
   description: string | null;
+  owner_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -14,6 +15,7 @@ function rowToCourse(row: CourseRow): Course {
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
+    ownerId: row.owner_id ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -34,10 +36,13 @@ export async function getCourse(id: string): Promise<Course | null> {
   return rows[0] ? rowToCourse(rows[0]) : null;
 }
 
-export async function createCourse(input: CourseInput): Promise<Course> {
+export async function createCourse(
+  input: CourseInput,
+  ownerId: string | null = null
+): Promise<Course> {
   const { rows } = await pool.query<CourseRow>(
-    'INSERT INTO courses (name, description) VALUES ($1, $2) RETURNING *',
-    [input.name, input.description ?? null]
+    'INSERT INTO courses (name, description, owner_id) VALUES ($1, $2, $3) RETURNING *',
+    [input.name, input.description ?? null, ownerId]
   );
   return rowToCourse(rows[0]!);
 }

@@ -2,14 +2,29 @@ import type {
   ApiResponse,
   AudioPoint,
   AudioPointInput,
+  AuthResult,
   Course,
   CourseInput,
+  Role,
   UploadResult,
+  User,
 } from '@audioworld/shared';
 
 export const BASE = (
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001'
 ).replace(/\/$/, '');
+
+const TOKEN_KEY = 'audioworld.admin.token';
+let authToken: string | null = localStorage.getItem(TOKEN_KEY);
+
+export function setToken(token: string | null): void {
+  authToken = token;
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+export function getToken(): string | null {
+  return authToken;
+}
 
 /** Server-relative audio paths (`/uploads/...`) become absolute against the API host. */
 export function absoluteAudioUrl(url: string): string {
@@ -35,17 +50,26 @@ export async function syncServerTime(samples = 3): Promise<number> {
   return best ? best.offset : 0;
 }
 
-/** Perform a request and unwrap the ApiResponse envelope, throwing on failure. */
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, init);
+/** Thrown on HTTP error, carrying the status so callers can react to 401/403. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** Perform a request (with the bearer token if present) and unwrap the envelope. */
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
   let body: ApiResponse<T>;
   try {
     body = (await res.json()) as ApiResponse<T>;
   } catch {
-    throw new Error(`Invalid response from server (${res.status}).`);
+    throw new ApiError(`Invalid response from server (${res.status}).`, res.status);
   }
   if (!body.success || body.data === undefined) {
-    throw new Error(body.error ?? `Request failed (${res.status}).`);
+    throw new ApiError(body.error ?? `Request failed (${res.status}).`, res.status);
   }
   return body.data;
 }
@@ -59,6 +83,16 @@ function jsonBody(method: string, body: unknown): RequestInit {
 }
 
 export const api = {
+  register: (email: string, password: string) =>
+    request<AuthResult>('/api/auth/register', jsonBody('POST', { email, password })),
+  login: (email: string, password: string) =>
+    request<AuthResult>('/api/auth/login', jsonBody('POST', { email, password })),
+  me: () => request<User>('/api/auth/me'),
+
+  listUsers: () => request<User[]>('/api/users'),
+  setUserRole: (id: string, role: Role) =>
+    request<User>(`/api/users/${id}/role`, jsonBody('PATCH', { role })),
+
   listCourses: () => request<Course[]>('/api/courses'),
   getCourse: (id: string) => request<Course>(`/api/courses/${id}`),
   createCourse: (input: CourseInput) =>
