@@ -161,8 +161,18 @@ function configForType(
   body: Record<string, unknown>
 ): Record<string, unknown> {
   switch (type) {
-    case 'static':
-      return { center: coord(body.center, 'center'), radius: num(body.radius, 'radius') };
+    case 'static': {
+      const config: Record<string, unknown> = {
+        center: coord(body.center, 'center'),
+        radius: num(body.radius, 'radius'),
+      };
+      if (body.triggerRadius != null) {
+        const triggerRadius = num(body.triggerRadius, 'triggerRadius');
+        if (triggerRadius < 0) throw new ValidationError('triggerRadius must be >= 0');
+        config.triggerRadius = triggerRadius;
+      }
+      return config;
+    }
     case 'static_circling':
       return {
         center: coord(body.center, 'center'),
@@ -198,11 +208,16 @@ function configForType(
 function normalizePlayback(value: unknown): PlaybackOptions {
   if (!value || typeof value !== 'object') return { ...DEFAULT_PLAYBACK };
   const v = value as Record<string, unknown>;
-  return {
+  const playback: PlaybackOptions = {
     loop: v.loop == null ? DEFAULT_PLAYBACK.loop : Boolean(v.loop),
     stopAfter: v.stopAfter == null ? DEFAULT_PLAYBACK.stopAfter : Boolean(v.stopAfter),
     reload: v.reload == null ? DEFAULT_PLAYBACK.reload : Boolean(v.reload),
   };
+  if (v.loopGapSec != null) {
+    const gap = Number(v.loopGapSec);
+    if (Number.isFinite(gap) && gap >= 0) playback.loopGapSec = gap;
+  }
+  return playback;
 }
 
 function asObject(value: unknown, field: string): Record<string, unknown> {

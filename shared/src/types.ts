@@ -44,6 +44,9 @@ export interface PlaybackOptions {
   loop: boolean;
   stopAfter: boolean;
   reload: boolean;
+  /** Seconds of silence to wait between loop iterations when `loop` is true
+   *  (0/undefined = seamless, the default). */
+  loopGapSec?: number;
 }
 
 /** The audio media backing a point (URL or uploaded file, both resolve to `url`). */
@@ -79,6 +82,13 @@ export interface StaticPoint extends BaseAudioPoint {
   type: 'static';
   center: Coordinates;
   radius: number;
+  /**
+   * Optional jumpscare trigger. When set (> 0) the point is SILENT until the user
+   * comes within `triggerRadius` of `center`; it then arms and becomes audible
+   * within its normal `radius`. Pair with "Play once" (stopAfter) for a one-shot
+   * scare. Absent/0 = always audible within `radius`, as normal.
+   */
+  triggerRadius?: number;
 }
 
 /** Source that orbits `center` at `circleRadius`, moving `speed` m/s along the circle. */

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import L from 'leaflet';
 import {
   anchorOf,
@@ -157,6 +157,10 @@ export default function MapView(props: Props) {
   const clickTimer = useRef<number | null>(null);
   const stateRef = useRef(props);
   stateRef.current = props;
+
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   // Create the map exactly once.
   useEffect(() => {
@@ -356,6 +360,29 @@ export default function MapView(props: Props) {
     else map.doubleClickZoom.enable();
   }, [props.draft]);
 
+  // Geocode a place name via Nominatim and recentre the map on the first hit.
+  const goToPlace = async (e: FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    const map = mapRef.current;
+    if (!q || !map || searching) return;
+    setSearching(true);
+    setNotFound(false);
+    try {
+      const res = await fetch(
+        'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q)
+      );
+      const hits = (await res.json()) as { lat: string; lon: string }[];
+      const hit = hits[0];
+      if (hit) map.setView([+hit.lat, +hit.lon], 16);
+      else setNotFound(true);
+    } catch {
+      setNotFound(true);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const d = props.draft;
   const placing = !!d && (isPathType(d.type) ? d.drawingPath : true);
 
@@ -364,6 +391,32 @@ export default function MapView(props: Props) {
       {/* The Leaflet container keeps a stable className — Leaflet appends its own
           classes (leaflet-container, etc.) and React must never overwrite them. */}
       <div ref={containerRef} className="map" />
+
+      {/* Place search — stop pointer/click events so they never reach the map. */}
+      <form
+        className="map-search"
+        onSubmit={goToPlace}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        <input
+          className="map-search__input"
+          type="text"
+          placeholder="Go to place…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.currentTarget.value);
+            setNotFound(false);
+          }}
+        />
+        <button type="submit" className="map-search__btn" disabled={searching || !query.trim()}>
+          {searching ? '…' : 'Go'}
+        </button>
+        {notFound && <span className="map-search__hint">Not found</span>}
+      </form>
+
       <div className="legend">
         {POINT_TYPE_ORDER.map((t) => (
           <div key={t} className="legend-row">

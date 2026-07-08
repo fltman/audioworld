@@ -174,6 +174,8 @@ export function audibleRadiusOf(point: AudioPoint): number {
 /** The proximity radius that triggers a point, or null if the point has no trigger. */
 export function triggerRadiusOf(point: AudioPoint): number | null {
   switch (point.type) {
+    case 'static':
+      return point.triggerRadius ?? null;
     case 'follow_user':
       return point.initialRadius;
     case 'path_triggered':
@@ -256,6 +258,14 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
   switch (point.type) {
     case 'static': {
       const d = calculateDistance(user, point.center);
+      if (point.triggerRadius != null && point.triggerRadius > 0) {
+        // Jumpscare: silent until armed by coming within triggerRadius, then
+        // audible within the normal radius. Arm before out() reads triggeredAtSec.
+        if (triggeredAtSec === null && d <= point.triggerRadius) {
+          triggeredAtSec = clockSec;
+        }
+        return out(point.center, triggeredAtSec !== null && d <= point.radius);
+      }
       return out(point.center, d <= point.radius);
     }
 

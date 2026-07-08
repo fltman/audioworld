@@ -28,6 +28,10 @@ interface SourceNode {
   wasAudible: boolean;
   /** A one-shot (stopAfter) source has finished and should stay silent until re-entry. */
   ended: boolean;
+  /** Gap between loop iterations in ms; > 0 = "gapped loop" (one-shots + a restart timer). */
+  loopGapMs: number;
+  /** Pending restart timer during a loop gap; cleared on silence and in dispose(). */
+  gapTimer: number | null;
 }
 
 const POS_TC = 0.05; // panner glide
@@ -74,7 +78,11 @@ export class AudioEngine {
       if (!fs.audible && !this.nodes.has(fs.id)) continue;
 
       const node = this.ensure(fs);
-      node.loop = fs.playback.loop && !fs.playback.stopAfter;
+      const gapSec = fs.playback.loopGapSec ?? 0;
+      const looping = fs.playback.loop && !fs.playback.stopAfter;
+      node.loopGapMs = looping && gapSec > 0 ? gapSec * 1000 : 0;
+      // node.loop drives the *native* seamless loop; a gapped loop plays one-shots + a timer.
+      node.loop = looping && node.loopGapMs === 0;
       node.stopAfter = fs.playback.stopAfter;
       node.reload = fs.playback.reload;
 
@@ -87,7 +95,7 @@ export class AudioEngine {
         if (entering && node.ended) node.ended = false; // re-arm a one-shot on re-entry
 
         if (!node.ended) {
-          if (!node.src) {
+          if (!node.src && node.gapTimer === null) {
             this.startSource(node, fs.startOffsetSec); // first play (seeks global sources into sync)
           } else if (entering && node.reload) {
             this.startSource(node, fs.startOffsetSec); // reload: restart
@@ -97,9 +105,12 @@ export class AudioEngine {
         node.wasAudible = true;
       } else {
         node.gain.gain.setTargetAtTime(0, t, GAIN_TC);
-        // A looping source keeps running (silently) to preserve its phase; one-shot /
-        // reload sources are stopped so the next entry starts fresh / re-armed.
-        if (!node.loop) this.stopSource(node);
+        // A native-looping source keeps running (silently) to preserve its phase; one-shot,
+        // reload and gapped-loop sources are stopped so the next entry starts fresh / re-armed.
+        if (!node.loop) {
+          this.clearGap(node);
+          this.stopSource(node);
+        }
         node.wasAudible = false;
       }
     }
@@ -107,6 +118,7 @@ export class AudioEngine {
 
   dispose(): void {
     for (const node of this.nodes.values()) {
+      this.clearGap(node);
       this.stopSource(node);
       try {
         node.panner.disconnect();
@@ -150,6 +162,8 @@ export class AudioEngine {
       reload: fs.playback.reload,
       wasAudible: false,
       ended: false,
+      loopGapMs: 0,
+      gapTimer: null,
     };
     this.nodes.set(fs.id, node);
     void this.loadBuffer(fs.url);
@@ -163,6 +177,7 @@ export class AudioEngine {
   private startSource(node: SourceNode, offsetSec = 0): void {
     const buffer = this.buffers.get(node.url);
     if (!buffer) return; // not decoded yet — retried on the next audible frame
+    this.clearGap(node);
     this.stopSource(node);
 
     const src = this.ctx.createBufferSource();
@@ -170,9 +185,17 @@ export class AudioEngine {
     src.loop = node.loop;
     src.connect(node.panner);
     src.onended = () => {
-      if (src === node.src) {
-        node.src = null;
-        if (!node.loop) node.ended = true; // a one-shot finished
+      if (src !== node.src) return;
+      node.src = null;
+      if (node.loop) return; // native seamless loop never ends on its own
+      if (node.loopGapMs > 0 && node.wasAudible) {
+        // Gapped loop: wait out the silence, then play the next iteration if still audible.
+        node.gapTimer = window.setTimeout(() => {
+          node.gapTimer = null;
+          if (node.wasAudible && !node.ended) this.startSource(node);
+        }, node.loopGapMs);
+      } else {
+        node.ended = true; // a one-shot finished
       }
     };
     node.src = src;
@@ -182,6 +205,14 @@ export class AudioEngine {
       src.start(0, off);
     } catch {
       /* start races */
+    }
+  }
+
+  /** Cancel a pending loop-gap restart (on silence, restart or dispose). */
+  private clearGap(node: SourceNode): void {
+    if (node.gapTimer !== null) {
+      window.clearTimeout(node.gapTimer);
+      node.gapTimer = null;
     }
   }
 

@@ -26,6 +26,8 @@ export interface DraftState {
   audio: AudioSource;
   volume: number;
   playback: PlaybackOptions;
+  /** Seconds of silence between loop iterations (0 = seamless). */
+  loopGapSec: number;
   /** Individual (per-device) vs global (shared, server-synced) timing. */
   sync: SyncMode;
   /** Global anchor (epoch ms); undefined lets the server set it to "now" on save. */
@@ -69,6 +71,9 @@ export function freshDraft(type: PointType, courseId: string): DraftState {
     stops: [],
     drawingPath: isPathType(type),
     ...NUMERIC_DEFAULTS,
+    // The static jumpscare shares the triggerRadius field but starts off (0).
+    triggerRadius: type === 'static' ? 0 : NUMERIC_DEFAULTS.triggerRadius,
+    loopGapSec: 0,
     endBehavior: 'loop',
   };
 }
@@ -82,6 +87,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     audio: { ...point.audio },
     volume: point.volume,
     playback: { ...point.playback },
+    loopGapSec: point.playback.loopGapSec ?? 0,
     sync: point.sync,
     startAt: point.startAt,
     center: null,
@@ -94,7 +100,12 @@ export function pointToDraft(point: AudioPoint): DraftState {
 
   switch (point.type) {
     case 'static':
-      return { ...base, center: point.center, radius: point.radius };
+      return {
+        ...base,
+        center: point.center,
+        radius: point.radius,
+        triggerRadius: point.triggerRadius ?? 0,
+      };
     case 'static_circling':
       return {
         ...base,
@@ -159,7 +170,8 @@ export function draftToInput(d: DraftState): DraftResult {
     courseId: d.courseId,
     name,
     audio: { ...d.audio, url },
-    playback: d.playback,
+    // loopGapSec lives in its own draft field; carry it into playback only when set.
+    playback: { ...d.playback, loopGapSec: d.loopGapSec > 0 ? d.loopGapSec : undefined },
     volume: d.volume,
     sync: d.sync,
     startAt: d.startAt,
@@ -168,7 +180,15 @@ export function draftToInput(d: DraftState): DraftResult {
   switch (d.type) {
     case 'static':
       if (!d.center) return { error: 'Click the map to place the center.' };
-      return { input: { ...common, type: 'static', center: d.center, radius: d.radius } };
+      return {
+        input: {
+          ...common,
+          type: 'static',
+          center: d.center,
+          radius: d.radius,
+          ...(d.triggerRadius > 0 ? { triggerRadius: d.triggerRadius } : {}),
+        },
+      };
     case 'static_circling':
       if (!d.center) return { error: 'Click the map to place the center.' };
       return {

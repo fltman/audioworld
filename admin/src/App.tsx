@@ -12,6 +12,7 @@ import PreviewPanel from './components/PreviewPanel';
 import MapView from './components/MapView';
 import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
+import SoundLibrary from './components/SoundLibrary';
 import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
@@ -21,6 +22,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
+  const [showSounds, setShowSounds] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [points, setPoints] = useState<AudioPoint[]>([]);
@@ -104,6 +106,7 @@ export default function App() {
     setToken(null);
     setUser(null);
     setShowUsers(false);
+    setShowSounds(false);
     setPreview(null);
     setCourses([]);
     setCourseId(null);
@@ -330,10 +333,27 @@ export default function App() {
           </span>
           <span className="account__role">{user.role}</span>
           {user.role === 'admin' && (
-            <button type="button" className="icon-btn" onClick={() => setShowUsers((s) => !s)}>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                setShowUsers((s) => !s);
+                setShowSounds(false);
+              }}
+            >
               {showUsers ? 'Courses' : 'Users'}
             </button>
           )}
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => {
+              setShowSounds((s) => !s);
+              setShowUsers(false);
+            }}
+          >
+            {showSounds ? 'Courses' : 'Sounds'}
+          </button>
           <button type="button" className="icon-btn" onClick={logout}>
             Sign out
           </button>
@@ -341,6 +361,8 @@ export default function App() {
 
         {showUsers && user.role === 'admin' ? (
           <UsersPanel me={user} />
+        ) : showSounds ? (
+          <SoundLibrary />
         ) : (
           <>
         <CourseBar

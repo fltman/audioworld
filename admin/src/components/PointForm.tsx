@@ -27,7 +27,8 @@ interface Props {
   error: string | null;
 }
 
-const PLAYBACK_LABEL: Record<keyof PlaybackOptions, string> = {
+type BoolPlayback = 'loop' | 'stopAfter' | 'reload';
+const PLAYBACK_LABEL: Record<BoolPlayback, string> = {
   loop: 'Loop while in range',
   stopAfter: 'Play once',
   reload: 'Restart on re-entry',
@@ -192,7 +193,7 @@ export default function PointForm(props: Props) {
       </div>
 
       <div className="checks">
-        {(Object.keys(PLAYBACK_LABEL) as (keyof PlaybackOptions)[]).map((k) => (
+        {(Object.keys(PLAYBACK_LABEL) as BoolPlayback[]).map((k) => (
           <label key={k} className="check">
             <input
               type="checkbox"
@@ -206,9 +207,25 @@ export default function PointForm(props: Props) {
         ))}
       </div>
 
+      {playback.loop && (
+        <NumberField
+          label="Pause before looping (s)"
+          value={draft.loopGapSec}
+          onValue={(n) => onChange({ loopGapSec: n })}
+          step={0.5}
+        />
+      )}
+
       <div className="number-grid">
         {draft.type === 'static' && (
-          <NumberField label="Audible radius (m)" value={draft.radius} onValue={(n) => onChange({ radius: n })} />
+          <>
+            <NumberField label="Audible radius (m)" value={draft.radius} onValue={(n) => onChange({ radius: n })} />
+            <NumberField
+              label="Jumpscare trigger radius (m) — 0 = off"
+              value={draft.triggerRadius}
+              onValue={(n) => onChange({ triggerRadius: n })}
+            />
+          </>
         )}
         {draft.type === 'static_circling' && (
           <>
@@ -247,6 +264,13 @@ export default function PointForm(props: Props) {
           </label>
         )}
       </div>
+
+      {draft.type === 'static' && (
+        <p className="geo-status">
+          0 disables the jumpscare. Above 0, the point stays silent until you come within it, then
+          plays inside the audible radius — pair with "Play once".
+        </p>
+      )}
 
       {draft.type === 'path' && draft.path.length >= 2 && (
         <div className="form-field">

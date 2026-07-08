@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { extname } from 'node:path';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
 import type { UploadResult } from '@audioworld/shared';
@@ -23,6 +24,22 @@ const upload = multer({
     if (file.mimetype.startsWith('audio/')) cb(null, true);
     else cb(new Error('Only audio files are allowed'));
   },
+});
+
+// List previously uploaded audio, newest first.
+uploadRouter.get('/', (_req, res) => {
+  const files = !existsSync(UPLOAD_DIR)
+    ? []
+    : readdirSync(UPLOAD_DIR)
+        .map((filename) => ({ filename, stat: statSync(join(UPLOAD_DIR, filename)) }))
+        .filter(({ stat }) => stat.isFile())
+        .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+        .map(({ filename, stat }) => ({
+          url: `/uploads/${filename}`,
+          filename,
+          size: stat.size,
+        }));
+  res.json({ success: true, data: files });
 });
 
 uploadRouter.post('/', (req, res) => {

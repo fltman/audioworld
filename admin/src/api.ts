@@ -116,4 +116,6 @@ export const api = {
     form.append('file', file);
     return request<UploadResult>('/api/upload', { method: 'POST', body: form });
   },
+  listUploads: () =>
+    request<{ url: string; filename: string; size: number }[]>('/api/upload'),
 };
