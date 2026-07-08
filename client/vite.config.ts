@@ -5,5 +5,7 @@ import react from '@vitejs/plugin-react';
 // so a phone / ngrok tunnel can reach it — required for real GPS + compass testing.
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5174, strictPort: true },
+  // allowedHosts: true lets the Vite dev server answer requests proxied through a
+  // tunnel (e.g. *.trycloudflare.com) for real-device testing over HTTPS.
+  server: { port: 5174, strictPort: true, allowedHosts: true },
 });

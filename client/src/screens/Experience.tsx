@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import type { Course } from '@audioworld/shared';
 import { Radar } from '../components/Radar';
+import { MapView } from '../components/MapView';
 import { Readout } from '../components/Readout';
-import { TopBar } from '../components/TopBar';
+import { TopBar, type ExperienceView } from '../components/TopBar';
 import { ExperienceEngine, useExperience } from '../services/experience';
 
 interface ExperienceProps {
@@ -12,6 +14,7 @@ interface ExperienceProps {
 
 export function Experience({ engine, course, onExit }: ExperienceProps) {
   const { frameRef, snapshot, muted, toggleMute } = useExperience(engine);
+  const [view, setView] = useState<ExperienceView>('radar');
 
   return (
     <div className="screen screen--experience">
@@ -19,13 +22,19 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
         courseName={course.name}
         audibleCount={snapshot.audibleCount}
         muted={muted}
+        view={view}
+        onSetView={setView}
         onToggleMute={toggleMute}
         onExit={onExit}
       />
 
-      <div className="radar-stage">
-        <Radar engine={engine} frameRef={frameRef} />
-      </div>
+      {view === 'radar' ? (
+        <div className="radar-stage">
+          <Radar engine={engine} frameRef={frameRef} />
+        </div>
+      ) : (
+        <MapView engine={engine} frameRef={frameRef} />
+      )}
 
       {engine.isSim() && <SimControls engine={engine} heading={snapshot.headingDeg ?? 0} />}
 
@@ -42,7 +51,7 @@ interface SimControlsProps {
 function SimControls({ engine, heading }: SimControlsProps) {
   return (
     <div className="sim-controls">
-      <div className="sim-controls__hint">WASD / arrows move · Q/E turn · drag radar</div>
+      <div className="sim-controls__hint">WASD / arrows move · Q/E turn</div>
       <label className="sim-controls__dial">
         <span>{Math.round(heading)}°</span>
         <input

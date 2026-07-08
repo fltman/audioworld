@@ -195,9 +195,34 @@ body {
 }
 .topbar {
   display: grid;
-  grid-template-columns: 40px 1fr 40px;
+  grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 8px;
+}
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.segmented button.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .topbar__title {
   display: flex;
@@ -301,4 +326,86 @@ body {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+/* --- Map view ------------------------------------------------------------ */
+.mapstage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.expmap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden; /* clip Leaflet's tile buffer even if the container is re-classed */
+  background: #0b0b12;
+}
+.expmap .leaflet-control-zoom a {
+  background: rgba(18, 18, 31, 0.92);
+  color: #eae6ff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.expmap .leaflet-control-attribution {
+  background: rgba(10, 10, 18, 0.6);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 9px;
+}
+.expmap .leaflet-control-attribution a {
+  color: rgba(201, 188, 255, 0.8);
+}
+
+.exp-user__cone {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+}
+.exp-user__cone::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid var(--accent);
+  filter: drop-shadow(0 0 4px rgba(124, 92, 255, 0.8));
+}
+.exp-user__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #eae6ff;
+  box-shadow: 0 0 10px 2px var(--accent);
+}
+.exp-src span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 8px var(--c);
+}
+.recenter-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 600;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(18, 18, 31, 0.92);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
 }
