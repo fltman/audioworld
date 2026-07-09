@@ -58,6 +58,8 @@ export interface DraftState {
   disengageDistance: number;
   followRadius: number;
   followSpeed: number;
+  /** Height in metres above the listener (+up / -down); 0 = level. */
+  height: number;
   /** Story flags this point sets / requires (comma-separated text). */
   setsFlags: string;
   requiresFlags: string;
@@ -74,6 +76,7 @@ const NUMERIC_DEFAULTS = {
   disengageDistance: 80,
   followRadius: 8,
   followSpeed: 2,
+  height: 0,
 };
 
 /** Non-numeric draft fields shared by freshDraft + pointToDraft's base. */
@@ -131,6 +134,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     ...NUMERIC_DEFAULTS,
     endBehavior: 'loop',
     ...FLAG_DEFAULTS,
+    height: point.height ?? 0,
     setsFlags: (point.setsFlags ?? []).join(', '),
     requiresFlags: (point.requiresFlags ?? []).join(', '),
   };
@@ -230,6 +234,7 @@ export function draftToInput(d: DraftState): DraftResult {
     startAt: d.startAt,
     setsFlags: parseFlags(d.setsFlags),
     requiresFlags: parseFlags(d.requiresFlags),
+    ...(d.height ? { height: d.height } : {}),
   };
 
   switch (d.type) {

@@ -9,8 +9,14 @@ export interface FrameSource {
   audible: boolean;
   /** Relative azimuth in degrees (0 = dead ahead, +90 = right). */
   az: number;
+  /** Elevation angle in radians (+up); places the source above/below on the unit sphere. */
+  elevation?: number;
   /** Target loudness 0..1. */
   gain: number;
+  /** Doppler playback rate (1 = no shift); recreated sources inherit the last value. */
+  playbackRate?: number;
+  /** Air-absorption low-pass cutoff in Hz (far = duller); undefined leaves it open. */
+  cutoffHz?: number;
   /** For global/shared points: seconds into the shared timeline, so playback starts
    *  at the same point in the loop on every device. Undefined = start at 0. */
   startOffsetSec?: number;
@@ -19,7 +25,11 @@ export interface FrameSource {
 interface SourceNode {
   url: string;
   panner: PannerNode;
+  /** Distance air-absorption low-pass, between the source and the panner. */
+  lowpass: BiquadFilterNode;
   gain: GainNode;
+  /** Latest Doppler rate, so a recreated one-shot source starts at the right pitch. */
+  rate: number;
   /** Transient — AudioBufferSourceNodes are one-shot, recreated on each (re)start. */
   src: AudioBufferSourceNode | null;
   loop: boolean;
@@ -36,6 +46,8 @@ interface SourceNode {
 
 const POS_TC = 0.05; // panner glide
 const GAIN_TC = 0.08; // loudness glide
+const RATE_TC = 0.06; // Doppler pitch glide
+const CUTOFF_TC = 0.08; // air-absorption filter glide
 
 /**
  * Web Audio spatializer built on decoded AudioBuffers. Shared by the client
@@ -90,9 +102,19 @@ export class AudioEngine {
       node.stopAfter = fs.playback.stopAfter;
       node.reload = fs.playback.reload;
 
-      // Direction: place on the unit circle by relative azimuth.
+      // Direction: place on the unit sphere by relative azimuth + elevation.
       const rad = (fs.az * Math.PI) / 180;
-      this.position(node.panner, Math.sin(rad), -Math.cos(rad), t);
+      const el = fs.elevation ?? 0;
+      const ce = Math.cos(el);
+      this.position(node.panner, Math.sin(rad) * ce, Math.sin(el), -Math.cos(rad) * ce, t);
+
+      // Air-absorption: dull the far side of the field.
+      if (fs.cutoffHz != null) node.lowpass.frequency.setTargetAtTime(fs.cutoffHz, t, CUTOFF_TC);
+      // Doppler: nudge the pitch of whatever source is currently playing.
+      if (fs.playbackRate != null) {
+        node.rate = fs.playbackRate;
+        if (node.src) node.src.playbackRate.setTargetAtTime(fs.playbackRate, t, RATE_TC);
+      }
 
       if (fs.audible) {
         const entering = !node.wasAudible;
@@ -125,6 +147,7 @@ export class AudioEngine {
       this.clearGap(node);
       this.stopSource(node);
       try {
+        node.lowpass.disconnect();
         node.panner.disconnect();
         node.gain.disconnect();
       } catch {
@@ -150,16 +173,23 @@ export class AudioEngine {
     panner.maxDistance = 10_000;
     panner.rolloffFactor = 0;
 
+    const lowpass = this.ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 18000;
+
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
 
+    lowpass.connect(panner);
     panner.connect(gain);
     gain.connect(this.master);
 
     const node: SourceNode = {
       url: fs.url,
       panner,
+      lowpass,
       gain,
+      rate: 1,
       src: null,
       loop: fs.playback.loop && !fs.playback.stopAfter,
       stopAfter: fs.playback.stopAfter,
@@ -187,7 +217,8 @@ export class AudioEngine {
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
     src.loop = node.loop;
-    src.connect(node.panner);
+    src.playbackRate.value = node.rate;
+    src.connect(node.lowpass);
     src.onended = () => {
       if (src !== node.src) return;
       node.src = null;
@@ -237,13 +268,13 @@ export class AudioEngine {
     }
   }
 
-  private position(p: PannerNode, x: number, z: number, t: number): void {
+  private position(p: PannerNode, x: number, y: number, z: number, t: number): void {
     if (p.positionX) {
       p.positionX.setTargetAtTime(x, t, POS_TC);
-      p.positionY.setTargetAtTime(0, t, POS_TC);
+      p.positionY.setTargetAtTime(y, t, POS_TC);
       p.positionZ.setTargetAtTime(z, t, POS_TC);
     } else {
-      p.setPosition(x, 0, z);
+      p.setPosition(x, y, z);
     }
   }
 

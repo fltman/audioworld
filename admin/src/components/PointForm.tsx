@@ -63,11 +63,13 @@ function NumberField({
   value,
   onValue,
   step = 1,
+  min = 0,
 }: {
   label: string;
   value: number;
   onValue: (n: number) => void;
   step?: number;
+  min?: number;
 }) {
   return (
     <label className="form-field">
@@ -75,7 +77,7 @@ function NumberField({
       <input
         className="input"
         type="number"
-        min={0}
+        min={min}
         step={step}
         value={value}
         onChange={(e) => onValue(readNum(e))}
@@ -285,6 +287,12 @@ export default function PointForm(props: Props) {
             </select>
           </label>
         )}
+        <NumberField
+          label="Height (m · + up / − down)"
+          value={draft.height}
+          onValue={(n) => onChange({ height: n })}
+          min={-1000}
+        />
       </div>
 
       {draft.type === 'static' && (

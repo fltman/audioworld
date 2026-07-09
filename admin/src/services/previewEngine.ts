@@ -1,8 +1,11 @@
 import type { AudioPoint, Coordinates, SourceState } from '@audioworld/shared';
 import {
+  airCutoffHz,
   attenuation,
   audibleRadiusOf,
   destinationPoint,
+  dopplerRate,
+  elevationRad,
   isGloballyTimed,
   relativeBearing,
   resolveSource,
@@ -41,6 +44,7 @@ export class PreviewEngine {
   private serverOffset = 0;
   private readonly stateMemory = new Map<string, SourceState>();
   private readonly flags = new Set<string>();
+  private readonly prevDistance = new Map<string, number>();
   private points: AudioPoint[];
 
   listener: Coordinates;
@@ -125,6 +129,17 @@ export class PreviewEngine {
       const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
       const gain = r.audible ? attenuation(r.distance, radius, point.volume) : 0;
 
+      const prevDist = this.prevDistance.get(point.id);
+      this.prevDistance.set(point.id, r.distance);
+      const isMover =
+        point.type === 'path' ||
+        point.type === 'static_circling' ||
+        point.type === 'path_triggered' ||
+        (point.type === 'follow_user' && (point.mode ?? 'attach') !== 'attach');
+      const playbackRate = isMover ? dopplerRate(r.distance, prevDist ?? null, dtSec) : 1;
+      const cutoffHz = airCutoffHz(r.distance, radius);
+      const elevation = elevationRad(point.height ?? 0, r.distance);
+
       if (r.audible) {
         audible.push({ id: point.id, name: point.name, distance: r.distance, az, gain });
       }
@@ -141,7 +156,10 @@ export class PreviewEngine {
           playback: point.playback,
           audible: r.audible && !narrating,
           az,
+          elevation,
           gain,
+          playbackRate,
+          cutoffHz,
           startOffsetSec,
         });
         for (const s of point.stops) {
@@ -152,7 +170,10 @@ export class PreviewEngine {
             playback: { loop: false, stopAfter: false, reload: false },
             audible: r.audible && r.atStop?.index === s.index,
             az,
+            elevation,
             gain,
+            playbackRate,
+            cutoffHz,
           });
         }
       } else {
@@ -162,7 +183,10 @@ export class PreviewEngine {
           playback: point.playback,
           audible: r.audible,
           az,
+          elevation,
           gain,
+          playbackRate,
+          cutoffHz,
           startOffsetSec,
         });
       }

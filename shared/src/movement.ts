@@ -180,6 +180,45 @@ export function secondsUntilAtStart(point: AudioPoint, elapsedSec: number): numb
   return period - phase;
 }
 
+/** Speed of sound in air, m/s. */
+const SPEED_OF_SOUND = 343;
+
+/**
+ * Doppler playback-rate for a source, from how its distance changed since last frame.
+ * Approaching (distance shrinking) pitches up (>1); receding pitches down (<1). Clamped
+ * to a musical ±~2 semitones so a fast fly-by whooshes without ever sounding broken, and
+ * so GPS jitter can't warble it. Returns 1 (no shift) when there's no prior sample.
+ */
+export function dopplerRate(distNow: number, distPrev: number | null, dtSec: number): number {
+  if (distPrev == null || dtSec <= 0) return 1;
+  // Clamp the radial velocity (not the output): a huge fake spike from a GPS jump would
+  // otherwise drive (c + v) negative and flip the pitch the wrong way. ±35 m/s keeps the
+  // rate in ~[0.91, 1.11] with the direction always correct.
+  const vRadial = Math.max(-35, Math.min(35, (distNow - distPrev) / dtSec)); // +ve = receding
+  return SPEED_OF_SOUND / (SPEED_OF_SOUND + vRadial);
+}
+
+/**
+ * Low-pass cutoff (Hz) for distance air-absorption: near sounds stay bright, far ones go
+ * dull, driven by the same normalized distance `t = distance/radius` as loudness. Open
+ * (~18 kHz) at the source, ~720 Hz at the audible edge.
+ */
+export function airCutoffHz(distance: number, radius: number): number {
+  if (radius <= 0) return 18000;
+  const t = Math.max(0, Math.min(1, distance / radius));
+  return Math.round(18000 * Math.pow(0.04, t));
+}
+
+/**
+ * Elevation angle (radians, +up) of a source `height` metres above the listener at
+ * `distance` metres of ground range. Zero height reads dead level; walk under it
+ * (distance -> 0) and it swings directly overhead.
+ */
+export function elevationRad(height: number, distance: number): number {
+  if (!height) return 0;
+  return Math.atan2(height, Math.max(distance, 0));
+}
+
 /** Position of a source orbiting `center` at radius `circleRadius`, `speed` m/s, at time `tSec`. */
 export function circlingPosition(
   center: Coordinates,

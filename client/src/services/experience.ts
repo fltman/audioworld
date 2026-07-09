@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AudioPoint, Coordinates, PointType, SourceState } from '@audioworld/shared';
 import {
+  airCutoffHz,
   anchorOf,
   attenuation,
   audibleRadiusOf,
   calculateBearing,
   calculateDistance,
   destinationPoint,
+  dopplerRate,
+  elevationRad,
   isGloballyTimed,
   relativeBearing,
   resolveSource,
@@ -114,6 +117,8 @@ export class ExperienceEngine {
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
   private readonly flags = new Set<string>();
+  /** Previous-frame distance per point, for Doppler radial velocity. */
+  private readonly prevDistance = new Map<string, number>();
 
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
@@ -267,6 +272,18 @@ export class ExperienceEngine {
       const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
       const gain = r.audible ? attenuation(r.distance, radius, point.volume) : 0;
 
+      // Spatial polish: Doppler on movers, air-absorption + elevation on everything.
+      const prevDist = this.prevDistance.get(point.id);
+      this.prevDistance.set(point.id, r.distance);
+      const isMover =
+        point.type === 'path' ||
+        point.type === 'static_circling' ||
+        point.type === 'path_triggered' ||
+        (point.type === 'follow_user' && (point.mode ?? 'attach') !== 'attach');
+      const playbackRate = isMover ? dopplerRate(r.distance, prevDist ?? null, dtSec) : 1;
+      const cutoffHz = airCutoffHz(r.distance, radius);
+      const elevation = elevationRad(point.height ?? 0, r.distance);
+
       if (r.audible) {
         blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
       }
@@ -326,7 +343,10 @@ export class ExperienceEngine {
           playback: point.playback,
           audible: r.audible && !narrating,
           az,
+          elevation,
           gain,
+          playbackRate,
+          cutoffHz,
           startOffsetSec,
         });
         for (const s of point.stops) {
@@ -337,7 +357,10 @@ export class ExperienceEngine {
             playback: { loop: false, stopAfter: false, reload: false },
             audible: r.audible && r.atStop?.index === s.index,
             az,
+            elevation,
             gain,
+            playbackRate,
+            cutoffHz,
           });
         }
       } else {
@@ -347,7 +370,10 @@ export class ExperienceEngine {
           playback: point.playback,
           audible: r.audible,
           az,
+          elevation,
           gain,
+          playbackRate,
+          cutoffHz,
           startOffsetSec,
         });
       }

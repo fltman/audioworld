@@ -73,6 +73,9 @@ export interface BaseAudioPoint {
   sync: SyncMode;
   /** For global points: epoch ms when the shared motion/audio clock starts (t=0). */
   startAt?: number;
+  /** Height in metres above the listener (+up). 0/absent = level. Drives elevation:
+   *  walk under a raised source and it swings overhead. */
+  height?: number;
   /**
    * Story flags this point RAISES on the visitor's device the first time it is
    * heard/reached (e.g. ["OLD-LADY"]). Other points can gate on them.
