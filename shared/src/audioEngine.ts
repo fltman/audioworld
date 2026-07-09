@@ -85,13 +85,20 @@ export class AudioEngine {
 
   // Acoustic-zone reverb: the whole mix is tapped into a convolver whose send level +
   // impulse are crossfaded as the listener enters/leaves zones, plus an ambient bed.
-  private readonly reverbSend: GainNode;
-  private readonly convolver: ConvolverNode;
+  // Two parallel convolver sends so a zone change cross-fades between impulses (the
+  // old tail decays on its own send) instead of hot-swapping one live convolver.
+  private readonly reverbConvolvers: [ConvolverNode, ConvolverNode];
+  private readonly reverbSends: [GainNode, GainNode];
+  private activeReverb: 0 | 1 = 0;
   private readonly impulses = new Map<ReverbCharacter, AudioBuffer>();
   /** Current ambient bed (its own gain, for independent cross-fades). */
   private ambient: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
   /** Desired ambient URL — guards the async decode against a zone change mid-load. */
   private ambientTarget: string | null = null;
+  /** Latest desired ambient volume, applied even if set while the bed is still loading. */
+  private ambientVolume = 0.6;
+  /** Pending ambient fade-out stop timers, cancelled on dispose. */
+  private readonly ambientTimers = new Set<number>();
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
@@ -99,12 +106,14 @@ export class AudioEngine {
     this.master.gain.value = 1;
     this.master.connect(ctx.destination);
 
-    this.reverbSend = ctx.createGain();
-    this.reverbSend.gain.value = 0;
-    this.convolver = ctx.createConvolver();
-    this.master.connect(this.reverbSend);
-    this.reverbSend.connect(this.convolver);
-    this.convolver.connect(ctx.destination);
+    this.reverbConvolvers = [ctx.createConvolver(), ctx.createConvolver()];
+    this.reverbSends = [ctx.createGain(), ctx.createGain()];
+    for (let i = 0; i < 2; i++) {
+      this.reverbSends[i]!.gain.value = 0;
+      this.master.connect(this.reverbSends[i]!);
+      this.reverbSends[i]!.connect(this.reverbConvolvers[i]!);
+      this.reverbConvolvers[i]!.connect(ctx.destination);
+    }
   }
 
   setMuted(muted: boolean): void {
@@ -114,19 +123,27 @@ export class AudioEngine {
   /** Enter/leave an acoustic zone: cross-fade the reverb send + impulse and the ambient bed. */
   setZone(zone: AcousticZone | null): void {
     const t = this.ctx.currentTime;
-    if (zone) this.convolver.buffer = this.impulse(zone.reverb);
-    const wet = zone ? Math.max(0, Math.min(1, zone.wet)) : 0;
-    this.reverbSend.gain.setTargetAtTime(wet, t, 0.35);
+    if (zone) {
+      // Load the new impulse onto the idle convolver, then cross-fade sends: the old
+      // tail keeps ringing on its own send as it fades, so there's no swap click.
+      const next = (1 - this.activeReverb) as 0 | 1;
+      this.reverbConvolvers[next]!.buffer = this.impulse(zone.reverb);
+      this.reverbSends[this.activeReverb]!.gain.setTargetAtTime(0, t, 0.35);
+      this.reverbSends[next]!.gain.setTargetAtTime(Math.max(0, Math.min(1, zone.wet)), t, 0.35);
+      this.activeReverb = next;
+    } else {
+      this.reverbSends[this.activeReverb]!.gain.setTargetAtTime(0, t, 0.35);
+    }
 
     const url = zone?.ambienceUrl || null;
-    const vol = Math.max(0, Math.min(1, zone?.ambienceVolume ?? 0.6));
+    this.ambientVolume = Math.max(0, Math.min(1, zone?.ambienceVolume ?? 0.6));
     if (url === this.ambientTarget) {
-      if (this.ambient) this.ambient.gain.gain.setTargetAtTime(vol, t, 0.3);
+      if (this.ambient) this.ambient.gain.gain.setTargetAtTime(this.ambientVolume, t, 0.3);
       return;
     }
     this.ambientTarget = url;
     this.fadeOutAmbient();
-    if (url) void this.startAmbient(url, vol);
+    if (url) void this.startAmbient(url);
   }
 
   private impulse(char: ReverbCharacter): AudioBuffer {
@@ -146,7 +163,7 @@ export class AudioEngine {
     return buf;
   }
 
-  private async startAmbient(url: string, volume: number): Promise<void> {
+  private async startAmbient(url: string): Promise<void> {
     await this.loadBuffer(url);
     if (this.ambientTarget !== url) return; // zone changed while decoding
     const buffer = this.buffers.get(url);
@@ -158,7 +175,8 @@ export class AudioEngine {
     src.buffer = buffer;
     src.loop = true;
     src.connect(gain);
-    gain.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.5);
+    // Use the latest desired volume — it may have been re-set while we were loading.
+    gain.gain.setTargetAtTime(this.ambientVolume, this.ctx.currentTime, 0.5);
     try {
       src.start();
     } catch {
@@ -171,8 +189,14 @@ export class AudioEngine {
     const a = this.ambient;
     this.ambient = null;
     if (!a) return;
-    a.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.35);
-    window.setTimeout(() => {
+    // Linear ramp to a true zero (an exponential never reaches 0, so a fixed-time stop
+    // would truncate an audible residual — a click). Stop just after the ramp lands.
+    const t = this.ctx.currentTime;
+    a.gain.gain.cancelScheduledValues(t);
+    a.gain.gain.setValueAtTime(a.gain.gain.value, t);
+    a.gain.gain.linearRampToValueAtTime(0, t + 0.5);
+    const id = window.setTimeout(() => {
+      this.ambientTimers.delete(id);
       try {
         a.src.stop();
         a.src.disconnect();
@@ -180,7 +204,8 @@ export class AudioEngine {
       } catch {
         /* already torn down */
       }
-    }, 900);
+    }, 600);
+    this.ambientTimers.add(id);
   }
 
   /** Reconcile the audio graph with this frame's sources. */
@@ -253,6 +278,8 @@ export class AudioEngine {
       }
     }
     this.nodes.clear();
+    for (const id of this.ambientTimers) window.clearTimeout(id);
+    this.ambientTimers.clear();
     try {
       this.ambient?.src.stop();
       this.ambient?.src.disconnect();
@@ -262,8 +289,8 @@ export class AudioEngine {
     }
     this.ambient = null;
     try {
-      this.reverbSend.disconnect();
-      this.convolver.disconnect();
+      for (const s of this.reverbSends) s.disconnect();
+      for (const c of this.reverbConvolvers) c.disconnect();
       this.master.disconnect();
     } catch {
       /* noop */
