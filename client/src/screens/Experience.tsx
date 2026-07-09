@@ -32,12 +32,18 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
       if (report) postAnalytics(course.id, report);
     };
     const onHide = () => {
-      if (document.visibilityState === 'hidden') flush();
+      if (document.visibilityState === 'hidden') {
+        // Drain analytics FIRST (marks reached as sent, clears dwell), THEN persist, so
+        // the resume snapshot reflects the post-drain state and can't re-send it.
+        flush();
+        engine.persist();
+      }
     };
     document.addEventListener('visibilitychange', onHide);
     return () => {
       document.removeEventListener('visibilitychange', onHide);
       flush();
+      engine.persist(); // capture final progress on a clean exit
     };
   }, [engine, course.id]);
 

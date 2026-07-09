@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { AudioPoint, Course } from '@audioworld/shared';
 import { getPublished } from '../api';
-import { ExperienceEngine } from '../services/experience';
+import { ExperienceEngine, type RunSnapshot } from '../services/experience';
+import { clearRun, readResumable, runKey } from '../services/runStore';
 import { isSecureEnough } from '../services/geolocation';
 import { StartMap } from '../components/StartMap';
 import { playTestTone } from '../services/testTone';
@@ -36,6 +37,7 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
   const [tested, setTested] = useState(false);
   const [pack, setPack] = useState<PackMeta | null>(() => packMeta(courseId));
   const [downloading, setDownloading] = useState<PackProgress | null>(null);
+  const [resumable, setResumable] = useState<RunSnapshot | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +49,11 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
         if (!alive) return;
         setCourse(pub.course);
         setPoints(pub.points);
+        // Offer resume only for a PUBLISHED course: an unpublished draft can be edited
+        // freely without changing the run key, so a restored run might not match it.
+        setResumable(
+          pub.course.publishedAt ? readResumable(runKey(courseId, pub.course.publishedAt)) : null
+        );
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : 'Failed to load course');
       }
@@ -59,7 +66,7 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
 
   const ready = !!course && !!points && !busy;
 
-  const handleStart = async (sim: boolean) => {
+  const handleStart = async (sim: boolean, resume?: RunSnapshot) => {
     if (!course || !points || busy) return;
     setBusy(true);
     setError(null);
@@ -70,6 +77,8 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
         showStartWayfinding: course.showStartWayfinding ?? false,
         zones: course.zones ?? [],
         eyesUp: course.eyesUp ?? false,
+        persistKey: runKey(courseId, course.publishedAt),
+        resume,
       });
       await engine.start();
       onReady(engine, sim, course);
@@ -77,6 +86,11 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
       setError('Could not start audio on this device');
       setBusy(false);
     }
+  };
+
+  const startOver = () => {
+    if (course) clearRun(runKey(courseId, course.publishedAt));
+    setResumable(null);
   };
 
   const runTest = async () => {
@@ -188,10 +202,22 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
         <button
           className="btn-primary"
           disabled={!ready}
-          onClick={() => void handleStart(preferSim)}
+          onClick={() => void handleStart(preferSim, resumable ?? undefined)}
         >
-          {busy ? 'Starting…' : preferSim ? 'Start simulation' : 'Start listening'}
+          {busy
+            ? 'Starting…'
+            : resumable
+              ? 'Resume walk'
+              : preferSim
+                ? 'Start simulation'
+                : 'Start listening'}
         </button>
+
+        {resumable && !busy && (
+          <button type="button" className="linkish" onClick={startOver}>
+            Start over from the beginning
+          </button>
+        )}
 
         <p className="gate-hint">Put on headphones and face any direction — you are the center.</p>
 

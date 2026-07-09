@@ -79,6 +79,9 @@ const CUTOFF_TC = 0.08; // air-absorption filter glide
 export class AudioEngine {
   private readonly ctx: AudioContext;
   private readonly master: GainNode;
+  /** Brick-wall-ish limiter on the master bus so overlapping loud sources (dense
+   *  clusters, a cathedral zone at high wet) can't hard-clip a phone speaker. */
+  private readonly limiter: DynamicsCompressorNode;
   private readonly nodes = new Map<string, SourceNode>();
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly loading = new Set<string>();
@@ -102,9 +105,20 @@ export class AudioEngine {
 
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
+
+    // Everything (dry sources + reverb returns + ambient) sums into master, then through
+    // the limiter to the speakers, so the summed peak is caught before the DAC clips.
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -6; // start catching peaks a little below full scale
+    this.limiter.knee.value = 4;
+    this.limiter.ratio.value = 12; // high ratio → acts as a limiter, not gentle compression
+    this.limiter.attack.value = 0.003;
+    this.limiter.release.value = 0.25;
+    this.limiter.connect(ctx.destination);
+
     this.master = ctx.createGain();
     this.master.gain.value = 1;
-    this.master.connect(ctx.destination);
+    this.master.connect(this.limiter);
 
     this.reverbConvolvers = [ctx.createConvolver(), ctx.createConvolver()];
     this.reverbSends = [ctx.createGain(), ctx.createGain()];
@@ -112,7 +126,7 @@ export class AudioEngine {
       this.reverbSends[i]!.gain.value = 0;
       this.master.connect(this.reverbSends[i]!);
       this.reverbSends[i]!.connect(this.reverbConvolvers[i]!);
-      this.reverbConvolvers[i]!.connect(ctx.destination);
+      this.reverbConvolvers[i]!.connect(this.limiter);
     }
   }
 
@@ -330,6 +344,7 @@ export class AudioEngine {
       for (const s of this.reverbSends) s.disconnect();
       for (const c of this.reverbConvolvers) c.disconnect();
       this.master.disconnect();
+      this.limiter.disconnect();
     } catch {
       /* noop */
     }

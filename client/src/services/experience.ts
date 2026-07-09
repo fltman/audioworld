@@ -129,11 +129,49 @@ const SIM_TURN_DEG = 15;
 const SIM_DRAG_M_PER_PX = 0.6;
 const HEADING_SMOOTH = 0.25;
 
+// --- GPS glitch shield ---
+// One urban-canyon multipath jump can teleport the listener tens of metres and
+// permanently commit a crossroads (locked flags never re-raise) or fire a one-shot
+// scare. These gate the raw fix stream and irreversible commits without making normal
+// walking feel laggy. Sim mode bypasses all of it.
+// Only egregious (cell-tower-grade) fixes are hard-dropped for accuracy — 40-90 m is
+// routine under tree canopy / in urban canyons where these walks run, and rejecting it
+// would throttle position updates to a stutter. The teleport (implied-speed) gate does
+// the real glitch-catching; accuracy just filters the truly useless fixes.
+const MAX_FIX_ACCURACY_M = 120;
+const MAX_FIX_SPEED_MPS = 12; // a fix implying a jump faster than ~43 km/h is a glitch
+const GPS_REJECT_TOLERANCE = 3; // accept after this many rejects (a real GPS re-lock)
+const MAX_FIX_GAP_SEC = 2; // cap the dt used for the teleport check so held rejects
+//                            don't loosen the speed bound without limit
+const GPS_STALE_MS = 10_000; // warn when no good fix has landed for this long
+const COMMIT_DWELL_MS = 1500; // sustained audibility required before an exclusive commit
+
 function smoothHeading(prev: number | null, next: number): number {
   if (prev === null) return next;
   const delta = ((next - prev + 540) % 360) - 180;
   return (prev + delta * HEADING_SMOOTH + 360) % 360;
 }
+
+/**
+ * A serialized run: everything needed to resume a walk after a reload / tab-kill so
+ * story flags, crossroads commitments, one-shot triggers and progress survive. All
+ * plain JSON (Sets/Maps flattened) so it round-trips through localStorage.
+ */
+export interface RunSnapshot {
+  /** Schema version, so an incompatible old snapshot is ignored rather than misread. */
+  v: number;
+  /** Device-clock seconds elapsed at save time — re-anchors the session clock on resume. */
+  clockSec: number;
+  flags: string[];
+  locked: string[];
+  reached: string[];
+  sentReached: string[];
+  state: Record<string, SourceState>;
+  /** Epoch ms of the save, for freshness (a very old run isn't offered for resume). */
+  savedAt: number;
+}
+
+const RUN_SNAPSHOT_VERSION = 1;
 
 export interface EngineOptions {
   points: AudioPoint[];
@@ -144,6 +182,10 @@ export interface EngineOptions {
   zones?: AcousticZone[];
   /** Eyes-up sonar navigation (hide the radar, ping toward the next point). */
   eyesUp?: boolean;
+  /** localStorage key under which to persist run state (omit to disable persistence). */
+  persistKey?: string;
+  /** A prior snapshot to resume from (its flags/locks/progress are restored). */
+  resume?: RunSnapshot;
 }
 
 /**
@@ -181,6 +223,11 @@ export class ExperienceEngine {
   /** Live speed for the hold-still gate, derived from GPS fixes (~1 Hz), not RAF frames. */
   private userSpeedLive = 0;
   private prevFix: { coords: Coordinates; t: number } | null = null;
+  /** GPS glitch shield: last accepted fix time + consecutive-reject counter. */
+  private lastAcceptedFixPerf = 0;
+  private rejectStreak = 0;
+  /** perf time each point became continuously audible (for the commit dwell gate). */
+  private readonly audibleSince = new Map<string, number>();
 
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
@@ -189,6 +236,10 @@ export class ExperienceEngine {
   private lastTickPerf = 0;
   /** ms to add to Date.now() to match the server clock (for global/shared points). */
   private serverOffset = 0;
+  /** localStorage key for run persistence (null = disabled), + throttle + resume clock. */
+  private readonly persistKey: string | null;
+  private resumeClockSec = 0;
+  private lastPersistPerf = 0;
 
   private geoWatch: GeoWatch | null = null;
   private headingWatch: HeadingWatch | null = null;
@@ -212,12 +263,25 @@ export class ExperienceEngine {
     this.showStartWayfinding = opts.showStartWayfinding ?? false;
     this.zones = opts.zones ?? [];
     this.eyesUp = opts.eyesUp ?? false;
+    this.persistKey = opts.persistKey ?? null;
     this.status = {
       mode: opts.sim ? 'sim' : 'live',
       geoError: null,
       compass: opts.sim ? 'sim' : 'unavailable',
       insecure: false,
     };
+
+    // Resume a prior run: rehydrate progress so flags, crossroads locks, one-shot
+    // triggers and per-point progress pick up where the walk left off.
+    const r = opts.resume;
+    if (r && r.v === RUN_SNAPSHOT_VERSION) {
+      this.resumeClockSec = Math.max(0, r.clockSec) || 0;
+      for (const f of r.flags) this.flags.add(f);
+      for (const f of r.locked) this.locked.add(f);
+      for (const id of r.reached) this.reachedPoints.add(id);
+      for (const id of r.sentReached) this.sentReached.add(id);
+      for (const [id, st] of Object.entries(r.state)) this.stateMemory.set(id, { ...st });
+    }
   }
 
   /** MUST be called synchronously from a user gesture (creates the AudioContext,
@@ -239,7 +303,9 @@ export class ExperienceEngine {
     // pending until the gesture fully settles, which would block opening the experience.
     void this.ctx.resume().catch(() => {});
     this.audio = new AudioEngine(this.ctx);
-    this.startedAtPerf = performance.now();
+    // Anchor the device clock so a resumed run continues from its saved elapsed time
+    // (individual-timed points read this clock; global points use the shared wall clock).
+    this.startedAtPerf = performance.now() - this.resumeClockSec * 1000;
 
     // Sync to the server clock so global/shared points are timed identically on
     // every device. Non-blocking: global points use the device clock until this
@@ -255,13 +321,32 @@ export class ExperienceEngine {
       this.headingWatch = watchHeading();
       this.geoWatch = watchUserPosition(
         (fix) => {
+          const now = performance.now();
+          // The reported heading/speed can be sound even when the POSITION jumped, and
+          // the compass-fallback shouldn't go stale during a reject streak — feed it
+          // regardless of whether we accept the position.
+          this.headingWatch?.feedGps(fix.heading, fix.speed);
+          // Glitch shield: once positioned, drop a fix that's far too inaccurate or
+          // that implies an impossible jump — unless several arrive in a row (a genuine
+          // GPS re-lock after a tunnel), so we converge instead of freezing forever.
+          if (this.userLive && this.prevFix) {
+            // Cap dt so a run of held rejects can't keep loosening the speed bound.
+            const dt = Math.min(MAX_FIX_GAP_SEC, Math.max(0.25, (now - this.prevFix.t) / 1000));
+            const implied = calculateDistance(this.prevFix.coords, fix.coords) / dt;
+            const bad =
+              (fix.accuracy != null && fix.accuracy > MAX_FIX_ACCURACY_M) ||
+              implied > MAX_FIX_SPEED_MPS;
+            if (bad && this.rejectStreak < GPS_REJECT_TOLERANCE) {
+              this.rejectStreak += 1;
+              return; // keep the last good position; don't move on a glitch
+            }
+          }
+          this.rejectStreak = 0;
+          this.lastAcceptedFixPerf = now;
           this.userLive = fix.coords;
           this.accuracy = fix.accuracy;
-          // Anchor the GPS-course fallback (used when there's no magnetic compass).
-          this.headingWatch?.feedGps(fix.heading, fix.speed);
           // Hold-still speed: use the device's own reading, else the fix-to-fix delta
           // over the ELAPSED fix interval (never the render-frame delta).
-          const now = performance.now();
           let spd = 0;
           if (fix.speed != null && fix.speed >= 0) {
             spd = fix.speed;
@@ -314,6 +399,17 @@ export class ExperienceEngine {
               : deviceClockSec > 3
                 ? 'unavailable'
                 : this.status.compass;
+    }
+
+    // GPS staleness: warn (not error) when no good fix has landed for a while, so the
+    // listener knows the position may be stale rather than silently trusting it.
+    if (
+      !this.sim &&
+      this.lastAcceptedFixPerf &&
+      nowPerf - this.lastAcceptedFixPerf > GPS_STALE_MS &&
+      !this.status.geoError
+    ) {
+      this.status.geoError = 'Weak GPS — your position may be stale';
     }
 
     const user = this.sim ? this.userSim : this.userLive;
@@ -376,12 +472,23 @@ export class ExperienceEngine {
       }
       const r = resolveSource(point, { user, clockSec, dtSec, heading, userSpeed, state, flags: this.flags });
       this.stateMemory.set(point.id, r.state);
+      // Commit-dwell tracking: how long has this point been continuously audible? A
+      // single GPS glitch shouldn't be enough to fire an IRREVERSIBLE exclusive-group
+      // choice (locked flags can never re-raise), so that commit waits for sustained
+      // audibility. Plain audibility + non-group flags stay instant. Sim bypasses.
+      if (r.audible) {
+        if (!this.audibleSince.has(point.id)) this.audibleSince.set(point.id, nowPerf);
+      } else {
+        this.audibleSince.delete(point.id);
+      }
+      const committable =
+        this.sim || (r.audible && nowPerf - (this.audibleSince.get(point.id) ?? nowPerf) >= COMMIT_DWELL_MS);
       // Visiting (hearing) a point raises its story flags for the rest of the session.
       // For an exclusive group the first sibling reached commits and locks the others'
       // flags (excluding any flag it sets itself, so a shared flag isn't self-locked).
       if (r.audible && point.setsFlags && point.setsFlags.length > 0) {
         if (point.flagGroup) {
-          if (!committedGroups.has(point.flagGroup)) {
+          if (committable && !committedGroups.has(point.flagGroup)) {
             committedGroups.add(point.flagGroup);
             raised.push(...point.setsFlags);
             const mine = new Set(point.setsFlags);
@@ -391,7 +498,7 @@ export class ExperienceEngine {
               }
             }
           }
-          // else: a lower-order sibling already won this group this frame — skip.
+          // else: not yet sustained, or a lower-order sibling already won — skip.
         } else {
           raised.push(...point.setsFlags);
         }
@@ -567,6 +674,14 @@ export class ExperienceEngine {
     this.lastAudibleCount = blips.length;
 
     this.audio?.update(frame);
+
+    // Persist the run periodically so a reload / iOS tab-kill mid-walk can resume with
+    // flags, crossroads locks and progress intact.
+    if (this.persistKey && !this.sim && nowPerf - this.lastPersistPerf > 5000) {
+      this.lastPersistPerf = nowPerf;
+      this.persist();
+    }
+
     return {
       user, headingDeg, accuracy, blips, sources, waypoints,
       zoneName: zone?.name ?? null, audibleCount: blips.length,
@@ -575,6 +690,40 @@ export class ExperienceEngine {
 
   getStatus(): EngineStatus {
     return this.status;
+  }
+
+  /** Snapshot the run's progress so it can be resumed after a reload / tab-kill. */
+  serialize(): RunSnapshot {
+    return {
+      v: RUN_SNAPSHOT_VERSION,
+      clockSec: this.startedAtPerf ? (performance.now() - this.startedAtPerf) / 1000 : this.resumeClockSec,
+      flags: [...this.flags],
+      locked: [...this.locked],
+      reached: [...this.reachedPoints],
+      sentReached: [...this.sentReached],
+      state: Object.fromEntries(this.stateMemory),
+      savedAt: Date.now(),
+    };
+  }
+
+  /** Write the run snapshot to localStorage (no-op for sim or when persistence is off). */
+  persist(): void {
+    if (!this.persistKey || this.sim) return;
+    try {
+      localStorage.setItem(this.persistKey, JSON.stringify(this.serialize()));
+    } catch {
+      /* storage full / disabled — the walk still runs, just won't resume */
+    }
+  }
+
+  /** Forget any persisted run (on "start over" / completion). */
+  clearPersisted(): void {
+    if (!this.persistKey) return;
+    try {
+      localStorage.removeItem(this.persistKey);
+    } catch {
+      /* ignore */
+    }
   }
 
   /**
