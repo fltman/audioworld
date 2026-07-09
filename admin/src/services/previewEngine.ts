@@ -89,6 +89,7 @@ export class PreviewEngine {
   reset(): void {
     this.stateMemory.clear();
     this.flags.clear();
+    this.prevDistance.clear();
     this.lastTickPerf = 0;
     this.startedAtPerf = performance.now();
   }
