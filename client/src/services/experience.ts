@@ -237,7 +237,11 @@ export class ExperienceEngine {
       // For a global source, seek playback to the shared loop position; undefined = start at 0.
       const startOffsetSec = startAt != null ? clockSec : undefined;
 
-      if (point.type === 'path' && point.stops && point.stops.length > 0) {
+      if (
+        (point.type === 'path' || point.type === 'path_triggered') &&
+        point.stops &&
+        point.stops.length > 0
+      ) {
         // Guided tour: the traveling voice plays while moving (and during silent
         // dwells); it yields to a stop's narration while dwelling there. Each stop's
         // clip is its own voice, audible only during its dwell, and plays once.

@@ -138,6 +138,8 @@ export interface FollowUserPoint extends BaseAudioPoint {
 export interface PathTriggeredPoint extends BaseAudioPoint {
   type: 'path_triggered';
   path: Coordinates[];
+  /** Guided-tour waypoints (pause + optional narration), timed from the trigger moment. */
+  stops?: PathStop[];
   triggerRadius: number;
   speed: number;
   endBehavior: PathEndBehavior;

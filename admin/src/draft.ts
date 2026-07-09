@@ -129,6 +129,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
       return {
         ...base,
         path: [...point.path],
+        stops: point.stops ? point.stops.map((s) => ({ ...s })) : [],
         triggerRadius: point.triggerRadius,
         speed: point.speed,
         endBehavior: point.endBehavior,
@@ -226,6 +227,7 @@ export function draftToInput(d: DraftState): DraftResult {
           ...common,
           type: 'path_triggered',
           path: d.path,
+          stops: d.stops.filter((s) => s.dwellSec > 0 && s.index < d.path.length),
           triggerRadius: d.triggerRadius,
           speed: d.speed,
           endBehavior: d.endBehavior,

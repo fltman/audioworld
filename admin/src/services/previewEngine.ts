@@ -116,7 +116,11 @@ export class PreviewEngine {
         audible.push({ id: point.id, name: point.name, distance: r.distance, az, gain });
       }
       const startOffsetSec = startAt != null ? clockSec : undefined;
-      if (point.type === 'path' && point.stops && point.stops.length > 0) {
+      if (
+        (point.type === 'path' || point.type === 'path_triggered') &&
+        point.stops &&
+        point.stops.length > 0
+      ) {
         const narrating = !!(r.atStop && r.atStop.audio);
         frame.push({
           id: point.id,

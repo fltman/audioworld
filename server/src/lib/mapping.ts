@@ -195,13 +195,16 @@ function configForType(
         center: coord(body.center, 'center'),
         initialRadius: num(body.initialRadius, 'initialRadius'),
       };
-    case 'path_triggered':
+    case 'path_triggered': {
+      const path = coordArray(body.path, 'path');
       return {
-        path: coordArray(body.path, 'path'),
+        path,
+        stops: pathStops(body.stops, path.length),
         triggerRadius: num(body.triggerRadius, 'triggerRadius'),
         speed: num(body.speed, 'speed'),
         endBehavior: endBehavior(body.endBehavior),
       };
+    }
   }
 }
 

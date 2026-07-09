@@ -140,7 +140,7 @@ function drawPoint(layer: L.LayerGroup, p: AudioPoint, onClick: () => void): voi
       { color: meta.color, weight: 3, opacity: 0.85, interactive: false }
     ).addTo(layer);
   }
-  if (p.type === 'path') {
+  if (p.type === 'path' || p.type === 'path_triggered') {
     drawPathTimes(layer, p.path, p.speed, p.stops);
   }
 
@@ -288,7 +288,7 @@ export default function MapView(props: Props) {
         d.path.map((c) => [c.lat, c.lng] as [number, number]),
         { color: ACCENT, weight: 3, dashArray: d.drawingPath ? '6 6' : undefined, interactive: false }
       ).addTo(layer);
-      if (d.type === 'path' && !d.drawingPath) {
+      if ((d.type === 'path' || d.type === 'path_triggered') && !d.drawingPath) {
         drawPathTimes(layer, d.path, d.speed, d.stops);
       }
       const start = d.path[0]!;

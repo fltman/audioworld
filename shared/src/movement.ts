@@ -310,9 +310,16 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
       }
       if (triggeredAtSec !== null) {
         const elapsed = clockSec - triggeredAtSec;
-        const { position } = pointAlongPath(point.path, point.speed * elapsed, point.endBehavior);
-        const d = calculateDistance(user, position);
-        return out(position, d <= point.triggerRadius);
+        const st =
+          point.stops && point.stops.length > 0
+            ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, elapsed)
+            : {
+                position: pointAlongPath(point.path, point.speed * elapsed, point.endBehavior)
+                  .position,
+                atStop: null as PathStop | null,
+              };
+        const d = calculateDistance(user, st.position);
+        return out(st.position, d <= point.triggerRadius, st.atStop);
       }
       return out(start, false);
     }

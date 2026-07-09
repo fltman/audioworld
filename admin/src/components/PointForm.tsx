@@ -72,8 +72,9 @@ export default function PointForm(props: Props) {
   // Global (shared) timing only makes sense for the continuously-moving types.
   const canSync = draft.type === 'path' || draft.type === 'static_circling';
 
-  const vertexTimes =
-    draft.type === 'path' ? pathVertexTimes(draft.path, draft.speed, draft.stops) : [];
+  const vertexTimes = isPathType(draft.type)
+    ? pathVertexTimes(draft.path, draft.speed, draft.stops)
+    : [];
 
   const upsertStop = (index: number, patch: Partial<PathStop>) => {
     const exists = draft.stops.some((s) => s.index === index);
@@ -272,7 +273,7 @@ export default function PointForm(props: Props) {
         </p>
       )}
 
-      {draft.type === 'path' && draft.path.length >= 2 && (
+      {isPathType(draft.type) && draft.path.length >= 2 && (
         <div className="form-field">
           <span className="label">Stops · pause &amp; narrate (arrival time shown)</span>
           <div className="stops">
