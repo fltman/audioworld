@@ -393,6 +393,37 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 0 8px var(--c);
 }
+
+.start-map {
+  width: 100%;
+  max-width: 340px;
+  height: 190px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.start-pin__dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.start-pin__label {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+  color: #fff;
+  background: var(--accent);
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
 .recenter-btn {
   position: absolute;
   right: 12px;

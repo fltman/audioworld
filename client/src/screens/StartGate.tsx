@@ -3,6 +3,7 @@ import type { AudioPoint, Course } from '@audioworld/shared';
 import { getCourse, getPoints } from '../api';
 import { ExperienceEngine } from '../services/experience';
 import { isSecureEnough } from '../services/geolocation';
+import { StartMap } from '../components/StartMap';
 
 interface StartGateProps {
   courseId: string;
@@ -70,6 +71,13 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
       <div className="gate-body">
         <h1 className="gate-title">{course?.name ?? 'Loading…'}</h1>
         {course?.description && <p className="gate-desc">{course.description}</p>}
+
+        {points && points.length > 0 && (
+          <>
+            <StartMap points={points} />
+            <p className="gate-hint">Head to the start pin to begin.</p>
+          </>
+        )}
 
         {error && <div className="notice notice--error">{error}</div>}
         {insecure && (
