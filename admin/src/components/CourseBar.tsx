@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Course } from '@audioworld/shared';
+import ShareCourse from './ShareCourse';
 
 interface Props {
   courses: Course[];
@@ -14,6 +15,7 @@ export default function CourseBar({ courses, selectedId, onSelect, onCreate, onD
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const submit = () => {
     const n = name.trim();
@@ -86,39 +88,59 @@ export default function CourseBar({ courses, selectedId, onSelect, onCreate, onD
         </button>
       </div>
 
-      {selectedId &&
-        (confirmDelete ? (
-          <div className="confirm">
-            <span>Delete this course and its points?</span>
-            <div className="row-actions">
-              <button
-                type="button"
-                className="btn btn-danger small"
-                onClick={() => {
-                  onDelete(selectedId);
-                  setConfirmDelete(false);
-                }}
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost small"
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
+      {selectedId && (
+        <div className="row-actions">
           <button
             type="button"
             className="btn btn-ghost small"
-            onClick={() => setConfirmDelete(true)}
+            onClick={() => setSharing((s) => !s)}
           >
-            Delete course
+            {sharing ? 'Hide share' : 'Share link & QR'}
           </button>
-        ))}
+          {!confirmDelete && (
+            <button
+              type="button"
+              className="btn btn-ghost small"
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete course
+            </button>
+          )}
+        </div>
+      )}
+
+      {selectedId && sharing && (
+        <ShareCourse
+          courseId={selectedId}
+          courseName={courses.find((c) => c.id === selectedId)?.name ?? 'course'}
+          onClose={() => setSharing(false)}
+        />
+      )}
+
+      {selectedId && confirmDelete && (
+        <div className="confirm">
+          <span>Delete this course and its points?</span>
+          <div className="row-actions">
+            <button
+              type="button"
+              className="btn btn-danger small"
+              onClick={() => {
+                onDelete(selectedId);
+                setConfirmDelete(false);
+              }}
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost small"
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

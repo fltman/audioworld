@@ -207,6 +207,30 @@ body {
   gap: 8px;
 }
 
+.share {
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.share__qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.share__qr img {
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+}
+
 .banner {
   margin: 0 18px;
   padding: 10px 12px;
