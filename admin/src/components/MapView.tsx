@@ -5,6 +5,7 @@ import {
   audibleRadiusOf,
   pathVertexTimes,
   triggerRadiusOf,
+  type AcousticZone,
   type AudioPoint,
   type Coordinates,
 } from '@audioworld/shared';
@@ -28,6 +29,10 @@ interface Props {
   onSelectPoint: (id: string) => void;
   /** When set, the map hosts a draggable virtual listener for the playtest. */
   preview: PreviewEngine | null;
+  /** Acoustic zones to draw as filled polygons. */
+  zones?: AcousticZone[];
+  /** In-progress zone polygon vertices (while drawing a new zone). */
+  zoneDraft?: Coordinates[] | null;
 }
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
@@ -154,6 +159,7 @@ export default function MapView(props: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const pointsLayerRef = useRef<L.LayerGroup | null>(null);
   const draftLayerRef = useRef<L.LayerGroup | null>(null);
+  const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const clickTimer = useRef<number | null>(null);
   const stateRef = useRef(props);
   stateRef.current = props;
@@ -182,6 +188,7 @@ export default function MapView(props: Props) {
       maxZoom: 19,
     }).addTo(map);
 
+    zonesLayerRef.current = L.layerGroup().addTo(map); // under the point markers
     pointsLayerRef.current = L.layerGroup().addTo(map);
     draftLayerRef.current = L.layerGroup().addTo(map);
 
@@ -216,8 +223,42 @@ export default function MapView(props: Props) {
       mapRef.current = null;
       pointsLayerRef.current = null;
       draftLayerRef.current = null;
+      zonesLayerRef.current = null;
     };
   }, []);
+
+  // Draw acoustic zones (filled polygons) + the in-progress zone outline.
+  useEffect(() => {
+    const layer = zonesLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    for (const z of props.zones ?? []) {
+      if (z.polygon.length < 3) continue;
+      L.polygon(
+        z.polygon.map((c) => [c.lat, c.lng] as [number, number]),
+        { color: '#3fd0c9', weight: 1.5, fillColor: '#3fd0c9', fillOpacity: 0.14 }
+      )
+        .bindTooltip(`${z.name} · ${z.reverb}`, { sticky: true })
+        .addTo(layer);
+    }
+    const d = props.zoneDraft;
+    if (d && d.length > 0) {
+      const latlngs = d.map((c) => [c.lat, c.lng] as [number, number]);
+      L.polyline([...latlngs, ...(d.length >= 3 ? [latlngs[0]!] : [])], {
+        color: '#3fd0c9',
+        weight: 2,
+        dashArray: '5,5',
+      }).addTo(layer);
+      for (const c of d) {
+        L.circleMarker([c.lat, c.lng], {
+          radius: 4,
+          color: '#3fd0c9',
+          fillColor: '#3fd0c9',
+          fillOpacity: 1,
+        }).addTo(layer);
+      }
+    }
+  }, [props.zones, props.zoneDraft]);
 
   // Playtest: a draggable virtual listener. A loop keeps the marker synced to the
   // engine (which the keyboard also drives) and rotates its cone to the heading.

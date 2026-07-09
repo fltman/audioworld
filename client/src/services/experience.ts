@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AudioPoint, Coordinates, PointType, SourceState } from '@audioworld/shared';
+import type {
+  AcousticZone,
+  AudioPoint,
+  Coordinates,
+  PointType,
+  SourceState,
+} from '@audioworld/shared';
 import {
   airCutoffHz,
   anchorOf,
@@ -14,6 +20,7 @@ import {
   relativeBearing,
   resolveSource,
   secondsUntilAtStart,
+  zoneAt,
 } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
 import { AudioEngine, type FrameSource } from '@audioworld/shared';
@@ -66,6 +73,8 @@ export interface FrameState {
   blips: Blip[];
   sources: MapSource[];
   waypoints: Waypoint[];
+  /** Name of the acoustic zone the listener is inside, or null. */
+  zoneName: string | null;
   audibleCount: number;
 }
 
@@ -83,6 +92,7 @@ export interface Snapshot extends EngineStatus {
   lng: number | null;
   accuracy: number | null;
   headingDeg: number | null;
+  zone: string | null;
 }
 
 const FALLBACK_ORIGIN: Coordinates = { lat: 59.3293, lng: 18.0686 };
@@ -102,6 +112,8 @@ export interface EngineOptions {
   sim: boolean;
   /** Show a compass cue + distance (+ return ETA) to the course start point. */
   showStartWayfinding?: boolean;
+  /** Acoustic zones (reverb + ambient beds) for the course. */
+  zones?: AcousticZone[];
 }
 
 /**
@@ -113,6 +125,9 @@ export class ExperienceEngine {
   private readonly points: AudioPoint[];
   private readonly sim: boolean;
   private readonly showStartWayfinding: boolean;
+  private readonly zones: AcousticZone[];
+  /** Id of the zone the listener is currently inside, to fire setZone only on change. */
+  private lastZoneId: string | null = null;
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
@@ -148,6 +163,7 @@ export class ExperienceEngine {
     this.points = opts.points;
     this.sim = opts.sim;
     this.showStartWayfinding = opts.showStartWayfinding ?? false;
+    this.zones = opts.zones ?? [];
     this.status = {
       mode: opts.sim ? 'sim' : 'live',
       geoError: null,
@@ -247,7 +263,17 @@ export class ExperienceEngine {
 
     if (!user) {
       this.audio?.update([]);
-      return { user: null, headingDeg, accuracy, blips: [], sources: [], waypoints: [], audibleCount: 0 };
+      return {
+        user: null, headingDeg, accuracy, blips: [], sources: [], waypoints: [],
+        zoneName: null, audibleCount: 0,
+      };
+    }
+
+    // Acoustic zone: fire setZone only when the enclosing zone changes.
+    const zone = zoneAt(this.zones, user);
+    if ((zone?.id ?? null) !== this.lastZoneId) {
+      this.lastZoneId = zone?.id ?? null;
+      this.audio?.setZone(zone);
     }
 
     const heading = headingDeg ?? 0;
@@ -413,7 +439,10 @@ export class ExperienceEngine {
     }
 
     this.audio?.update(frame);
-    return { user, headingDeg, accuracy, blips, sources, waypoints, audibleCount: blips.length };
+    return {
+      user, headingDeg, accuracy, blips, sources, waypoints,
+      zoneName: zone?.name ?? null, audibleCount: blips.length,
+    };
   }
 
   getStatus(): EngineStatus {
@@ -508,6 +537,7 @@ function toSnapshot(f: FrameState, status: EngineStatus): Snapshot {
     lng: f.user?.lng ?? null,
     accuracy: f.accuracy,
     headingDeg: f.headingDeg,
+    zone: f.zoneName,
   };
 }
 
@@ -523,6 +553,7 @@ export function useExperience(engine: ExperienceEngine) {
     blips: [],
     sources: [],
     waypoints: [],
+    zoneName: null,
     audibleCount: 0,
   });
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>

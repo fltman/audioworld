@@ -25,6 +25,7 @@ export function Readout({ snap }: ReadoutProps) {
         <span>{coords}</span>
         {snap.accuracy != null && <span>&plusmn;{Math.round(snap.accuracy)} m</span>}
         <span>{snap.headingDeg != null ? `${Math.round(snap.headingDeg)}°` : '—'}</span>
+        {snap.zone && <span className="pill pill--zone">{snap.zone}</span>}
       </div>
       {notices.length > 0 && (
         <div className="readout__notices">

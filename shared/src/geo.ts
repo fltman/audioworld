@@ -86,3 +86,22 @@ export function attenuation(distance: number, radius: number, maxVolume: number)
   const t = distance / radius; // 0..1
   return maxVolume * (1 - t * t);
 }
+
+/**
+ * Is a coordinate inside a polygon? Ray-casting on lat/lng treated as a plane — exact
+ * enough at the scale of a walkable acoustic zone. Polygon needs >= 3 vertices.
+ */
+export function pointInPolygon(p: Coordinates, polygon: Coordinates[]): boolean {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i]!.lng;
+    const yi = polygon[i]!.lat;
+    const xj = polygon[j]!.lng;
+    const yj = polygon[j]!.lat;
+    const intersects =
+      yi > p.lat !== yj > p.lat && p.lng < ((xj - xi) * (p.lat - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}

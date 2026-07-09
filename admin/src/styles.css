@@ -410,6 +410,28 @@ input[type='range'] {
   margin-top: 10px;
 }
 
+.zone-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.zone-row__head {
+  display: flex;
+  gap: 6px;
+}
+.zone-row__wet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .number-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

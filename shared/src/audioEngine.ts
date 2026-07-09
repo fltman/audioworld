@@ -1,4 +1,13 @@
-import type { PlaybackOptions } from './types';
+import type { AcousticZone, PlaybackOptions, ReverbCharacter } from './types';
+
+/** Synthesized impulse-response presets per reverb character: [length s, decay power]. */
+const REVERB: Record<ReverbCharacter, { seconds: number; decay: number }> = {
+  outdoor: { seconds: 0.25, decay: 1.2 },
+  room: { seconds: 0.6, decay: 2.0 },
+  hall: { seconds: 1.8, decay: 2.6 },
+  cathedral: { seconds: 3.6, decay: 3.2 },
+  tunnel: { seconds: 2.4, decay: 1.6 },
+};
 
 /** Per-frame instruction for one point, produced by the experience engine. */
 export interface FrameSource {
@@ -74,15 +83,104 @@ export class AudioEngine {
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly loading = new Set<string>();
 
+  // Acoustic-zone reverb: the whole mix is tapped into a convolver whose send level +
+  // impulse are crossfaded as the listener enters/leaves zones, plus an ambient bed.
+  private readonly reverbSend: GainNode;
+  private readonly convolver: ConvolverNode;
+  private readonly impulses = new Map<ReverbCharacter, AudioBuffer>();
+  /** Current ambient bed (its own gain, for independent cross-fades). */
+  private ambient: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  /** Desired ambient URL — guards the async decode against a zone change mid-load. */
+  private ambientTarget: string | null = null;
+
   constructor(ctx: AudioContext) {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = 1;
     this.master.connect(ctx.destination);
+
+    this.reverbSend = ctx.createGain();
+    this.reverbSend.gain.value = 0;
+    this.convolver = ctx.createConvolver();
+    this.master.connect(this.reverbSend);
+    this.reverbSend.connect(this.convolver);
+    this.convolver.connect(ctx.destination);
   }
 
   setMuted(muted: boolean): void {
     this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.05);
+  }
+
+  /** Enter/leave an acoustic zone: cross-fade the reverb send + impulse and the ambient bed. */
+  setZone(zone: AcousticZone | null): void {
+    const t = this.ctx.currentTime;
+    if (zone) this.convolver.buffer = this.impulse(zone.reverb);
+    const wet = zone ? Math.max(0, Math.min(1, zone.wet)) : 0;
+    this.reverbSend.gain.setTargetAtTime(wet, t, 0.35);
+
+    const url = zone?.ambienceUrl || null;
+    const vol = Math.max(0, Math.min(1, zone?.ambienceVolume ?? 0.6));
+    if (url === this.ambientTarget) {
+      if (this.ambient) this.ambient.gain.gain.setTargetAtTime(vol, t, 0.3);
+      return;
+    }
+    this.ambientTarget = url;
+    this.fadeOutAmbient();
+    if (url) void this.startAmbient(url, vol);
+  }
+
+  private impulse(char: ReverbCharacter): AudioBuffer {
+    const cached = this.impulses.get(char);
+    if (cached) return cached;
+    const { seconds, decay } = REVERB[char] ?? REVERB.room;
+    const rate = this.ctx.sampleRate;
+    const len = Math.max(1, Math.floor(rate * seconds));
+    const buf = this.ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    this.impulses.set(char, buf);
+    return buf;
+  }
+
+  private async startAmbient(url: string, volume: number): Promise<void> {
+    await this.loadBuffer(url);
+    if (this.ambientTarget !== url) return; // zone changed while decoding
+    const buffer = this.buffers.get(url);
+    if (!buffer) return;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(this.master);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    src.connect(gain);
+    gain.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.5);
+    try {
+      src.start();
+    } catch {
+      /* start race */
+    }
+    this.ambient = { src, gain };
+  }
+
+  private fadeOutAmbient(): void {
+    const a = this.ambient;
+    this.ambient = null;
+    if (!a) return;
+    a.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.35);
+    window.setTimeout(() => {
+      try {
+        a.src.stop();
+        a.src.disconnect();
+        a.gain.disconnect();
+      } catch {
+        /* already torn down */
+      }
+    }, 900);
   }
 
   /** Reconcile the audio graph with this frame's sources. */
@@ -156,6 +254,16 @@ export class AudioEngine {
     }
     this.nodes.clear();
     try {
+      this.ambient?.src.stop();
+      this.ambient?.src.disconnect();
+      this.ambient?.gain.disconnect();
+    } catch {
+      /* already torn down */
+    }
+    this.ambient = null;
+    try {
+      this.reverbSend.disconnect();
+      this.convolver.disconnect();
       this.master.disconnect();
     } catch {
       /* noop */

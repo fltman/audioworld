@@ -1,4 +1,4 @@
-import type { Course, CourseInput } from '@audioworld/shared';
+import type { AcousticZone, Course, CourseInput } from '@audioworld/shared';
 import { pool } from '../db/pool';
 
 interface CourseRow {
@@ -7,6 +7,7 @@ interface CourseRow {
   description: string | null;
   owner_id: string | null;
   show_start_wayfinding: boolean;
+  zones: AcousticZone[] | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -18,6 +19,7 @@ function rowToCourse(row: CourseRow): Course {
     description: row.description ?? undefined,
     ownerId: row.owner_id ?? null,
     showStartWayfinding: row.show_start_wayfinding,
+    zones: row.zones ?? [],
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -43,9 +45,15 @@ export async function createCourse(
   ownerId: string | null = null
 ): Promise<Course> {
   const { rows } = await pool.query<CourseRow>(
-    `INSERT INTO courses (name, description, owner_id, show_start_wayfinding)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [input.name, input.description ?? null, ownerId, input.showStartWayfinding ?? false]
+    `INSERT INTO courses (name, description, owner_id, show_start_wayfinding, zones)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [
+      input.name,
+      input.description ?? null,
+      ownerId,
+      input.showStartWayfinding ?? false,
+      JSON.stringify(input.zones ?? []),
+    ]
   );
   return rowToCourse(rows[0]!);
 }
@@ -61,9 +69,16 @@ export async function updateCourse(
        name = $1,
        description = COALESCE($2, description),
        show_start_wayfinding = COALESCE($3, show_start_wayfinding),
+       zones = COALESCE($4, zones),
        updated_at = now()
-     WHERE id = $4 RETURNING *`,
-    [input.name, input.description ?? null, input.showStartWayfinding ?? null, id]
+     WHERE id = $5 RETURNING *`,
+    [
+      input.name,
+      input.description ?? null,
+      input.showStartWayfinding ?? null,
+      input.zones != null ? JSON.stringify(input.zones) : null,
+      id,
+    ]
   );
   return rows[0] ? rowToCourse(rows[0]) : null;
 }

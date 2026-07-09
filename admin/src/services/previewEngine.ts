@@ -1,4 +1,4 @@
-import type { AudioPoint, Coordinates, SourceState } from '@audioworld/shared';
+import type { AcousticZone, AudioPoint, Coordinates, SourceState } from '@audioworld/shared';
 import {
   airCutoffHz,
   attenuation,
@@ -9,6 +9,7 @@ import {
   isGloballyTimed,
   relativeBearing,
   resolveSource,
+  zoneAt,
 } from '@audioworld/shared';
 import { AudioEngine, type FrameSource } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
@@ -46,6 +47,8 @@ export class PreviewEngine {
   private readonly flags = new Set<string>();
   private readonly prevDistance = new Map<string, number>();
   private points: AudioPoint[];
+  private zones: AcousticZone[] = [];
+  private lastZoneId: string | null = null;
 
   listener: Coordinates;
   heading = 0;
@@ -72,6 +75,9 @@ export class PreviewEngine {
   setPoints(points: AudioPoint[]): void {
     this.points = points;
   }
+  setZones(zones: AcousticZone[]): void {
+    this.zones = zones;
+  }
   setListener(c: Coordinates): void {
     this.listener = c;
   }
@@ -91,6 +97,8 @@ export class PreviewEngine {
     this.flags.clear();
     this.prevDistance.clear();
     this.lastTickPerf = 0;
+    this.lastZoneId = null;
+    this.audio?.setZone(null);
     this.startedAtPerf = performance.now();
   }
 
@@ -113,6 +121,12 @@ export class PreviewEngine {
     const frame: FrameSource[] = [];
     const audible: PreviewBlip[] = [];
     const raised: string[] = [];
+
+    const zone = zoneAt(this.zones, user);
+    if ((zone?.id ?? null) !== this.lastZoneId) {
+      this.lastZoneId = zone?.id ?? null;
+      this.audio?.setZone(zone);
+    }
 
     for (const point of this.points) {
       const startAt = isGloballyTimed(point) ? point.startAt : undefined;

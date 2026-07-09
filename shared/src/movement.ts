@@ -1,5 +1,14 @@
-import type { AudioPoint, Coordinates, PathEndBehavior, PathStop } from './types';
-import { calculateBearing, calculateDistance, destinationPoint } from './geo';
+import type { AcousticZone, AudioPoint, Coordinates, PathEndBehavior, PathStop } from './types';
+import { calculateBearing, calculateDistance, destinationPoint, pointInPolygon } from './geo';
+
+/** The acoustic zone the listener is in, or null. Later zones win where they overlap. */
+export function zoneAt(zones: AcousticZone[] | undefined, p: Coordinates): AcousticZone | null {
+  if (!zones) return null;
+  for (let i = zones.length - 1; i >= 0; i--) {
+    if (pointInPolygon(p, zones[i]!.polygon)) return zones[i]!;
+  }
+  return null;
+}
 
 /** Total length of a polyline in meters. */
 export function pathLength(path: Coordinates[]): number {

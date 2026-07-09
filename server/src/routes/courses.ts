@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { CourseInput } from '@audioworld/shared';
+import type { AcousticZone, CourseInput, ReverbCharacter } from '@audioworld/shared';
 import * as Courses from '../models/course';
 import * as Points from '../models/point';
 import { ValidationError } from '../lib/mapping';
@@ -37,7 +37,49 @@ function validateCourseInput(body: unknown): CourseInput {
     description: typeof b.description === 'string' ? b.description : undefined,
     showStartWayfinding:
       typeof b.showStartWayfinding === 'boolean' ? b.showStartWayfinding : undefined,
+    zones: parseZones(b.zones),
   };
+}
+
+const REVERB_CHARS: readonly ReverbCharacter[] = [
+  'room',
+  'hall',
+  'cathedral',
+  'tunnel',
+  'outdoor',
+];
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** Validate acoustic zones. Undefined (omitted) means "leave unchanged" on update. */
+function parseZones(value: unknown): AcousticZone[] | undefined {
+  if (value == null) return undefined;
+  if (!Array.isArray(value)) throw new ValidationError('"zones" must be an array');
+  return value.map((z, i) => {
+    if (!z || typeof z !== 'object') throw new ValidationError(`zones[${i}] must be an object`);
+    const o = z as Record<string, unknown>;
+    if (!Array.isArray(o.polygon) || o.polygon.length < 3) {
+      throw new ValidationError(`zones[${i}].polygon needs at least 3 points`);
+    }
+    const polygon = o.polygon.map((c, j) => {
+      const cc = c as Record<string, unknown>;
+      if (!cc || typeof cc.lat !== 'number' || typeof cc.lng !== 'number') {
+        throw new ValidationError(`zones[${i}].polygon[${j}] must be {lat, lng}`);
+      }
+      return { lat: cc.lat, lng: cc.lng };
+    });
+    const zone: AcousticZone = {
+      id: typeof o.id === 'string' && o.id ? o.id : `zone-${i}`,
+      name: typeof o.name === 'string' && o.name.trim() ? o.name : `Zone ${i + 1}`,
+      polygon,
+      reverb: REVERB_CHARS.includes(o.reverb as ReverbCharacter)
+        ? (o.reverb as ReverbCharacter)
+        : 'room',
+      wet: typeof o.wet === 'number' ? clamp01(o.wet) : 0.5,
+    };
+    if (typeof o.ambienceUrl === 'string' && o.ambienceUrl.trim()) zone.ambienceUrl = o.ambienceUrl;
+    if (typeof o.ambienceVolume === 'number') zone.ambienceVolume = clamp01(o.ambienceVolume);
+    return zone;
+  });
 }
 
 coursesRouter.get(

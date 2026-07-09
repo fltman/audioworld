@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { AudioPoint, Coordinates, Course, PointType, User } from '@audioworld/shared';
+import type {
+  AcousticZone,
+  AudioPoint,
+  Coordinates,
+  Course,
+  PointType,
+  User,
+} from '@audioworld/shared';
 import { anchorOf } from '@audioworld/shared';
 import { api, getToken, setToken } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
@@ -13,6 +20,7 @@ import MapView from './components/MapView';
 import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
+import ZonePanel from './components/ZonePanel';
 import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
@@ -26,6 +34,9 @@ export default function App() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [points, setPoints] = useState<AudioPoint[]>([]);
+  const [zones, setZones] = useState<AcousticZone[]>([]);
+  const [zoneDraft, setZoneDraft] = useState<Coordinates[] | null>(null);
+  const [savingZones, setSavingZones] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [fitToken, setFitToken] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -47,10 +58,11 @@ export default function App() {
     setPreview(null);
   };
 
-  // Keep the running playtest fed with the latest points; tear it down on unmount.
+  // Keep the running playtest fed with the latest points + zones; tear it down on unmount.
   useEffect(() => {
     preview?.setPoints(points);
-  }, [points, preview]);
+    preview?.setZones(zones);
+  }, [points, zones, preview]);
   useEffect(() => () => preview?.dispose(), [preview]);
 
   const loadPoints = async (id: string) => {
@@ -143,11 +155,35 @@ export default function App() {
         name: patch.name ?? current.name,
         description: patch.description ?? current.description,
         showStartWayfinding: patch.showStartWayfinding ?? current.showStartWayfinding ?? false,
+        zones: patch.zones ?? current.zones ?? [],
       });
       setCourses((prev) => prev.map((c) => (c.id === id ? updated : c)));
     } catch (e) {
       setError(msg(e));
     }
+  };
+
+  // Sync the zone editor to the selected course whenever it changes.
+  useEffect(() => {
+    const c = courses.find((x) => x.id === courseId);
+    setZones(c?.zones ?? []);
+    setZoneDraft(null);
+  }, [courseId, courses]);
+
+  const finishZone = () => {
+    if (zoneDraft && zoneDraft.length >= 3) {
+      setZones((z) => [
+        ...z,
+        { id: crypto.randomUUID(), name: `Zone ${z.length + 1}`, polygon: zoneDraft, reverb: 'room', wet: 0.5 },
+      ]);
+    }
+    setZoneDraft(null);
+  };
+  const saveZones = async () => {
+    if (!courseId) return;
+    setSavingZones(true);
+    await updateCourse(courseId, { zones });
+    setSavingZones(false);
   };
 
   const deleteCourse = async (id: string) => {
@@ -183,19 +219,30 @@ export default function App() {
     setFormError(null);
   };
 
-  const mapClick = (coord: Coordinates) =>
+  const mapClick = (coord: Coordinates) => {
+    // While drawing a zone, map clicks lay down polygon corners.
+    if (zoneDraft != null) {
+      setZoneDraft((d) => [...(d ?? []), coord]);
+      return;
+    }
     setDraft((d) => {
       if (!d) return d;
       if (isPathType(d.type)) return d.drawingPath ? { ...d, path: [...d.path, coord] } : d;
       return { ...d, center: coord };
     });
+  };
 
-  const mapDblClick = () =>
+  const mapDblClick = () => {
+    if (zoneDraft != null) {
+      finishZone();
+      return;
+    }
     setDraft((d) =>
       d && isPathType(d.type) && d.drawingPath && d.path.length >= 2
         ? { ...d, drawingPath: false }
         : d
     );
+  };
 
   const finishPath = () =>
     setDraft((d) =>
@@ -437,6 +484,20 @@ export default function App() {
               ) : (
                 <PointList points={points} onEdit={editPoint} onDelete={deletePoint} />
               )}
+              <ZonePanel
+                zones={zones}
+                drawing={zoneDraft != null}
+                draftLen={zoneDraft?.length ?? 0}
+                saving={savingZones}
+                onNew={() => setZoneDraft([])}
+                onFinish={finishZone}
+                onCancel={() => setZoneDraft(null)}
+                onUpdate={(i, patch) =>
+                  setZones((z) => z.map((zz, idx) => (idx === i ? { ...zz, ...patch } : zz)))
+                }
+                onDelete={(i) => setZones((z) => z.filter((_, idx) => idx !== i))}
+                onSave={saveZones}
+              />
             </>
           )
         )}
@@ -454,6 +515,8 @@ export default function App() {
         onPathVertexDrag={pathVertexDrag}
         onSelectPoint={selectPoint}
         preview={preview}
+        zones={zones}
+        zoneDraft={zoneDraft}
       />
     </div>
   );

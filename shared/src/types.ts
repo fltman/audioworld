@@ -205,6 +205,29 @@ export type AudioPoint =
   | FollowUserPoint
   | PathTriggeredPoint;
 
+/** Reverb character of an acoustic zone — maps to a synthesized impulse response. */
+export type ReverbCharacter = 'room' | 'hall' | 'cathedral' | 'tunnel' | 'outdoor';
+
+/**
+ * A polygonal region that colours the whole soundscape while the listener is inside
+ * it: a reverb tail (its `reverb` character at `wet` strength) and an optional diffuse
+ * ambient bed. Walking under the bridge floods everything with reverb; stepping into
+ * the chapel hushes and lengthens every tail.
+ */
+export interface AcousticZone {
+  id: string;
+  name: string;
+  /** Polygon vertices (>= 3), in order. */
+  polygon: Coordinates[];
+  reverb: ReverbCharacter;
+  /** Reverb send strength 0..1. */
+  wet: number;
+  /** Optional looping, non-spatialized ambient bed heard throughout the zone. */
+  ambienceUrl?: string;
+  /** Ambient bed loudness 0..1. */
+  ambienceVolume?: number;
+}
+
 /** A collection of audio points that form one experience. */
 export interface Course {
   id: string;
@@ -212,6 +235,8 @@ export interface Course {
   description?: string;
   /** The superuser who owns/authored this course (null for legacy/admin-created). */
   ownerId?: string | null;
+  /** Acoustic zones (reverb + ambient beds) painted over the course area. */
+  zones?: AcousticZone[];
   /**
    * When true, the client always shows a compass cue + distance to the course's
    * start point (the first point, or its first path vertex). If that first point is
@@ -261,7 +286,10 @@ export type AudioPointInput = DistributiveOmit<
 >;
 
 /** Payload accepted when creating/updating a course. */
-export type CourseInput = Pick<Course, 'name' | 'description' | 'showStartWayfinding'>;
+export type CourseInput = Pick<
+  Course,
+  'name' | 'description' | 'showStartWayfinding' | 'zones'
+>;
 
 /** Result of an audio-file upload. */
 export interface UploadResult {
