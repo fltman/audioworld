@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
@@ -68,6 +68,8 @@ function isCellKey(k: string): boolean {
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /** Sanitize + cap an anonymous analytics report from an untrusted client. */
 function parseAnalyticsReport(body: unknown): AnalyticsReport {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -83,7 +85,10 @@ function parseAnalyticsReport(body: unknown): AnalyticsReport {
   const reached: string[] = [];
   if (Array.isArray(b.reached)) {
     for (const p of b.reached.slice(0, 1000)) {
-      if (typeof p === 'string' && p.length <= 64) reached.push(p);
+      // Reject prototype-polluting keys — these become object keys in the aggregate.
+      if (typeof p === 'string' && p.length > 0 && p.length <= 64 && !DANGEROUS_KEYS.has(p)) {
+        reached.push(p);
+      }
     }
   }
   return { cells, reached };
@@ -167,20 +172,36 @@ const REVERB_CHARS: readonly ReverbCharacter[] = [
 ];
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 
+const MAX_ZONES = 200;
+const MAX_ZONE_VERTICES = 1000;
+
 /** Validate acoustic zones. Undefined (omitted) means "leave unchanged" on update. */
 function parseZones(value: unknown): AcousticZone[] | undefined {
   if (value == null) return undefined;
   if (!Array.isArray(value)) throw new ValidationError('"zones" must be an array');
+  if (value.length > MAX_ZONES) throw new ValidationError(`Too many zones (max ${MAX_ZONES})`);
   return value.map((z, i) => {
     if (!z || typeof z !== 'object') throw new ValidationError(`zones[${i}] must be an object`);
     const o = z as Record<string, unknown>;
     if (!Array.isArray(o.polygon) || o.polygon.length < 3) {
       throw new ValidationError(`zones[${i}].polygon needs at least 3 points`);
     }
+    if (o.polygon.length > MAX_ZONE_VERTICES) {
+      throw new ValidationError(`zones[${i}].polygon has too many vertices`);
+    }
     const polygon = o.polygon.map((c, j) => {
       const cc = c as Record<string, unknown>;
-      if (!cc || typeof cc.lat !== 'number' || typeof cc.lng !== 'number') {
-        throw new ValidationError(`zones[${i}].polygon[${j}] must be {lat, lng}`);
+      // Require FINITE lat/lng in range — NaN/Infinity would poison point-in-polygon math.
+      if (
+        !cc ||
+        typeof cc.lat !== 'number' ||
+        typeof cc.lng !== 'number' ||
+        !Number.isFinite(cc.lat) ||
+        !Number.isFinite(cc.lng) ||
+        Math.abs(cc.lat) > 90 ||
+        Math.abs(cc.lng) > 180
+      ) {
+        throw new ValidationError(`zones[${i}].polygon[${j}] must be finite {lat, lng} in range`);
       }
       return { lat: cc.lat, lng: cc.lng };
     });
@@ -376,18 +397,36 @@ coursesRouter.post(
     const bundle = parseBundle(req.file.buffer);
 
     const urlMap = new Map<string, string>();
+    const writtenFiles: string[] = [];
     for (const asset of bundle.assets) {
       const name = randomUUID() + extForAsset(asset);
       writeFileSync(join(UPLOAD_DIR, name), Buffer.from(asset.data, 'base64'));
+      writtenFiles.push(name);
       urlMap.set(asset.url, `/uploads/${name}`);
     }
 
-    const zones = rewriteZoneUrls(bundle.course.zones ?? [], urlMap);
-    const course = await Courses.createCourse({ ...bundle.course, zones }, req.user!.id);
-    for (const point of bundle.points) {
-      await Points.create(course.id, rewritePointUrls(point, urlMap));
+    // If any part fails mid-import, roll back so we don't leave a half-imported course
+    // and orphaned asset files behind. (Point delete cascades from the course row.)
+    let courseId: string | null = null;
+    try {
+      const zones = rewriteZoneUrls(bundle.course.zones ?? [], urlMap);
+      const course = await Courses.createCourse({ ...bundle.course, zones }, req.user!.id);
+      courseId = course.id;
+      for (const point of bundle.points) {
+        await Points.create(course.id, rewritePointUrls(point, urlMap));
+      }
+      res.status(201).json({ success: true, data: course });
+    } catch (err) {
+      if (courseId) await Courses.removeCourse(courseId).catch(() => {});
+      for (const name of writtenFiles) {
+        try {
+          rmSync(join(UPLOAD_DIR, name), { force: true });
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      throw err;
     }
-    res.status(201).json({ success: true, data: course });
   })
 );
 

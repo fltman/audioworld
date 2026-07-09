@@ -13,9 +13,15 @@ type Phase =
 const PARAMS = new URLSearchParams(window.location.search);
 const PREFER_SIM = PARAMS.get('sim') === '1';
 
+// Course ids are UUIDs; anything else in ?course= is ignored (it flows into API paths
+// and storage/cache keys, so it must not be attacker-shaped free text).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function initialPhase(): Phase {
   const courseId = PARAMS.get('course');
-  return courseId ? { name: 'gate', courseId, course: null } : { name: 'picker' };
+  return courseId && UUID_RE.test(courseId)
+    ? { name: 'gate', courseId, course: null }
+    : { name: 'picker' };
 }
 
 export default function App() {

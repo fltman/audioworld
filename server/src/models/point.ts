@@ -9,8 +9,9 @@ async function touchCourse(courseId: string): Promise<void> {
 }
 
 export async function listByCourse(courseId: string): Promise<AudioPoint[]> {
+  // Bounded: a course far past any sane point count won't return an unbounded payload.
   const { rows } = await pool.query<PointRow>(
-    'SELECT * FROM audio_points WHERE course_id = $1 ORDER BY created_at ASC',
+    'SELECT * FROM audio_points WHERE course_id = $1 ORDER BY created_at ASC LIMIT 5000',
     [courseId]
   );
   return rows.map(rowToPoint);

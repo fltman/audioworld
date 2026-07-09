@@ -80,14 +80,21 @@ export default function App() {
   }, [points, zones, preview]);
   useEffect(() => () => preview?.dispose(), [preview]);
 
+  // Monotonic token so a slow listPoints response for a previously-selected course
+  // can't clobber the points of the course the user has since switched to.
+  const loadReqRef = useRef(0);
   const loadPoints = async (id: string) => {
+    const token = ++loadReqRef.current;
     try {
-      setPoints(await api.listPoints(id));
+      const pts = await api.listPoints(id);
+      if (token !== loadReqRef.current) return; // superseded by a newer selection
+      setPoints(pts);
     } catch (e) {
+      if (token !== loadReqRef.current) return;
       setError(msg(e));
       setPoints([]);
     } finally {
-      setFitToken((t) => t + 1);
+      if (token === loadReqRef.current) setFitToken((t) => t + 1);
     }
   };
 

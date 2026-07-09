@@ -20,7 +20,7 @@ export async function createUser(
 ): Promise<User> {
   const { rows } = await pool.query<UserRow>(
     'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING *',
-    [email, passwordHash, role]
+    [email.trim().toLowerCase(), passwordHash, role]
   );
   return toUser(rows[0]!);
 }
@@ -61,7 +61,7 @@ export async function upsertUser(
     `INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)
      ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role
      RETURNING *`,
-    [email, passwordHash, role]
+    [email.trim().toLowerCase(), passwordHash, role]
   );
   return toUser(rows[0]!);
 }

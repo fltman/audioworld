@@ -110,8 +110,9 @@ export async function getWithSnapshot(
 }
 
 export async function listCourses(): Promise<Course[]> {
+  // Bounded so the public list endpoint can't return an unbounded payload.
   const { rows } = await pool.query<CourseRow>(
-    'SELECT * FROM courses ORDER BY created_at ASC'
+    'SELECT * FROM courses ORDER BY created_at ASC LIMIT 1000'
   );
   return rows.map(rowToCourse);
 }

@@ -29,7 +29,14 @@ export function errorHandler(
         ? (err as { statusCode: number }).statusCode
         : 500;
 
-  const message = err instanceof Error ? err.message : 'Internal server error';
-  if (status >= 500) console.error('[error]', err);
+  // For 5xx, don't leak internal error text (Postgres details, stack messages) to the
+  // client — log it server-side and return a generic message. Sub-500s (thrown with an
+  // explicit status) carry an intentional, safe message.
+  if (status >= 500) {
+    console.error('[error]', err);
+    res.status(status).json({ success: false, error: 'Internal server error' });
+    return;
+  }
+  const message = err instanceof Error ? err.message : 'Request failed';
   res.status(status).json({ success: false, error: message });
 }

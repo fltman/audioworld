@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { basename, extname, join } from 'node:path';
+import { basename, join } from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
 import type { UploadListItem, UploadResult } from '@audioworld/shared';
@@ -14,9 +14,33 @@ export const uploadRouter = Router();
 // Only authors may upload audio.
 uploadRouter.use(requireRole('superuser', 'admin'));
 
+// Map the (client-declared) audio mimetype to a SAFE, server-chosen extension. The
+// stored extension must never come from the client's filename: express.static derives
+// the response Content-Type from the extension, so a client-controlled ".html"/".svg"
+// would be served as text/html on the same origin as the app → stored XSS. Any audio
+// type we don't recognize falls back to ".bin" (served as octet-stream, never executed).
+const AUDIO_EXT_BY_MIME: Record<string, string> = {
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/aac': '.aac',
+  'audio/x-aac': '.aac',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+  'audio/wave': '.wav',
+  'audio/ogg': '.ogg',
+  'audio/opus': '.opus',
+  'audio/webm': '.webm',
+  'audio/flac': '.flac',
+  'audio/x-flac': '.flac',
+};
+const safeAudioExt = (mimetype: string): string =>
+  AUDIO_EXT_BY_MIME[mimetype.toLowerCase()] ?? '.bin';
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => cb(null, randomUUID() + extname(file.originalname)),
+  // Never trust the client's filename/extension — derive it from the validated type.
+  filename: (_req, file, cb) => cb(null, randomUUID() + safeAudioExt(file.mimetype)),
 });
 
 const upload = multer({

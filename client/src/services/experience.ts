@@ -165,6 +165,8 @@ export class ExperienceEngine {
   /** Anonymous analytics (live only): coarse grid cell → seconds dwelt, + points heard. */
   private readonly visitedCells = new Map<string, number>();
   private readonly reachedPoints = new Set<string>();
+  /** Point ids already reported in a prior flush, so re-flushing can't double-count. */
+  private readonly sentReached = new Set<string>();
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
@@ -575,9 +577,24 @@ export class ExperienceEngine {
     return this.status;
   }
 
-  /** This session's anonymous, aggregate report (coarse cells + points heard). */
-  getAnalytics(): AnalyticsReport {
-    return { cells: Object.fromEntries(this.visitedCells), reached: [...this.reachedPoints] };
+  /**
+   * Drain the anonymous aggregate report accumulated since the last drain. Cells are
+   * cleared (the server SUMS dwell across reports, so sending deltas is correct); reached
+   * points are sent once (tracked in sentReached) so a mid-walk flush + a final flush
+   * can't double-count the funnel. Returns null when there's nothing new to send.
+   */
+  drainAnalytics(): AnalyticsReport | null {
+    const cells = Object.fromEntries(this.visitedCells);
+    this.visitedCells.clear();
+    const reached: string[] = [];
+    for (const id of this.reachedPoints) {
+      if (!this.sentReached.has(id)) {
+        this.sentReached.add(id);
+        reached.push(id);
+      }
+    }
+    if (Object.keys(cells).length === 0 && reached.length === 0) return null;
+    return { cells, reached };
   }
 
   setMuted(muted: boolean): void {
@@ -700,6 +717,9 @@ export function useExperience(engine: ExperienceEngine) {
     let lastTick = 0;
     let hidden = document.hidden;
     let lowBattery = false;
+    // The getBattery() promise may resolve AFTER this effect is cleaned up; this flag
+    // stops its callback from re-arming a zombie loop / leaking battery listeners.
+    let cancelled = false;
 
     const push = (frame: FrameState, gap: number): void => {
       const now = performance.now();
@@ -717,6 +737,7 @@ export function useExperience(engine: ExperienceEngine) {
 
     // Pick a scheduling strategy from the current visibility + battery state.
     const schedule = (): void => {
+      if (cancelled) return;
       clearTimers();
       if (hidden) {
         // Pocket / backgrounded: rAF is frozen while hidden, so keep the SOUND alive
@@ -763,6 +784,7 @@ export function useExperience(engine: ExperienceEngine) {
       getBattery
         .call(navigator)
         .then((b) => {
+          if (cancelled) return; // effect already cleaned up — don't wire a zombie
           battery = b;
           b.addEventListener('levelchange', onBattery);
           b.addEventListener('chargingchange', onBattery);
@@ -775,6 +797,7 @@ export function useExperience(engine: ExperienceEngine) {
 
     schedule();
     return () => {
+      cancelled = true;
       clearTimers();
       document.removeEventListener('visibilitychange', onVisibility);
       if (battery) {

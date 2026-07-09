@@ -47,6 +47,12 @@ interface Props {
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
 
+/** Escape a user-controlled string before interpolating it into Leaflet HTML (divIcon
+ *  / bindTooltip render their string as HTML, so an unescaped name is a DOM-XSS sink). */
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
 function markerIcon(color: string, big: boolean, symbol: string, selected = false): L.DivIcon {
   const s = big ? 26 : 22;
   const cls = selected ? 'aw-marker aw-marker--selected' : 'aw-marker';
@@ -282,7 +288,7 @@ export default function MapView(props: Props) {
         z.polygon.map((c) => [c.lat, c.lng] as [number, number]),
         { color: '#3fd0c9', weight: 1.5, fillColor: '#3fd0c9', fillOpacity: 0.14 }
       )
-        .bindTooltip(`${z.name} · ${z.reverb}`, { sticky: true })
+        .bindTooltip(`${esc(z.name)} · ${esc(z.reverb)}`, { sticky: true })
         .addTo(layer);
     }
     const d = props.zoneDraft;

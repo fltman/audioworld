@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Course } from '@audioworld/shared';
 import { Radar } from '../components/Radar';
 import { MapView } from '../components/MapView';
@@ -20,15 +20,16 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
   // desktop author can still see where they are while testing the sonar.
   const eyesUp = (course.eyesUp ?? false) && !engine.isSim();
 
-  // Send the anonymous aggregate report once, on exit or when the page is hidden.
-  const sentRef = useRef(false);
+  // Send the anonymous aggregate report whenever the page is hidden (the reliable
+  // moment on mobile) and on unmount. Draining sends only the delta since the last
+  // flush, so multiple screen-offs during a long walk are all captured without
+  // double-counting — the previous once-only latch discarded everything after the
+  // first screen-off.
   useEffect(() => {
     const flush = () => {
-      if (sentRef.current || engine.isSim()) return;
-      const report = engine.getAnalytics();
-      if (Object.keys(report.cells).length === 0) return;
-      sentRef.current = true;
-      postAnalytics(course.id, report);
+      if (engine.isSim()) return;
+      const report = engine.drainAnalytics();
+      if (report) postAnalytics(course.id, report);
     };
     const onHide = () => {
       if (document.visibilityState === 'hidden') flush();
