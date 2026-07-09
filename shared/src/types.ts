@@ -209,6 +209,12 @@ export interface Course {
   description?: string;
   /** The superuser who owns/authored this course (null for legacy/admin-created). */
   ownerId?: string | null;
+  /**
+   * When true, the client always shows a compass cue + distance to the course's
+   * start point (the first point, or its first path vertex). If that first point is
+   * a moving guide, the cue also shows an ETA for when it returns to the start.
+   */
+  showStartWayfinding?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -252,7 +258,7 @@ export type AudioPointInput = DistributiveOmit<
 >;
 
 /** Payload accepted when creating/updating a course. */
-export type CourseInput = Pick<Course, 'name' | 'description'>;
+export type CourseInput = Pick<Course, 'name' | 'description' | 'showStartWayfinding'>;
 
 /** Result of an audio-file upload. */
 export interface UploadResult {

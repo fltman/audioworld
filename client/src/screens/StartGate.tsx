@@ -51,7 +51,11 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
     setBusy(true);
     setError(null);
     try {
-      const engine = new ExperienceEngine({ points, sim });
+      const engine = new ExperienceEngine({
+        points,
+        sim,
+        showStartWayfinding: course.showStartWayfinding ?? false,
+      });
       await engine.start();
       onReady(engine, sim, course);
     } catch {

@@ -6,6 +6,7 @@ interface CourseRow {
   name: string;
   description: string | null;
   owner_id: string | null;
+  show_start_wayfinding: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -16,6 +17,7 @@ function rowToCourse(row: CourseRow): Course {
     name: row.name,
     description: row.description ?? undefined,
     ownerId: row.owner_id ?? null,
+    showStartWayfinding: row.show_start_wayfinding,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -41,8 +43,9 @@ export async function createCourse(
   ownerId: string | null = null
 ): Promise<Course> {
   const { rows } = await pool.query<CourseRow>(
-    'INSERT INTO courses (name, description, owner_id) VALUES ($1, $2, $3) RETURNING *',
-    [input.name, input.description ?? null, ownerId]
+    `INSERT INTO courses (name, description, owner_id, show_start_wayfinding)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [input.name, input.description ?? null, ownerId, input.showStartWayfinding ?? false]
   );
   return rowToCourse(rows[0]!);
 }
@@ -52,9 +55,9 @@ export async function updateCourse(
   input: CourseInput
 ): Promise<Course | null> {
   const { rows } = await pool.query<CourseRow>(
-    `UPDATE courses SET name = $1, description = $2, updated_at = now()
-     WHERE id = $3 RETURNING *`,
-    [input.name, input.description ?? null, id]
+    `UPDATE courses SET name = $1, description = $2, show_start_wayfinding = $3, updated_at = now()
+     WHERE id = $4 RETURNING *`,
+    [input.name, input.description ?? null, input.showStartWayfinding ?? false, id]
   );
   return rows[0] ? rowToCourse(rows[0]) : null;
 }

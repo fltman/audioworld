@@ -135,6 +135,21 @@ export default function App() {
     }
   };
 
+  const updateCourse = async (id: string, patch: Partial<Course>) => {
+    const current = courses.find((c) => c.id === id);
+    if (!current) return;
+    try {
+      const updated = await api.updateCourse(id, {
+        name: patch.name ?? current.name,
+        description: patch.description ?? current.description,
+        showStartWayfinding: patch.showStartWayfinding ?? current.showStartWayfinding ?? false,
+      });
+      setCourses((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
   const deleteCourse = async (id: string) => {
     try {
       await api.deleteCourse(id);
@@ -371,6 +386,7 @@ export default function App() {
           onSelect={selectCourse}
           onCreate={createCourse}
           onDelete={deleteCourse}
+          onUpdate={updateCourse}
         />
 
         {error && (

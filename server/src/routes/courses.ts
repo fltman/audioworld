@@ -33,6 +33,7 @@ function validateCourseInput(body: unknown): CourseInput {
   return {
     name: b.name,
     description: typeof b.description === 'string' ? b.description : undefined,
+    showStartWayfinding: b.showStartWayfinding === true,
   };
 }
 

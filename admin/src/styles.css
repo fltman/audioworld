@@ -406,6 +406,10 @@ input[type='range'] {
   accent-color: var(--accent);
 }
 
+.course-check {
+  margin-top: 10px;
+}
+
 .number-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

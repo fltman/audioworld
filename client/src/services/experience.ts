@@ -4,10 +4,13 @@ import {
   anchorOf,
   attenuation,
   audibleRadiusOf,
+  calculateBearing,
+  calculateDistance,
   destinationPoint,
   isGloballyTimed,
   relativeBearing,
   resolveSource,
+  secondsUntilAtStart,
 } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
 import { AudioEngine, type FrameSource } from '@audioworld/shared';
@@ -46,6 +49,10 @@ export interface Waypoint {
   distance: number;
   /** True once you're within earshot (the sound itself takes over). */
   audible: boolean;
+  /** 'sound' = a per-point wayfinding arrow; 'start' = the course start cue. */
+  kind: 'sound' | 'start';
+  /** For a 'start' cue whose guide is a moving path: seconds until it's back at start (0 = there now). */
+  etaSec?: number;
 }
 
 /** Everything the HUD renders for one animation frame. */
@@ -90,6 +97,8 @@ function smoothHeading(prev: number | null, next: number): number {
 export interface EngineOptions {
   points: AudioPoint[];
   sim: boolean;
+  /** Show a compass cue + distance (+ return ETA) to the course start point. */
+  showStartWayfinding?: boolean;
 }
 
 /**
@@ -100,6 +109,7 @@ export interface EngineOptions {
 export class ExperienceEngine {
   private readonly points: AudioPoint[];
   private readonly sim: boolean;
+  private readonly showStartWayfinding: boolean;
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
@@ -131,6 +141,7 @@ export class ExperienceEngine {
   constructor(opts: EngineOptions) {
     this.points = opts.points;
     this.sim = opts.sim;
+    this.showStartWayfinding = opts.showStartWayfinding ?? false;
     this.status = {
       mode: opts.sim ? 'sim' : 'live',
       geoError: null,
@@ -227,6 +238,8 @@ export class ExperienceEngine {
     const blips: Blip[] = [];
     const sources: MapSource[] = [];
     const waypoints: Waypoint[] = [];
+    // The first point's own elapsed time, captured in the loop, for the start-return ETA.
+    let firstGuideElapsed: number | null = null;
     // Flags raised this frame are merged in AFTER the loop so ordering is irrelevant
     // (a gated point reacts on the next frame — imperceptible).
     const raised: string[] = [];
@@ -263,7 +276,20 @@ export class ExperienceEngine {
         point.showWayfinding &&
         r.position
       ) {
-        waypoints.push({ id: point.id, name: point.name, az, distance: r.distance, audible: r.audible });
+        waypoints.push({
+          id: point.id,
+          name: point.name,
+          az,
+          distance: r.distance,
+          audible: r.audible,
+          kind: 'sound',
+        });
+      }
+      // Capture the first point's own elapsed time (for the start-return ETA below).
+      if (point === this.points[0]) {
+        if (point.type === 'path') firstGuideElapsed = clockSec;
+        else if (point.type === 'path_triggered')
+          firstGuideElapsed = r.state.triggeredAtSec != null ? clockSec - r.state.triggeredAtSec : 0;
       }
       sources.push({
         id: point.id,
@@ -320,6 +346,25 @@ export class ExperienceEngine {
     }
 
     for (const f of raised) this.flags.add(f);
+
+    // Course start cue: always show the way (+ distance, + guide-return ETA) to the
+    // start point — the first point, or its first path vertex.
+    const first = this.points[0];
+    if (this.showStartWayfinding && first) {
+      const start = anchorOf(first);
+      const dStart = calculateDistance(user, start);
+      const azStart = dStart === 0 ? 0 : relativeBearing(calculateBearing(user, start), heading);
+      const eta = firstGuideElapsed != null ? secondsUntilAtStart(first, firstGuideElapsed) : null;
+      waypoints.push({
+        id: '__start__',
+        name: 'Start',
+        az: azStart,
+        distance: dStart,
+        audible: false,
+        kind: 'start',
+        etaSec: eta ?? undefined,
+      });
+    }
 
     this.audio?.update(frame);
     return { user, headingDeg, accuracy, blips, sources, waypoints, audibleCount: blips.length };

@@ -132,10 +132,16 @@ export function Radar({ engine, frameRef }: RadarProps) {
         if (!seen.has(id)) rendered.current.delete(id);
       }
 
-      // Wayfinding: rim arrows to sounds you're navigating to but can't yet hear.
+      // Wayfinding rim arrows. Sound cues show only when out of earshot; the course
+      // start cue always shows (with a return-ETA when its guide is a moving path).
       for (const wp of frame.waypoints) {
-        if (wp.audible) continue; // in earshot → the blip already shows it
-        drawWaypoint(ctx, cx, cy, R, wp);
+        if (wp.kind === 'start') {
+          const eta =
+            wp.etaSec == null ? '' : wp.etaSec <= 0 ? ' · at start' : ` · back ${fmtClock(wp.etaSec)}`;
+          drawWaypoint(ctx, cx, cy, R, wp.az, START_WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m${eta}`);
+        } else if (!wp.audible) {
+          drawWaypoint(ctx, cx, cy, R, wp.az, WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m`);
+        }
       }
 
       // You.
@@ -218,16 +224,25 @@ function drawNorth(
 }
 
 const WAYFIND = '#ffcf6b';
+const START_WAYFIND = '#5cff9d';
 
-/** An amber arrowhead pinned to the rim, pointing the way to an out-of-earshot sound. */
+/** Seconds -> m:ss. */
+function fmtClock(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** An arrowhead pinned to the rim in `color`, pointing the way, with a label just inside. */
 function drawWaypoint(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   R: number,
-  wp: { az: number; name: string; distance: number }
+  az: number,
+  color: string,
+  label: string
 ): void {
-  const rad = (wp.az * Math.PI) / 180;
+  const rad = (az * Math.PI) / 180;
   const dirx = Math.sin(rad);
   const diry = -Math.cos(rad);
   const rr = R - 6;
@@ -237,8 +252,8 @@ function drawWaypoint(
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(Math.atan2(diry, dirx));
-  ctx.fillStyle = WAYFIND;
-  ctx.shadowColor = WAYFIND;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
   ctx.shadowBlur = 10;
   ctx.beginPath();
   ctx.moveTo(9, 0);
@@ -249,11 +264,11 @@ function drawWaypoint(
   ctx.restore();
 
   ctx.save();
-  ctx.fillStyle = 'rgba(255,207,107,0.95)';
+  ctx.fillStyle = color;
   ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${wp.name} · ${Math.round(wp.distance)} m`, cx + dirx * (rr - 22), cy + diry * (rr - 22));
+  ctx.fillText(label, cx + dirx * (rr - 22), cy + diry * (rr - 22));
   ctx.restore();
 }
 

@@ -143,6 +143,38 @@ export function pathVertexTimes(
   return times;
 }
 
+/** One full traversal time (seconds) of a path including dwells — the loop cycle. */
+export function pathCycleSeconds(
+  path: Coordinates[],
+  speed: number,
+  stops: PathStop[] | undefined
+): number {
+  if (path.length < 2 || speed <= 0) return 0;
+  let t = 0;
+  for (let i = 0; i < path.length; i++) {
+    const s = stopAt(stops, i);
+    if (s) t += s.dwellSec;
+    if (i < path.length - 1) t += calculateDistance(path[i]!, path[i + 1]!) / speed;
+  }
+  return t;
+}
+
+/**
+ * Seconds until a moving path guide is next back at its start vertex (path[0]),
+ * given the guide's own elapsed time. Returns 0 if it is at the start right now,
+ * or null if the point never returns (not a path, or endBehavior 'stop').
+ */
+export function secondsUntilAtStart(point: AudioPoint, elapsedSec: number): number | null {
+  if (point.type !== 'path' && point.type !== 'path_triggered') return null;
+  if (point.endBehavior === 'stop') return null;
+  const cycle = pathCycleSeconds(point.path, point.speed, point.stops);
+  if (cycle <= 0) return null;
+  // loop returns every cycle; reverse (ping-pong) only every other cycle.
+  const period = point.endBehavior === 'reverse' ? cycle * 2 : cycle;
+  const phase = ((elapsedSec % period) + period) % period;
+  return phase === 0 ? 0 : period - phase;
+}
+
 /** Position of a source orbiting `center` at radius `circleRadius`, `speed` m/s, at time `tSec`. */
 export function circlingPosition(
   center: Coordinates,

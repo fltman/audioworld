@@ -8,9 +8,18 @@ interface Props {
   onSelect: (id: string) => void;
   onCreate: (name: string, description: string) => void;
   onDelete: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<Course>) => void;
 }
 
-export default function CourseBar({ courses, selectedId, onSelect, onCreate, onDelete }: Props) {
+export default function CourseBar({
+  courses,
+  selectedId,
+  onSelect,
+  onCreate,
+  onDelete,
+  onUpdate,
+}: Props) {
+  const selected = courses.find((c) => c.id === selectedId) ?? null;
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -87,6 +96,17 @@ export default function CourseBar({ courses, selectedId, onSelect, onCreate, onD
           New
         </button>
       </div>
+
+      {selected && (
+        <label className="check course-check">
+          <input
+            type="checkbox"
+            checked={selected.showStartWayfinding ?? false}
+            onChange={(e) => onUpdate(selected.id, { showStartWayfinding: e.currentTarget.checked })}
+          />
+          Show listeners the direction to the start point
+        </label>
+      )}
 
       {selectedId && (
         <div className="row-actions">
