@@ -1,5 +1,11 @@
 import type { ChangeEvent } from 'react';
-import type { FollowMode, PathEndBehavior, PathStop, PlaybackOptions } from '@audioworld/shared';
+import type {
+  FollowMode,
+  LocalizedClip,
+  PathEndBehavior,
+  PathStop,
+  PlaybackOptions,
+} from '@audioworld/shared';
 import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
@@ -202,6 +208,69 @@ export default function PointForm(props: Props) {
             {!uploading && audio.url && <span className="muted">{audio.title ?? audio.url}</span>}
           </div>
         )}
+
+        {(() => {
+          const variants: LocalizedClip[] = audio.variants ?? [];
+          const setVariants = (vs: LocalizedClip[]) =>
+            onChange({ audio: { ...audio, variants: vs.length ? vs : undefined } });
+          const patchVariant = (i: number, patch: Partial<LocalizedClip>) =>
+            setVariants(variants.map((v, j) => (j === i ? { ...v, ...patch } : v)));
+          return (
+            <details className="lang-variants">
+              <summary>
+                Narration languages{variants.length > 0 ? ` (${variants.length})` : ''}
+              </summary>
+              <p className="hint">
+                Alternate recordings; each listener hears the one matching their device
+                language, falling back to the clip above.
+              </p>
+              {variants.map((v, i) => (
+                <div key={i} className="lang-row">
+                  <input
+                    className="input lang-code"
+                    placeholder="en"
+                    value={v.lang}
+                    onChange={(e) => patchVariant(i, { lang: e.currentTarget.value })}
+                  />
+                  <input
+                    className="input"
+                    placeholder="https://… or upload →"
+                    value={v.url}
+                    onChange={(e) => patchVariant(i, { url: e.currentTarget.value, kind: 'url' })}
+                  />
+                  <label className="btn btn-ghost small lang-upload">
+                    ⭱
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const f = e.currentTarget.files?.[0];
+                        if (!f) return;
+                        const url = await props.onUploadFile(f);
+                        if (url) patchVariant(i, { url, kind: 'upload', title: f.name });
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-danger small"
+                    onClick={() => setVariants(variants.filter((_, j) => j !== i))}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                onClick={() => setVariants([...variants, { lang: '', kind: 'url', url: '' }])}
+              >
+                + Add language
+              </button>
+            </details>
+          );
+        })()}
       </div>
 
       <div className="form-field">

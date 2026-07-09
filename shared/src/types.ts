@@ -49,6 +49,15 @@ export interface PlaybackOptions {
   loopGapSec?: number;
 }
 
+/** An alternate-language recording of a clip, chosen by the listener's device language. */
+export interface LocalizedClip {
+  /** BCP-47 language tag, e.g. "sv", "en", "de". Matched on the primary subtag. */
+  lang: string;
+  kind: AudioSourceKind;
+  url: string;
+  title?: string;
+}
+
 /** The audio media backing a point (URL or uploaded file, both resolve to `url`). */
 export interface AudioSource {
   kind: AudioSourceKind;
@@ -57,6 +66,12 @@ export interface AudioSource {
   title?: string;
   description?: string;
   tags?: string[];
+  /**
+   * Alternate-language recordings. The client plays the one matching the listener's
+   * device language (falling back to this default `url`), so one course can narrate in
+   * several languages without duplicating points.
+   */
+  variants?: LocalizedClip[];
 }
 
 /** Fields common to every audio point. */

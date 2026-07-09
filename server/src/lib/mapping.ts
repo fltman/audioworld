@@ -2,6 +2,7 @@ import type {
   AudioPoint,
   Coordinates,
   FollowMode,
+  LocalizedClip,
   PathEndBehavior,
   PathStop,
   PlaybackOptions,
@@ -68,6 +69,11 @@ const POINT_TYPES: readonly PointType[] = [
  * type-specific geometry (center/radius/path/speed/...), completing the union.
  */
 export function rowToPoint(row: PointRow): AudioPoint {
+  // Localized clips ride inside `config` (no dedicated column); lift them back under
+  // audio.variants and keep them out of the geometry spread.
+  const { audioVariants, ...geometry } = row.config as Record<string, unknown> & {
+    audioVariants?: LocalizedClip[];
+  };
   return {
     id: row.id,
     courseId: row.course_id,
@@ -79,6 +85,7 @@ export function rowToPoint(row: PointRow): AudioPoint {
       title: row.audio_title ?? undefined,
       description: row.audio_description ?? undefined,
       tags: row.audio_tags ?? undefined,
+      ...(audioVariants && audioVariants.length ? { variants: audioVariants } : {}),
     },
     playback: row.playback,
     volume: Number(row.volume),
@@ -86,8 +93,34 @@ export function rowToPoint(row: PointRow): AudioPoint {
     startAt: row.start_at ? row.start_at.getTime() : undefined,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
-    ...row.config,
+    ...geometry,
   } as AudioPoint;
+}
+
+/** Validate an audio.variants array from client input. Returns null when absent/empty. */
+function parseVariants(value: unknown): LocalizedClip[] | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) throw new ValidationError('audio.variants must be an array');
+  const out: LocalizedClip[] = [];
+  for (const v of value) {
+    const o = asObject(v, 'audio.variants[]');
+    if (typeof o.lang !== 'string' || o.lang.trim() === '') {
+      throw new ValidationError('each audio variant needs a "lang"');
+    }
+    if (o.kind !== 'url' && o.kind !== 'upload') {
+      throw new ValidationError('audio variant "kind" must be "url" or "upload"');
+    }
+    if (typeof o.url !== 'string' || o.url.trim() === '') {
+      throw new ValidationError('each audio variant needs a "url"');
+    }
+    out.push({
+      lang: o.lang.trim(),
+      kind: o.kind,
+      url: o.url.trim(),
+      ...(typeof o.title === 'string' ? { title: o.title } : {}),
+    });
+  }
+  return out.length ? out : null;
 }
 
 /**
@@ -151,6 +184,8 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
   if (typeof body.flagGroup === 'string' && body.flagGroup.trim()) {
     config.flagGroup = body.flagGroup.trim();
   }
+  const variants = parseVariants(audio.variants);
+  if (variants) config.audioVariants = variants;
 
   return {
     course_id: courseId,

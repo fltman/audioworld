@@ -43,16 +43,22 @@ export function extForAsset(asset: CourseBundleAsset): string {
   return EXT_BY_MIME[asset.mime] ?? MIME_BY_EXT[extname(asset.filename).toLowerCase()] ?? '.mp3';
 }
 
-/** Every distinct `/uploads/...` clip a course references (points, path stops, zones). */
+/** Every distinct `/uploads/...` clip a course references (points, localized variants,
+ *  path stops, zones). */
 export function collectAssetUrls(points: AudioPoint[], zones: AcousticZone[]): string[] {
   const urls = new Set<string>();
   const add = (u: string | undefined): void => {
     if (u && u.startsWith(UPLOADS_PREFIX)) urls.add(u);
   };
+  const addClip = (audio: { url: string; variants?: { url: string }[] } | undefined): void => {
+    if (!audio) return;
+    add(audio.url);
+    if (audio.variants) for (const v of audio.variants) add(v.url);
+  };
   for (const p of points) {
-    add(p.audio.url);
+    addClip(p.audio);
     if ((p.type === 'path' || p.type === 'path_triggered') && p.stops) {
-      for (const s of p.stops) add(s.audio?.url);
+      for (const s of p.stops) addClip(s.audio);
     }
   }
   for (const z of zones) add(z.ambienceUrl);
@@ -102,14 +108,16 @@ export function buildBundle(course: Course, points: AudioPoint[]): CourseBundle 
 /** Rewrite every audio url in a point through the old→new asset map (for import). */
 export function rewritePointUrls(point: AudioPoint, map: Map<string, string>): AudioPoint {
   const remap = (u: string): string => map.get(u) ?? u;
-  const next: AudioPoint = {
-    ...point,
-    audio: { ...point.audio, url: remap(point.audio.url) },
-  };
+  const remapClip = <T extends { url: string; variants?: { url: string }[] }>(audio: T): T => ({
+    ...audio,
+    url: remap(audio.url),
+    ...(audio.variants
+      ? { variants: audio.variants.map((v) => ({ ...v, url: remap(v.url) })) }
+      : {}),
+  });
+  const next: AudioPoint = { ...point, audio: remapClip(point.audio) };
   if ((next.type === 'path' || next.type === 'path_triggered') && next.stops) {
-    next.stops = next.stops.map((s) =>
-      s.audio ? { ...s, audio: { ...s.audio, url: remap(s.audio.url) } } : s
-    );
+    next.stops = next.stops.map((s) => (s.audio ? { ...s, audio: remapClip(s.audio) } : s));
   }
   return next;
 }

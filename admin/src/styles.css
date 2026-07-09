@@ -1087,3 +1087,33 @@ input[type='range'] {
 .bulk-field input[type='range'] {
   flex: 1;
 }
+
+/* --- Localized narration variants ---------------------------------------- */
+.lang-variants {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.lang-variants > summary {
+  cursor: pointer;
+  color: var(--muted);
+  user-select: none;
+}
+.lang-variants > summary:hover {
+  color: var(--accent);
+}
+.lang-row {
+  display: grid;
+  grid-template-columns: 56px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+.lang-code {
+  text-align: center;
+  text-transform: lowercase;
+}
+.lang-upload {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}

@@ -18,6 +18,7 @@ import {
   dopplerRate,
   elevationRad,
   isGloballyTimed,
+  pickClipUrl,
   polygonCrossings,
   relativeBearing,
   resolveSource,
@@ -28,6 +29,13 @@ import { absoluteAudioUrl, syncServerTime } from '../api';
 import { AudioEngine, type FrameSource } from '@audioworld/shared';
 import { geoErrorMessage, isSecureEnough, watchUserPosition, type GeoWatch } from './geolocation';
 import { requestOrientationPermission, watchHeading, type HeadingWatch } from './orientation';
+
+// The listener's language preferences, most-preferred first — drives localized
+// narration: a point plays the clip matching the device language, else its default.
+const DEVICE_LANGS: readonly string[] =
+  typeof navigator !== 'undefined'
+    ? navigator.languages ?? (navigator.language ? [navigator.language] : [])
+    : [];
 
 /** A single audible source, projected for the radar. */
 export interface Blip {
@@ -450,7 +458,7 @@ export class ExperienceEngine {
         const narrating = !!(r.atStop && r.atStop.audio);
         frame.push({
           id: point.id,
-          url: absoluteAudioUrl(point.audio.url),
+          url: absoluteAudioUrl(pickClipUrl(point.audio, DEVICE_LANGS)),
           playback: point.playback,
           audible: r.audible && !narrating,
           az,
@@ -464,7 +472,7 @@ export class ExperienceEngine {
           if (!s.audio) continue;
           frame.push({
             id: `${point.id}::stop::${s.index}`,
-            url: absoluteAudioUrl(s.audio.url),
+            url: absoluteAudioUrl(pickClipUrl(s.audio, DEVICE_LANGS)),
             playback: { loop: false, stopAfter: false, reload: false },
             audible: r.audible && r.atStop?.index === s.index,
             az,
@@ -477,7 +485,7 @@ export class ExperienceEngine {
       } else {
         frame.push({
           id: point.id,
-          url: absoluteAudioUrl(point.audio.url),
+          url: absoluteAudioUrl(pickClipUrl(point.audio, DEVICE_LANGS)),
           playback: point.playback,
           audible: r.audible,
           az,

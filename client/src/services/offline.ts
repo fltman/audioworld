@@ -1,5 +1,5 @@
-import type { AcousticZone, AudioPoint } from '@audioworld/shared';
-import { courseBounds } from '@audioworld/shared';
+import type { AcousticZone, AudioPoint, AudioSource } from '@audioworld/shared';
+import { clipUrls, courseBounds } from '@audioworld/shared';
 import { absoluteAudioUrl } from '../api';
 
 /**
@@ -52,13 +52,17 @@ export function packMeta(courseId: string): PackMeta | null {
 
 // --- URL collection --------------------------------------------------------
 
-/** Every audio clip a course plays: point clips, path-stop clips, zone ambience. */
+/** Every audio clip a course plays — incl. localized variants so offline works in any
+ *  language: point clips, path-stop clips, zone ambience. */
 function audioUrlsOf(points: AudioPoint[], zones: AcousticZone[]): string[] {
   const urls = new Set<string>();
+  const addClip = (audio: AudioSource): void => {
+    for (const u of clipUrls(audio)) urls.add(absoluteAudioUrl(u));
+  };
   for (const p of points) {
-    urls.add(absoluteAudioUrl(p.audio.url));
+    addClip(p.audio);
     if ((p.type === 'path' || p.type === 'path_triggered') && p.stops) {
-      for (const s of p.stops) if (s.audio?.url) urls.add(absoluteAudioUrl(s.audio.url));
+      for (const s of p.stops) if (s.audio) addClip(s.audio);
     }
   }
   for (const z of zones) if (z.ambienceUrl) urls.add(absoluteAudioUrl(z.ambienceUrl));
