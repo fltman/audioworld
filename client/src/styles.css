@@ -188,6 +188,63 @@ body {
   cursor: default;
 }
 
+.audio-check {
+  width: 100%;
+  max-width: 340px;
+  padding: 14px 16px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 14px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.audio-check__title {
+  margin: 0;
+  font-weight: 650;
+  font-size: 15px;
+}
+.audio-check__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.audio-check__ok {
+  margin: 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+.btn-test {
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.btn-test:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
 /* --- Experience ---------------------------------------------------------- */
 .screen--experience {
   padding: max(env(safe-area-inset-top), 12px) 14px max(env(safe-area-inset-bottom), 12px);

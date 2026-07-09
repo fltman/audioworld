@@ -4,6 +4,7 @@ import { getCourse, getPoints } from '../api';
 import { ExperienceEngine } from '../services/experience';
 import { isSecureEnough } from '../services/geolocation';
 import { StartMap } from '../components/StartMap';
+import { playTestTone } from '../services/testTone';
 
 interface StartGateProps {
   courseId: string;
@@ -22,6 +23,8 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
   const [points, setPoints] = useState<AudioPoint[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [tested, setTested] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -64,6 +67,14 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
     }
   };
 
+  const runTest = async () => {
+    if (testing) return;
+    setTesting(true);
+    await playTestTone();
+    setTesting(false);
+    setTested(true);
+  };
+
   const insecure = !isSecureEnough();
 
   return (
@@ -89,6 +100,26 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
             Location and compass need HTTPS (or localhost). Audio still works.
           </div>
         )}
+
+        <div className="audio-check">
+          <p className="audio-check__title">Check your sound first</p>
+          <ul className="audio-check__list">
+            <li>🎧 Put on headphones</li>
+            <li>🔊 Turn the volume up</li>
+            <li>
+              Heard nothing?{' '}
+              <button type="button" className="linkish" onClick={() => window.location.reload()}>
+                Reload the page
+              </button>
+            </li>
+          </ul>
+          <button type="button" className="btn-test" disabled={testing} onClick={() => void runTest()}>
+            {testing ? 'Playing…' : tested ? 'Play test sound again' : '▶ Play test sound'}
+          </button>
+          {tested && (
+            <p className="audio-check__ok">You should have heard a tone sweep left → right.</p>
+          )}
+        </div>
 
         <button
           className="btn-primary"
