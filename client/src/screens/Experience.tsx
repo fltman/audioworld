@@ -14,7 +14,7 @@ interface ExperienceProps {
 }
 
 export function Experience({ engine, course, onExit }: ExperienceProps) {
-  const { frameRef, snapshot, muted, toggleMute } = useExperience(engine);
+  const { frameRef, snapshot, muted, toggleMute, powerMode } = useExperience(engine);
   const [view, setView] = useState<ExperienceView>('radar');
   // Eyes-up hides the visual HUD on a real device; the sim keeps the radar so a
   // desktop author can still see where they are while testing the sonar.
@@ -51,6 +51,13 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
         onToggleMute={toggleMute}
         onExit={onExit}
       />
+
+      {powerMode === 'saver' && (
+        <div className="power-chip" role="status">
+          🔋 Power saver — the map updates less often to save battery. The sound is
+          unaffected.
+        </div>
+      )}
 
       {eyesUp ? (
         <div className="eyesup">

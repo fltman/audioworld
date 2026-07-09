@@ -107,6 +107,24 @@ export interface Snapshot extends EngineStatus {
 
 const FALLBACK_ORIGIN: Coordinates = { lat: 59.3293, lng: 18.0686 };
 const SIM_STEP_M = 4;
+
+// --- Power governor tuning ---
+/** active: full rAF. saver: throttled (low battery). pocket: audio-only while hidden. */
+export type PowerMode = 'active' | 'saver' | 'pocket';
+const ACTIVE_PUSH_MS = 150; // React snapshot cadence at full power
+const SAVER_TICK_MS = 66; // ~15 Hz engine ticks when the battery is low
+const SAVER_PUSH_MS = 300; // slower chrome updates in saver mode
+const POCKET_TICK_MS = 400; // audio-only tick rate while the screen is off / hidden
+
+interface BatteryLike {
+  charging: boolean;
+  level: number;
+  addEventListener(type: string, cb: () => void): void;
+  removeEventListener(type: string, cb: () => void): void;
+}
+interface NavigatorBattery {
+  getBattery?: () => Promise<BatteryLike>;
+}
 const SIM_TURN_DEG = 15;
 const SIM_DRAG_M_PER_PX = 0.6;
 const HEADING_SMOOTH = 0.25;
@@ -673,22 +691,97 @@ export function useExperience(engine: ExperienceEngine) {
     toSnapshot(frameRef.current, engine.getStatus())
   );
   const [muted, setMuted] = useState(false);
+  const [powerMode, setPowerMode] = useState<PowerMode>('active');
 
   useEffect(() => {
     let raf = 0;
+    let interval: number | null = null;
     let lastPush = 0;
-    const loop = () => {
-      const frame = engine.tick();
-      frameRef.current = frame;
+    let lastTick = 0;
+    let hidden = document.hidden;
+    let lowBattery = false;
+
+    const push = (frame: FrameState, gap: number): void => {
       const now = performance.now();
-      if (now - lastPush > 150) {
+      if (now - lastPush >= gap) {
         lastPush = now;
         setSnapshot(toSnapshot(frame, engine.getStatus()));
       }
+    };
+    const clearTimers = (): void => {
+      if (raf) cancelAnimationFrame(raf);
+      if (interval != null) clearInterval(interval);
+      raf = 0;
+      interval = null;
+    };
+
+    // Pick a scheduling strategy from the current visibility + battery state.
+    const schedule = (): void => {
+      clearTimers();
+      if (hidden) {
+        // Pocket / backgrounded: rAF is frozen while hidden, so keep the SOUND alive
+        // with a low-rate timer (spatialization still updates as you walk) and skip all
+        // visual work. Best-effort — a fully locked phone may suspend timers entirely.
+        setPowerMode('pocket');
+        interval = window.setInterval(() => {
+          frameRef.current = engine.tick();
+        }, POCKET_TICK_MS);
+        return;
+      }
+      setPowerMode(lowBattery ? 'saver' : 'active');
+      const tickGap = lowBattery ? SAVER_TICK_MS : 0; // 0 = every frame
+      const pushGap = lowBattery ? SAVER_PUSH_MS : ACTIVE_PUSH_MS;
+      const loop = (t: number): void => {
+        raf = requestAnimationFrame(loop);
+        if (t - lastTick < tickGap) return; // throttle ticks to spare the battery
+        lastTick = t;
+        const frame = engine.tick();
+        frameRef.current = frame;
+        push(frame, pushGap);
+      };
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+
+    const onVisibility = (): void => {
+      hidden = document.hidden;
+      if (!hidden) lastPush = 0; // force an immediate refresh when the screen returns
+      schedule();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Battery-driven power saver, where the (non-iOS) Battery API is available.
+    let battery: BatteryLike | null = null;
+    const onBattery = (): void => {
+      const low = !!battery && !battery.charging && battery.level <= 0.2;
+      if (low !== lowBattery) {
+        lowBattery = low;
+        if (!hidden) schedule();
+      }
+    };
+    const getBattery = (navigator as NavigatorBattery).getBattery;
+    if (typeof getBattery === 'function') {
+      getBattery
+        .call(navigator)
+        .then((b) => {
+          battery = b;
+          b.addEventListener('levelchange', onBattery);
+          b.addEventListener('chargingchange', onBattery);
+          onBattery();
+        })
+        .catch(() => {
+          /* no battery info — stay in active/pocket modes only */
+        });
+    }
+
+    schedule();
+    return () => {
+      clearTimers();
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (battery) {
+        battery.removeEventListener('levelchange', onBattery);
+        battery.removeEventListener('chargingchange', onBattery);
+      }
+    };
   }, [engine]);
 
   const toggleMute = useCallback(() => {
@@ -699,5 +792,5 @@ export function useExperience(engine: ExperienceEngine) {
     });
   }, [engine]);
 
-  return { frameRef, snapshot, muted, toggleMute };
+  return { frameRef, snapshot, muted, toggleMute, powerMode };
 }

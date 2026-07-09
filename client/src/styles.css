@@ -608,3 +608,17 @@ body {
   display: grid;
   place-items: center;
 }
+
+/* --- Power saver chip ---------------------------------------------------- */
+.power-chip {
+  align-self: center;
+  max-width: 92%;
+  padding: 6px 14px;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 999px;
+}
