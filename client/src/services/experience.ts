@@ -10,7 +10,7 @@ import {
   resolveSource,
 } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
-import { AudioEngine, type FrameSource } from './audioEngine';
+import { AudioEngine, type FrameSource } from '@audioworld/shared';
 import { geoErrorMessage, isSecureEnough, watchUserPosition, type GeoWatch } from './geolocation';
 import { requestOrientationPermission, watchHeading, type OrientationWatch } from './orientation';
 

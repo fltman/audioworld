@@ -7,7 +7,7 @@ import {
   relativeBearing,
   resolveSource,
 } from '@audioworld/shared';
-import { AudioEngine, type FrameSource } from './audioEngine';
+import { AudioEngine, type FrameSource } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
 
 export interface PreviewBlip {

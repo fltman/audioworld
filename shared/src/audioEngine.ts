@@ -1,4 +1,4 @@
-import type { PlaybackOptions } from '@audioworld/shared';
+import type { PlaybackOptions } from './types';
 
 /** Per-frame instruction for one point, produced by the experience engine. */
 export interface FrameSource {
@@ -38,7 +38,8 @@ const POS_TC = 0.05; // panner glide
 const GAIN_TC = 0.08; // loudness glide
 
 /**
- * Web Audio spatializer built on decoded AudioBuffers.
+ * Web Audio spatializer built on decoded AudioBuffers. Shared by the client
+ * experience and the admin playtest (single source of truth).
  *
  * We deliberately avoid HTMLAudioElement + createMediaElementSource: iOS Safari
  * will only play ONE media-element-backed source at a time, so a soundscape with
@@ -50,6 +51,9 @@ const GAIN_TC = 0.08; // loudness glide
  * loudness ourselves so distance attenuation matches the HUD). The listener stays
  * at the origin facing -Z and sources sit on the unit circle by relative azimuth,
  * so the mix rotates as the user turns.
+ *
+ * Browser-only: instantiate this only in a browser (it uses Web Audio + fetch).
+ * The module is safe to import in Node (nothing runs at import time).
  */
 export class AudioEngine {
   private readonly ctx: AudioContext;
