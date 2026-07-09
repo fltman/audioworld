@@ -15,6 +15,9 @@ interface ExperienceProps {
 export function Experience({ engine, course, onExit }: ExperienceProps) {
   const { frameRef, snapshot, muted, toggleMute } = useExperience(engine);
   const [view, setView] = useState<ExperienceView>('radar');
+  // Eyes-up hides the visual HUD on a real device; the sim keeps the radar so a
+  // desktop author can still see where they are while testing the sonar.
+  const eyesUp = (course.eyesUp ?? false) && !engine.isSim();
 
   return (
     <div className="screen screen--experience">
@@ -28,7 +31,16 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
         onExit={onExit}
       />
 
-      {view === 'radar' ? (
+      {eyesUp ? (
+        <div className="eyesup">
+          <div className="eyesup__ring" />
+          <p className="eyesup__title">Eyes up</p>
+          <p className="eyesup__sub">
+            Pocket the phone and follow the ping toward the next sound — it quickens as
+            you close in. A brighter chime means you&rsquo;ve arrived.
+          </p>
+        </div>
+      ) : view === 'radar' ? (
         <div className="radar-stage">
           <Radar engine={engine} frameRef={frameRef} />
         </div>

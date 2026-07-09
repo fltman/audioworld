@@ -74,6 +74,53 @@ body {
   border-color: rgba(63, 208, 201, 0.4);
 }
 
+.eyesup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 24px;
+}
+.eyesup__ring {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 44px var(--accent-soft);
+  animation: eyesup-pulse 2s ease-in-out infinite;
+}
+@keyframes eyesup-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eyesup__ring {
+    animation: none;
+  }
+}
+.eyesup__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.eyesup__sub {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 14px;
+  color: var(--muted);
+}
+
 /* --- Course picker ------------------------------------------------------- */
 .screen--picker {
   gap: 22px;

@@ -98,14 +98,26 @@ export default function CourseBar({
       </div>
 
       {selected && (
-        <label className="check course-check">
-          <input
-            type="checkbox"
-            checked={selected.showStartWayfinding ?? false}
-            onChange={(e) => onUpdate(selected.id, { showStartWayfinding: e.currentTarget.checked })}
-          />
-          Show listeners the direction to the start point
-        </label>
+        <div className="course-check">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={selected.showStartWayfinding ?? false}
+              onChange={(e) =>
+                onUpdate(selected.id, { showStartWayfinding: e.currentTarget.checked })
+              }
+            />
+            Show listeners the direction to the start point
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={selected.eyesUp ?? false}
+              onChange={(e) => onUpdate(selected.id, { eyesUp: e.currentTarget.checked })}
+            />
+            Eyes-up mode (hide the screen, navigate by sonar ping)
+          </label>
+        </div>
       )}
 
       {selectedId && (

@@ -120,6 +120,44 @@ export class AudioEngine {
     this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.05);
   }
 
+  /** A short spatialized navigation ping (eyes-up sonar): a tone at `azimuthDeg`,
+   *  a brighter double-length tone for the 'arrive' earcon. Fire-and-forget. */
+  ping(azimuthDeg: number, kind: 'nav' | 'arrive' = 'nav'): void {
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = kind === 'arrive' ? 900 : 540;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.28, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + (kind === 'arrive' ? 0.32 : 0.16));
+    const panner = this.ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.rolloffFactor = 0;
+    const rad = (azimuthDeg * Math.PI) / 180;
+    const x = Math.sin(rad);
+    const z = -Math.cos(rad);
+    if (panner.positionX) {
+      panner.positionX.value = x;
+      panner.positionY.value = 0;
+      panner.positionZ.value = z;
+    } else {
+      panner.setPosition(x, 0, z);
+    }
+    osc.connect(gain).connect(panner).connect(this.master);
+    osc.start(now);
+    osc.stop(now + (kind === 'arrive' ? 0.34 : 0.18));
+    osc.onended = () => {
+      try {
+        osc.disconnect();
+        gain.disconnect();
+        panner.disconnect();
+      } catch {
+        /* already torn down */
+      }
+    };
+  }
+
   /** Enter/leave an acoustic zone: cross-fade the reverb send + impulse and the ambient bed. */
   setZone(zone: AcousticZone | null): void {
     const t = this.ctx.currentTime;

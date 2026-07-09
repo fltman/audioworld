@@ -53,6 +53,7 @@ ALTER TABLE audio_points
 ALTER TABLE courses
   ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS show_start_wayfinding boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS eyes_up boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS zones jsonb NOT NULL DEFAULT '[]',
   ADD COLUMN IF NOT EXISTS published jsonb;
 

@@ -251,6 +251,12 @@ export interface Course {
    * a moving guide, the cue also shows an ETA for when it returns to the start.
    */
   showStartWayfinding?: boolean;
+  /**
+   * "Eyes-up" mode: the client hides the radar/map and navigates by a spatialized
+   * sonar ping toward the nearest not-yet-heard point (faster the closer you are),
+   * with an arrival earcon — so the phone can stay in a pocket.
+   */
+  eyesUp?: boolean;
   /** When the course was last published (frozen for listeners), or null/absent if never. */
   publishedAt?: string | null;
   createdAt: string;
@@ -262,6 +268,7 @@ export interface PublishedSnapshot {
   name: string;
   description?: string;
   showStartWayfinding?: boolean;
+  eyesUp?: boolean;
   zones?: AcousticZone[];
   points: AudioPoint[];
   publishedAt: string;
@@ -327,7 +334,7 @@ export type AudioPointInput = DistributiveOmit<
 /** Payload accepted when creating/updating a course. */
 export type CourseInput = Pick<
   Course,
-  'name' | 'description' | 'showStartWayfinding' | 'zones'
+  'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones'
 >;
 
 /** Result of an audio-file upload. */

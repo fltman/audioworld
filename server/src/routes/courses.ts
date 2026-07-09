@@ -45,6 +45,7 @@ function validateCourseInput(body: unknown): CourseInput {
     description: typeof b.description === 'string' ? b.description : undefined,
     showStartWayfinding:
       typeof b.showStartWayfinding === 'boolean' ? b.showStartWayfinding : undefined,
+    eyesUp: typeof b.eyesUp === 'boolean' ? b.eyesUp : undefined,
     zones: parseZones(b.zones),
   };
 }
@@ -164,6 +165,7 @@ coursesRouter.post(
       name: course.name,
       description: course.description,
       showStartWayfinding: course.showStartWayfinding,
+      eyesUp: course.eyesUp,
       zones: course.zones,
       points,
       publishedAt: new Date().toISOString(),
@@ -190,6 +192,7 @@ coursesRouter.get(
             name: snap.name,
             description: snap.description,
             showStartWayfinding: snap.showStartWayfinding,
+            eyesUp: snap.eyesUp,
             zones: snap.zones,
           },
           points: snap.points,

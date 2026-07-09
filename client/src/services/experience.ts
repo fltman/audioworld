@@ -115,6 +115,8 @@ export interface EngineOptions {
   showStartWayfinding?: boolean;
   /** Acoustic zones (reverb + ambient beds) for the course. */
   zones?: AcousticZone[];
+  /** Eyes-up sonar navigation (hide the radar, ping toward the next point). */
+  eyesUp?: boolean;
 }
 
 /**
@@ -127,8 +129,12 @@ export class ExperienceEngine {
   private readonly sim: boolean;
   private readonly showStartWayfinding: boolean;
   private readonly zones: AcousticZone[];
+  private readonly eyesUp: boolean;
   /** Id of the zone the listener is currently inside, to fire setZone only on change. */
   private lastZoneId: string | null = null;
+  /** Eyes-up sonar: perf time of the last nav ping + audible count to detect arrivals. */
+  private lastPingAt = 0;
+  private lastAudibleCount = 0;
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
@@ -167,6 +173,7 @@ export class ExperienceEngine {
     this.sim = opts.sim;
     this.showStartWayfinding = opts.showStartWayfinding ?? false;
     this.zones = opts.zones ?? [];
+    this.eyesUp = opts.eyesUp ?? false;
     this.status = {
       mode: opts.sim ? 'sim' : 'live',
       geoError: null,
@@ -471,6 +478,32 @@ export class ExperienceEngine {
         etaSec: eta ?? undefined,
       });
     }
+
+    // Eyes-up sonar: ping toward the nearest not-yet-heard point (faster as you close
+    // in), plus a brighter earcon whenever a new point comes into earshot.
+    if (this.eyesUp && this.audio) {
+      let target: MapSource | null = null;
+      let best = Infinity;
+      for (const s of sources) {
+        if (s.audible || !s.position) continue;
+        const d = calculateDistance(user, s.position);
+        if (d < best) {
+          best = d;
+          target = s;
+        }
+      }
+      if (target?.position) {
+        const az = relativeBearing(calculateBearing(user, target.position), heading);
+        const radius = target.audibleRadius || 50;
+        const interval = Math.max(220, Math.min(1600, 220 + Math.max(0, best - radius) * 12));
+        if (nowPerf - this.lastPingAt >= interval) {
+          this.lastPingAt = nowPerf;
+          this.audio.ping(az, 'nav');
+        }
+      }
+      if (blips.length > this.lastAudibleCount) this.audio.ping(0, 'arrive');
+    }
+    this.lastAudibleCount = blips.length;
 
     this.audio?.update(frame);
     return {

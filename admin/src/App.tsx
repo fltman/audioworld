@@ -157,6 +157,7 @@ export default function App() {
         name: patch.name ?? current.name,
         description: patch.description ?? current.description,
         showStartWayfinding: patch.showStartWayfinding ?? current.showStartWayfinding ?? false,
+        eyesUp: patch.eyesUp ?? current.eyesUp ?? false,
         // Only send zones when this update is actually about zones (saveZones); otherwise
         // omit them so the server COALESCE keeps its saved set and unsaved edits aren't
         // overwritten with a stale copy from `courses`.

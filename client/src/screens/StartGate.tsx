@@ -58,6 +58,7 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
         sim,
         showStartWayfinding: course.showStartWayfinding ?? false,
         zones: course.zones ?? [],
+        eyesUp: course.eyesUp ?? false,
       });
       await engine.start();
       onReady(engine, sim, course);
