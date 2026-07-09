@@ -31,7 +31,8 @@ export function StartMap({ points }: { points: AudioPoint[] }) {
     }).setView([start.lat, start.lng], 16);
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Subdomain-less host so URLs match exactly what an offline pack precaches.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap',
     }).addTo(map);

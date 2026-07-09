@@ -303,6 +303,39 @@ export function anchorOf(point: AudioPoint): Coordinates {
   }
 }
 
+/** Every fixed coordinate a point defines (a path contributes all its vertices). Used
+ *  to bound a course's footprint for offline map-tile precaching. */
+export function coordsOf(point: AudioPoint): Coordinates[] {
+  switch (point.type) {
+    case 'static':
+    case 'static_circling':
+    case 'follow_user':
+      return [point.center];
+    case 'path':
+    case 'path_triggered':
+      return point.path;
+  }
+}
+
+/** Lat/lng bounding box of a course's points, or null if it has no coordinates. */
+export function courseBounds(
+  points: AudioPoint[]
+): { minLat: number; minLng: number; maxLat: number; maxLng: number } | null {
+  let minLat = Infinity;
+  let minLng = Infinity;
+  let maxLat = -Infinity;
+  let maxLng = -Infinity;
+  for (const p of points) {
+    for (const c of coordsOf(p)) {
+      if (c.lat < minLat) minLat = c.lat;
+      if (c.lat > maxLat) maxLat = c.lat;
+      if (c.lng < minLng) minLng = c.lng;
+      if (c.lng > maxLng) maxLng = c.lng;
+    }
+  }
+  return Number.isFinite(minLat) ? { minLat, minLng, maxLat, maxLng } : null;
+}
+
 /**
  * Whether a point's motion + audio is driven by the shared global clock (vs the
  * per-device clock). Only the continuously-moving types can be globally synced.

@@ -5,6 +5,15 @@ import { ExperienceEngine } from '../services/experience';
 import { isSecureEnough } from '../services/geolocation';
 import { StartMap } from '../components/StartMap';
 import { playTestTone } from '../services/testTone';
+import {
+  downloadPack,
+  offlineSupported,
+  packEstimate,
+  packMeta,
+  removePack,
+  type PackMeta,
+  type PackProgress,
+} from '../services/offline';
 
 interface StartGateProps {
   courseId: string;
@@ -25,6 +34,8 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   const [tested, setTested] = useState(false);
+  const [pack, setPack] = useState<PackMeta | null>(() => packMeta(courseId));
+  const [downloading, setDownloading] = useState<PackProgress | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -76,7 +87,32 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
     setTested(true);
   };
 
+  const handleDownload = async () => {
+    if (!course || !points || downloading) return;
+    setDownloading({ done: 0, total: 0 });
+    setError(null);
+    try {
+      const meta = await downloadPack(courseId, points, course.zones ?? [], setDownloading);
+      setPack(meta);
+    } catch {
+      setError('Could not download this walk for offline use');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const handleRemove = async () => {
+    await removePack(courseId);
+    setPack(null);
+  };
+
   const insecure = !isSecureEnough();
+  const canOffline = offlineSupported() && !!points && points.length > 0;
+  const estimate = canOffline && !pack ? packEstimate(points!, course?.zones ?? []) : null;
+  const pct =
+    downloading && downloading.total > 0
+      ? Math.round((downloading.done / downloading.total) * 100)
+      : 0;
 
   return (
     <div className="screen screen--gate">
@@ -93,6 +129,33 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
             <StartMap points={points} />
             <p className="gate-hint">Head to the start pin to begin.</p>
           </>
+        )}
+
+        {canOffline && (
+          <div className="offline">
+            {pack ? (
+              <div className="offline__row">
+                <span className="offline__ok">✓ Available offline</span>
+                <button type="button" className="linkish" onClick={() => void handleRemove()}>
+                  Remove
+                </button>
+              </div>
+            ) : downloading ? (
+              <div className="offline__progress">
+                <div className="offline__bar">
+                  <div className="offline__fill" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="offline__pct">Downloading… {pct}%</span>
+              </div>
+            ) : (
+              <button type="button" className="btn-offline" onClick={() => void handleDownload()}>
+                ⭳ Download for offline
+                {estimate && estimate.tiles > 0 && (
+                  <span className="offline__hint"> · map + {estimate.audio} clips</span>
+                )}
+              </button>
+            )}
+          </div>
         )}
 
         {error && <div className="notice notice--error">{error}</div>}
