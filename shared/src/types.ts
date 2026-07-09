@@ -262,6 +262,15 @@ export interface UploadResult {
   mimetype: string;
 }
 
+/** One clip as listed in the sound library (existence from disk, description from the DB). */
+export interface UploadListItem {
+  url: string;
+  filename: string;
+  size: number;
+  /** Author-set label for the clip, if any. */
+  description?: string;
+}
+
 /** Uniform API envelope. */
 export interface ApiResponse<T = unknown> {
   success: boolean;

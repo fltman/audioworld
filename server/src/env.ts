@@ -11,8 +11,9 @@ export const DATABASE_URL =
   process.env.DATABASE_URL ??
   'postgres://audioworld:audioworld@localhost:5433/audioworld';
 
-/** Absolute directory where uploaded/synthesized audio lives and is served from. */
-export const UPLOAD_DIR = resolve(process.env.UPLOAD_DIR ?? './uploads');
+/** Absolute directory where uploaded/synthesized audio lives and is served from.
+ *  `||` (not `??`) so an empty UPLOAD_DIR= doesn't resolve to cwd and expose it. */
+export const UPLOAD_DIR = resolve(process.env.UPLOAD_DIR || './uploads');
 
 /** Allowed CORS origin ('*' for any). */
 export const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';

@@ -1,17 +1,83 @@
 import { useEffect, useState } from 'react';
+import type { UploadListItem } from '@audioworld/shared';
 import { absoluteAudioUrl, api } from '../api';
 
-interface Upload {
-  url: string;
-  filename: string;
-  size: number;
+function SoundRow({ upload }: { upload: UploadListItem }) {
+  const [copied, setCopied] = useState(false);
+  const [desc, setDesc] = useState(upload.description ?? '');
+  const [saved, setSaved] = useState(upload.description ?? '');
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const copy = async () => {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(absoluteAudioUrl(upload.url));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const save = async () => {
+    const next = desc.trim();
+    if (next === saved) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.setUploadDescription(upload.filename, next);
+      setSaved(next);
+      setDesc(next);
+      setFlash(true);
+      window.setTimeout(() => setFlash(false), 1400);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <li className="sound-row">
+      <div className="sound-row__head">
+        <span className="sound-row__name" title={upload.filename}>
+          {upload.filename}
+        </span>
+        <button type="button" className="icon-btn" onClick={() => void copy()}>
+          {copied ? 'Copied!' : 'Copy URL'}
+        </button>
+      </div>
+      <input
+        className="input"
+        placeholder="Add a description…"
+        value={desc}
+        onChange={(e) => setDesc(e.currentTarget.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+      />
+      <span className="sound-row__meta">
+        {Math.round(upload.size / 1024)} KB
+        {saving ? ' · saving…' : flash ? ' · saved ✓' : ''}
+      </span>
+      {error && <span className="error">{error}</span>}
+      <audio
+        className="sound-row__audio"
+        controls
+        preload="none"
+        src={absoluteAudioUrl(upload.url)}
+      />
+    </li>
+  );
 }
 
 export default function SoundLibrary() {
-  const [uploads, setUploads] = useState<Upload[]>([]);
+  const [uploads, setUploads] = useState<UploadListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -20,16 +86,6 @@ export default function SoundLibrary() {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, []);
-
-  const copy = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(absoluteAudioUrl(url));
-      setCopied(url);
-      window.setTimeout(() => setCopied((c) => (c === url ? null : c)), 1400);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
 
   return (
     <section className="section">
@@ -42,18 +98,7 @@ export default function SoundLibrary() {
       ) : (
         <ul className="sound-list">
           {uploads.map((u) => (
-            <li key={u.url} className="sound-row">
-              <div className="sound-row__head">
-                <span className="sound-row__name" title={u.filename}>
-                  {u.filename}
-                </span>
-                <button type="button" className="icon-btn" onClick={() => void copy(u.url)}>
-                  {copied === u.url ? 'Copied!' : 'Copy URL'}
-                </button>
-              </div>
-              <span className="sound-row__meta">{Math.round(u.size / 1024)} KB</span>
-              <audio className="sound-row__audio" controls preload="none" src={absoluteAudioUrl(u.url)} />
-            </li>
+            <SoundRow key={u.url} upload={u} />
           ))}
         </ul>
       )}

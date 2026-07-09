@@ -37,6 +37,14 @@ CREATE TABLE IF NOT EXISTS audio_points (
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
 
+-- Sound-library metadata, keyed by on-disk filename. Files remain the source of
+-- truth for existence; this table only carries an author-set description.
+CREATE TABLE IF NOT EXISTS uploads (
+  filename    text PRIMARY KEY,
+  description text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
 -- Migrate existing tables (columns added after the first release).
 ALTER TABLE audio_points
   ADD COLUMN IF NOT EXISTS sync text NOT NULL DEFAULT 'individual' CHECK (sync IN ('individual','global')),

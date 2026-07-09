@@ -6,6 +6,7 @@ import type {
   Course,
   CourseInput,
   Role,
+  UploadListItem,
   UploadResult,
   User,
 } from '@audioworld/shared';
@@ -116,6 +117,10 @@ export const api = {
     form.append('file', file);
     return request<UploadResult>('/api/upload', { method: 'POST', body: form });
   },
-  listUploads: () =>
-    request<{ url: string; filename: string; size: number }[]>('/api/upload'),
+  listUploads: () => request<UploadListItem[]>('/api/upload'),
+  setUploadDescription: (filename: string, description: string) =>
+    request<{ filename: string; description: string }>(
+      `/api/upload/${encodeURIComponent(filename)}`,
+      jsonBody('PATCH', { description })
+    ),
 };
