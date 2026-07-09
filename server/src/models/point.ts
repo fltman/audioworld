@@ -2,6 +2,12 @@ import type { AudioPoint } from '@audioworld/shared';
 import { pool } from '../db/pool';
 import { pointInputToColumns, rowToPoint, type PointRow } from '../lib/mapping';
 
+/** Mark the parent course as edited, so any point change (incl. deletion — which
+ *  leaves no signal on a surviving row) shows up as "unpublished changes". */
+async function touchCourse(courseId: string): Promise<void> {
+  await pool.query('UPDATE courses SET updated_at = now() WHERE id = $1', [courseId]);
+}
+
 export async function listByCourse(courseId: string): Promise<AudioPoint[]> {
   const { rows } = await pool.query<PointRow>(
     'SELECT * FROM audio_points WHERE course_id = $1 ORDER BY created_at ASC',
@@ -43,6 +49,7 @@ export async function create(courseId: string, input: unknown): Promise<AudioPoi
       c.start_at,
     ]
   );
+  await touchCourse(c.course_id);
   return rowToPoint(rows[0]!);
 }
 
@@ -73,10 +80,15 @@ export async function update(id: string, input: unknown): Promise<AudioPoint | n
       id,
     ]
   );
+  if (rows[0]) await touchCourse(existing.courseId);
   return rows[0] ? rowToPoint(rows[0]) : null;
 }
 
 export async function remove(id: string): Promise<boolean> {
-  const { rowCount } = await pool.query('DELETE FROM audio_points WHERE id = $1', [id]);
-  return (rowCount ?? 0) > 0;
+  const { rows } = await pool.query<{ course_id: string }>(
+    'DELETE FROM audio_points WHERE id = $1 RETURNING course_id',
+    [id]
+  );
+  if (rows[0]) await touchCourse(rows[0].course_id);
+  return rows.length > 0;
 }

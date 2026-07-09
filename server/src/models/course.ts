@@ -43,13 +43,12 @@ export async function publish(id: string, snapshot: PublishedSnapshot): Promise<
   return rows[0] ? rowToCourse(rows[0]) : null;
 }
 
-/** The frozen published snapshot, or null if the course was never published. */
-export async function getPublished(id: string): Promise<PublishedSnapshot | null> {
-  const { rows } = await pool.query<{ published: PublishedSnapshot | null }>(
-    'SELECT published FROM courses WHERE id = $1',
-    [id]
-  );
-  return rows[0]?.published ?? null;
+/** A course + its published snapshot (if any) in a single query — the hot listener read. */
+export async function getWithSnapshot(
+  id: string
+): Promise<{ course: Course; snapshot: PublishedSnapshot | null } | null> {
+  const { rows } = await pool.query<CourseRow>('SELECT * FROM courses WHERE id = $1', [id]);
+  return rows[0] ? { course: rowToCourse(rows[0]), snapshot: rows[0].published ?? null } : null;
 }
 
 export async function listCourses(): Promise<Course[]> {

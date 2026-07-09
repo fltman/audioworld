@@ -177,12 +177,12 @@ coursesRouter.post(
 coursesRouter.get(
   '/:id/published',
   asyncHandler(async (req, res) => {
-    const course = await Courses.getCourse(req.params.id);
-    if (!course) {
+    const found = await Courses.getWithSnapshot(req.params.id);
+    if (!found) {
       res.status(404).json({ success: false, error: 'Course not found' });
       return;
     }
-    const snap = await Courses.getPublished(req.params.id);
+    const { course, snapshot: snap } = found;
     const data: PublishedCourse = snap
       ? {
           course: {

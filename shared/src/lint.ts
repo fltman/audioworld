@@ -37,7 +37,7 @@ export function flightCheck(points: AudioPoint[], zones?: AcousticZone[]): Fligh
       if (!settable.has(f)) {
         issues.push({
           severity: 'error',
-          message: `"${p.name}" requires flag "${f}", which nothing can set — it can never trigger.`,
+          message: `"${p.name}" requires flag "${f}", which no reachable point sets — it can never trigger.`,
           pointId: p.id,
         });
       }
