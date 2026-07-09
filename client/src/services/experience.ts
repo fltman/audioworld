@@ -290,6 +290,9 @@ export class ExperienceEngine {
     const raised: string[] = [];
     // Flags to lock this frame from exclusive-group choices (the branches not taken).
     const lockNow: string[] = [];
+    // Groups already committed this frame — so a same-frame tie has one winner (the
+    // first point, i.e. lowest creation order) rather than mutually cancelling out.
+    const committedGroups = new Set<string>();
 
     for (const point of this.points) {
       // Global/shared points are clocked from the server-synced wall clock (anchored
@@ -306,14 +309,23 @@ export class ExperienceEngine {
       const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
       this.stateMemory.set(point.id, r.state);
       // Visiting (hearing) a point raises its story flags for the rest of the session.
-      if (r.audible && point.setsFlags) raised.push(...point.setsFlags);
-      // Reaching a point in an exclusive group locks every sibling's flags (the choice
-      // you didn't make can never fire this run).
-      if (r.audible && point.flagGroup) {
-        for (const other of this.points) {
-          if (other !== point && other.flagGroup === point.flagGroup && other.setsFlags) {
-            lockNow.push(...other.setsFlags);
+      // For an exclusive group the first sibling reached commits and locks the others'
+      // flags (excluding any flag it sets itself, so a shared flag isn't self-locked).
+      if (r.audible && point.setsFlags && point.setsFlags.length > 0) {
+        if (point.flagGroup) {
+          if (!committedGroups.has(point.flagGroup)) {
+            committedGroups.add(point.flagGroup);
+            raised.push(...point.setsFlags);
+            const mine = new Set(point.setsFlags);
+            for (const other of this.points) {
+              if (other !== point && other.flagGroup === point.flagGroup && other.setsFlags) {
+                for (const f of other.setsFlags) if (!mine.has(f)) lockNow.push(f);
+              }
+            }
           }
+          // else: a lower-order sibling already won this group this frame — skip.
+        } else {
+          raised.push(...point.setsFlags);
         }
       }
 

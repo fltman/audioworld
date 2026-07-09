@@ -124,6 +124,7 @@ export class PreviewEngine {
     const audible: PreviewBlip[] = [];
     const raised: string[] = [];
     const lockNow: string[] = [];
+    const committedGroups = new Set<string>();
 
     const zone = zoneAt(this.zones, user);
     if ((zone?.id ?? null) !== this.lastZoneId) {
@@ -141,12 +142,20 @@ export class PreviewEngine {
       }
       const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
       this.stateMemory.set(point.id, r.state);
-      if (r.audible && point.setsFlags) raised.push(...point.setsFlags);
-      if (r.audible && point.flagGroup) {
-        for (const other of this.points) {
-          if (other !== point && other.flagGroup === point.flagGroup && other.setsFlags) {
-            lockNow.push(...other.setsFlags);
+      if (r.audible && point.setsFlags && point.setsFlags.length > 0) {
+        if (point.flagGroup) {
+          if (!committedGroups.has(point.flagGroup)) {
+            committedGroups.add(point.flagGroup);
+            raised.push(...point.setsFlags);
+            const mine = new Set(point.setsFlags);
+            for (const other of this.points) {
+              if (other !== point && other.flagGroup === point.flagGroup && other.setsFlags) {
+                for (const f of other.setsFlags) if (!mine.has(f)) lockNow.push(f);
+              }
+            }
           }
+        } else {
+          raised.push(...point.setsFlags);
         }
       }
 

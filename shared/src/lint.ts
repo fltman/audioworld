@@ -32,12 +32,34 @@ export function flightCheck(points: AudioPoint[], zones?: AcousticZone[]): Fligh
     }
   }
 
+  // Map each flag to its exclusive group (if any) so we can catch a point that
+  // requires two mutually-exclusive flags — a crossroads only ever commits one.
+  const groupOf = new Map<string, string>();
+  for (const p of points) {
+    if (p.flagGroup) for (const f of p.setsFlags ?? []) groupOf.set(f, p.flagGroup);
+  }
+
   for (const p of points) {
     for (const f of p.requiresFlags ?? []) {
       if (!settable.has(f)) {
         issues.push({
           severity: 'error',
           message: `"${p.name}" requires flag "${f}", which no reachable point sets — it can never trigger.`,
+          pointId: p.id,
+        });
+      }
+    }
+    // Two required flags from the same exclusive group can never both be raised.
+    const byGroup = new Map<string, string[]>();
+    for (const f of p.requiresFlags ?? []) {
+      const g = groupOf.get(f);
+      if (g) byGroup.set(g, [...(byGroup.get(g) ?? []), f]);
+    }
+    for (const [, flags] of byGroup) {
+      if (flags.length >= 2) {
+        issues.push({
+          severity: 'error',
+          message: `"${p.name}" requires ${flags.map((f) => `"${f}"`).join(' and ')} from the same exclusive group — they can never both be set.`,
           pointId: p.id,
         });
       }
