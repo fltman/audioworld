@@ -111,6 +111,17 @@ export interface StaticPoint extends BaseAudioPoint {
    * scare. Absent/0 = always audible within `radius`, as normal.
    */
   triggerRadius?: number;
+  /**
+   * "Hold still" reveal: within the audible radius, the point stays silent until the
+   * listener has stood still (below walking pace) for this many seconds — then the
+   * deer steps out / the confession begins. 0/absent = normal.
+   */
+  stillSec?: number;
+  /**
+   * Fragile presence: audible only while the listener is still; take a step and it
+   * flees (goes silent) until you settle again.
+   */
+  fleeOnMove?: boolean;
 }
 
 /** Source that orbits `center` at `circleRadius`, moving `speed` m/s along the circle. */

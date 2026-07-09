@@ -3,6 +3,7 @@ import {
   airCutoffHz,
   attenuation,
   audibleRadiusOf,
+  calculateDistance,
   destinationPoint,
   dopplerRate,
   elevationRad,
@@ -48,6 +49,8 @@ export class PreviewEngine {
   private readonly flags = new Set<string>();
   private readonly locked = new Set<string>();
   private readonly prevDistance = new Map<string, number>();
+  private prevUser: Coordinates | null = null;
+  private smoothedSpeed = 0;
   private points: AudioPoint[];
   private zones: AcousticZone[] = [];
   private lastZoneId: string | null = null;
@@ -99,6 +102,8 @@ export class PreviewEngine {
     this.flags.clear();
     this.locked.clear();
     this.prevDistance.clear();
+    this.prevUser = null;
+    this.smoothedSpeed = 0;
     this.lastTickPerf = 0;
     this.lastZoneId = null;
     this.audio?.setZone(null);
@@ -121,6 +126,11 @@ export class PreviewEngine {
     this.lastTickPerf = nowPerf;
     const user = this.listener;
     const heading = this.heading;
+    const rawSpeed =
+      this.prevUser && dtSec > 0 ? calculateDistance(this.prevUser, user) / dtSec : 0;
+    this.smoothedSpeed = this.smoothedSpeed * 0.7 + Math.min(rawSpeed, 15) * 0.3;
+    this.prevUser = user;
+    const userSpeed = this.smoothedSpeed;
     const frame: FrameSource[] = [];
     const audible: PreviewBlip[] = [];
     const raised: string[] = [];
@@ -141,7 +151,7 @@ export class PreviewEngine {
         state = { triggeredAtSec: null };
         this.stateMemory.set(point.id, state);
       }
-      const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
+      const r = resolveSource(point, { user, clockSec, dtSec, heading, userSpeed, state, flags: this.flags });
       this.stateMemory.set(point.id, r.state);
       if (r.audible && point.setsFlags && point.setsFlags.length > 0) {
         if (point.flagGroup) {

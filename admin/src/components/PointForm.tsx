@@ -249,6 +249,11 @@ export default function PointForm(props: Props) {
               value={draft.triggerRadius}
               onValue={(n) => onChange({ triggerRadius: n })}
             />
+            <NumberField
+              label="Reveal after standing still (s) — 0 = off"
+              value={draft.stillSec}
+              onValue={(n) => onChange({ stillSec: n })}
+            />
           </>
         )}
         {draft.type === 'static_circling' && (
@@ -298,8 +303,20 @@ export default function PointForm(props: Props) {
       {draft.type === 'static' && (
         <p className="geo-status">
           0 disables the jumpscare. Above 0, the point stays silent until you come within it, then
-          plays inside the audible radius — pair with "Play once".
+          plays inside the audible radius — pair with "Play once". "Reveal after standing still"
+          keeps it silent until the listener holds still that long inside range.
         </p>
+      )}
+
+      {draft.type === 'static' && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.fleeOnMove}
+            onChange={(e) => onChange({ fleeOnMove: e.currentTarget.checked })}
+          />
+          Flees on movement (audible only while the listener is still)
+        </label>
       )}
 
       {isPathType(draft.type) && draft.path.length >= 2 && (

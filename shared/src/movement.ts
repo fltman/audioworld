@@ -327,7 +327,14 @@ export interface SourceState {
   chaserPos?: Coordinates | null;
   /** chase: true once the user has outrun it (stays given-up until reset). */
   disengaged?: boolean;
+  /** hold-still: seconds stood still (below walking pace) inside range this streak. */
+  stillAccumSec?: number;
+  /** hold-still: latched once the still-time reveal has been earned. */
+  stillRevealed?: boolean;
 }
+
+/** Below this ground speed (m/s) the listener counts as "standing still". */
+const STILL_SPEED = 0.8;
 
 export interface ResolveInput {
   /** Current user position. */
@@ -338,6 +345,8 @@ export interface ResolveInput {
   dtSec: number;
   /** User compass heading, degrees clockwise from north (for heading-relative movers). */
   heading: number;
+  /** Listener ground speed (m/s), smoothed — drives the hold-still gate. */
+  userSpeed: number;
   /** Per-point memory; the returned `state` must be persisted for the next frame. */
   state: SourceState;
   /** Story flags currently raised on this device (for `requiresFlags` gating). */
@@ -396,7 +405,7 @@ function advanceWaitProgress(
  * memory the caller feeds back next frame.
  */
 export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOutput {
-  const { user, clockSec, dtSec, heading, flags } = input;
+  const { user, clockSec, dtSec, heading, flags, userSpeed } = input;
   const state: SourceState = { ...input.state };
 
   const out = (
@@ -420,15 +429,35 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
   switch (point.type) {
     case 'static': {
       const d = calculateDistance(user, point.center);
+      const inRange = d <= point.radius;
+      const still = userSpeed < STILL_SPEED;
+
+      // Hold-still: accumulate still-time while in range; latch "revealed" once the
+      // wait is served. Moving resets the wait (but keeps a reveal already earned).
+      if (point.stillSec && point.stillSec > 0) {
+        if (inRange && still) {
+          state.stillAccumSec = (state.stillAccumSec ?? 0) + dtSec;
+          if (state.stillAccumSec >= point.stillSec) state.stillRevealed = true;
+        } else {
+          state.stillAccumSec = 0;
+        }
+      }
+
+      // Jumpscare: silent until armed by coming within triggerRadius, then audible
+      // within the normal radius.
+      let audible: boolean;
       if (point.triggerRadius != null && point.triggerRadius > 0) {
-        // Jumpscare: silent until armed by coming within triggerRadius, then
-        // audible within the normal radius. Arm before out() reads state.
         if (state.triggeredAtSec === null && d <= point.triggerRadius) {
           state.triggeredAtSec = clockSec;
         }
-        return out(point.center, state.triggeredAtSec !== null && d <= point.radius);
+        audible = state.triggeredAtSec !== null && inRange;
+      } else {
+        audible = inRange;
       }
-      return out(point.center, d <= point.radius);
+
+      if (point.stillSec && point.stillSec > 0) audible = audible && !!state.stillRevealed;
+      if (point.fleeOnMove) audible = audible && still;
+      return out(point.center, audible);
     }
 
     case 'static_circling': {

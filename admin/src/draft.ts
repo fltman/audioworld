@@ -46,6 +46,9 @@ export interface DraftState {
   speed: number;
   initialRadius: number;
   triggerRadius: number;
+  /** Static hold-still reveal (s) + flee-on-move. */
+  stillSec: number;
+  fleeOnMove: boolean;
   endBehavior: PathEndBehavior;
   /** Wait-for-listener leash + toggle (path / path_triggered). */
   waitForListener: boolean;
@@ -79,12 +82,14 @@ const NUMERIC_DEFAULTS = {
   followRadius: 8,
   followSpeed: 2,
   height: 0,
+  stillSec: 0,
 };
 
 /** Non-numeric draft fields shared by freshDraft + pointToDraft's base. */
 const FLAG_DEFAULTS = {
   waitForListener: false,
   showWayfinding: false,
+  fleeOnMove: false,
   mode: 'attach' as FollowMode,
 };
 
@@ -150,6 +155,8 @@ export function pointToDraft(point: AudioPoint): DraftState {
         center: point.center,
         radius: point.radius,
         triggerRadius: point.triggerRadius ?? 0,
+        stillSec: point.stillSec ?? 0,
+        fleeOnMove: point.fleeOnMove ?? false,
       };
     case 'static_circling':
       return {
@@ -252,6 +259,8 @@ export function draftToInput(d: DraftState): DraftResult {
           center: d.center,
           radius: d.radius,
           ...(d.triggerRadius > 0 ? { triggerRadius: d.triggerRadius } : {}),
+          ...(d.stillSec > 0 ? { stillSec: d.stillSec } : {}),
+          ...(d.fleeOnMove ? { fleeOnMove: true } : {}),
         },
       };
     case 'static_circling':

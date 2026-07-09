@@ -184,6 +184,12 @@ function configForType(
         if (triggerRadius < 0) throw new ValidationError('triggerRadius must be >= 0');
         config.triggerRadius = triggerRadius;
       }
+      if (body.stillSec != null) {
+        const stillSec = num(body.stillSec, 'stillSec');
+        if (stillSec < 0) throw new ValidationError('stillSec must be >= 0');
+        if (stillSec > 0) config.stillSec = stillSec;
+      }
+      if (body.fleeOnMove) config.fleeOnMove = true;
       return config;
     }
     case 'static_circling':

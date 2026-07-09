@@ -143,6 +143,9 @@ export class ExperienceEngine {
   private readonly locked = new Set<string>();
   /** Previous-frame distance per point, for Doppler radial velocity. */
   private readonly prevDistance = new Map<string, number>();
+  /** Previous listener position + smoothed speed, for the hold-still gate. */
+  private prevUser: Coordinates | null = null;
+  private smoothedSpeed = 0;
 
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
@@ -287,6 +290,11 @@ export class ExperienceEngine {
     }
 
     const heading = headingDeg ?? 0;
+    // Listener speed (smoothed + jitter-clamped) drives the hold-still gate.
+    const rawSpeed = this.prevUser && dtSec > 0 ? calculateDistance(this.prevUser, user) / dtSec : 0;
+    this.smoothedSpeed = this.smoothedSpeed * 0.7 + Math.min(rawSpeed, 15) * 0.3;
+    this.prevUser = user;
+    const userSpeed = this.smoothedSpeed;
     const frame: FrameSource[] = [];
     const blips: Blip[] = [];
     const sources: MapSource[] = [];
@@ -314,7 +322,7 @@ export class ExperienceEngine {
         state = { triggeredAtSec: null };
         this.stateMemory.set(point.id, state);
       }
-      const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
+      const r = resolveSource(point, { user, clockSec, dtSec, heading, userSpeed, state, flags: this.flags });
       this.stateMemory.set(point.id, r.state);
       // Visiting (hearing) a point raises its story flags for the rest of the session.
       // For an exclusive group the first sibling reached commits and locks the others'
