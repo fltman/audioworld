@@ -132,6 +132,8 @@ export class ExperienceEngine {
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
   private readonly flags = new Set<string>();
+  /** Flags permanently locked by an exclusive-group choice — can never be raised. */
+  private readonly locked = new Set<string>();
   /** Previous-frame distance per point, for Doppler radial velocity. */
   private readonly prevDistance = new Map<string, number>();
 
@@ -286,6 +288,8 @@ export class ExperienceEngine {
     // Flags raised this frame are merged in AFTER the loop so ordering is irrelevant
     // (a gated point reacts on the next frame — imperceptible).
     const raised: string[] = [];
+    // Flags to lock this frame from exclusive-group choices (the branches not taken).
+    const lockNow: string[] = [];
 
     for (const point of this.points) {
       // Global/shared points are clocked from the server-synced wall clock (anchored
@@ -303,6 +307,15 @@ export class ExperienceEngine {
       this.stateMemory.set(point.id, r.state);
       // Visiting (hearing) a point raises its story flags for the rest of the session.
       if (r.audible && point.setsFlags) raised.push(...point.setsFlags);
+      // Reaching a point in an exclusive group locks every sibling's flags (the choice
+      // you didn't make can never fire this run).
+      if (r.audible && point.flagGroup) {
+        for (const other of this.points) {
+          if (other !== point && other.flagGroup === point.flagGroup && other.setsFlags) {
+            lockNow.push(...other.setsFlags);
+          }
+        }
+      }
 
       const radius = audibleRadiusOf(point);
       // A distance of 0 means the source rides on the user (follow_user): keep it
@@ -417,7 +430,8 @@ export class ExperienceEngine {
       }
     }
 
-    for (const f of raised) this.flags.add(f);
+    for (const f of lockNow) this.locked.add(f);
+    for (const f of raised) if (!this.locked.has(f)) this.flags.add(f);
 
     // Course start cue: always show the way (+ distance, + guide-return ETA) to the
     // start point — the first point, or its first path vertex.

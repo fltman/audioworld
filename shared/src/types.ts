@@ -87,6 +87,14 @@ export interface BaseAudioPoint {
    * turns a course into a branching adventure (visit A → unlocks B).
    */
   requiresFlags?: string[];
+  /**
+   * Exclusive-choice group. Points sharing a `flagGroup` are mutually exclusive: the
+   * first one you reach commits its flags and permanently LOCKS the others' flags for
+   * this run (a locked flag can never be raised, so anything requiring it stays inert).
+   * A crossroads — you commit to a branch by which way you walk, and can't hear the
+   * road not taken until you replay.
+   */
+  flagGroup?: string;
   createdAt: string;
   updatedAt: string;
 }

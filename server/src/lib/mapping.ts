@@ -148,6 +148,9 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
   const requiresFlags = flagList(body.requiresFlags, 'requiresFlags');
   if (requiresFlags) config.requiresFlags = requiresFlags;
   if (body.height != null) config.height = num(body.height, 'height');
+  if (typeof body.flagGroup === 'string' && body.flagGroup.trim()) {
+    config.flagGroup = body.flagGroup.trim();
+  }
 
   return {
     course_id: courseId,

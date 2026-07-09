@@ -45,6 +45,7 @@ export class PreviewEngine {
   private serverOffset = 0;
   private readonly stateMemory = new Map<string, SourceState>();
   private readonly flags = new Set<string>();
+  private readonly locked = new Set<string>();
   private readonly prevDistance = new Map<string, number>();
   private points: AudioPoint[];
   private zones: AcousticZone[] = [];
@@ -95,6 +96,7 @@ export class PreviewEngine {
   reset(): void {
     this.stateMemory.clear();
     this.flags.clear();
+    this.locked.clear();
     this.prevDistance.clear();
     this.lastTickPerf = 0;
     this.lastZoneId = null;
@@ -121,6 +123,7 @@ export class PreviewEngine {
     const frame: FrameSource[] = [];
     const audible: PreviewBlip[] = [];
     const raised: string[] = [];
+    const lockNow: string[] = [];
 
     const zone = zoneAt(this.zones, user);
     if ((zone?.id ?? null) !== this.lastZoneId) {
@@ -139,6 +142,13 @@ export class PreviewEngine {
       const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
       this.stateMemory.set(point.id, r.state);
       if (r.audible && point.setsFlags) raised.push(...point.setsFlags);
+      if (r.audible && point.flagGroup) {
+        for (const other of this.points) {
+          if (other !== point && other.flagGroup === point.flagGroup && other.setsFlags) {
+            lockNow.push(...other.setsFlags);
+          }
+        }
+      }
 
       const radius = audibleRadiusOf(point);
       const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
@@ -207,7 +217,8 @@ export class PreviewEngine {
       }
     }
 
-    for (const f of raised) this.flags.add(f);
+    for (const f of lockNow) this.locked.add(f);
+    for (const f of raised) if (!this.locked.has(f)) this.flags.add(f);
 
     this.audio?.update(frame);
     return { listener: user, heading, audible };

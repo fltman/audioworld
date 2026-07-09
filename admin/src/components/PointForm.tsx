@@ -483,6 +483,15 @@ export default function PointForm(props: Props) {
           onChange={(e) => onChange({ requiresFlags: e.currentTarget.value })}
         />
       </label>
+      <label className="form-field">
+        <span className="label">Exclusive group (crossroads)</span>
+        <input
+          className="input"
+          placeholder="fork-1 — the first sibling reached locks the others"
+          value={draft.flagGroup}
+          onChange={(e) => onChange({ flagGroup: e.currentTarget.value })}
+        />
+      </label>
 
       {canSync && (
         <div className="form-field">

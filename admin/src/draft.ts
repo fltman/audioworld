@@ -63,6 +63,8 @@ export interface DraftState {
   /** Story flags this point sets / requires (comma-separated text). */
   setsFlags: string;
   requiresFlags: string;
+  /** Exclusive-choice group (crossroads) — siblings lock each other. */
+  flagGroup: string;
 }
 
 const NUMERIC_DEFAULTS = {
@@ -112,6 +114,7 @@ export function freshDraft(type: PointType, courseId: string): DraftState {
     ...FLAG_DEFAULTS,
     setsFlags: '',
     requiresFlags: '',
+    flagGroup: '',
   };
 }
 
@@ -137,6 +140,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     height: point.height ?? 0,
     setsFlags: (point.setsFlags ?? []).join(', '),
     requiresFlags: (point.requiresFlags ?? []).join(', '),
+    flagGroup: point.flagGroup ?? '',
   };
 
   switch (point.type) {
@@ -235,6 +239,7 @@ export function draftToInput(d: DraftState): DraftResult {
     setsFlags: parseFlags(d.setsFlags),
     requiresFlags: parseFlags(d.requiresFlags),
     ...(d.height ? { height: d.height } : {}),
+    ...(d.flagGroup.trim() ? { flagGroup: d.flagGroup.trim() } : {}),
   };
 
   switch (d.type) {
