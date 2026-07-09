@@ -4,6 +4,10 @@ export interface PositionFix {
   coords: Coordinates;
   /** Horizontal accuracy in meters (as reported by the device). */
   accuracy: number;
+  /** Course over ground, degrees clockwise from north — null when stationary/unknown. */
+  heading: number | null;
+  /** Ground speed in m/s — null when unknown. */
+  speed: number | null;
 }
 
 export interface GeoWatch {
@@ -59,6 +63,8 @@ export function watchUserPosition(
       onFix({
         coords: { lat: p.coords.latitude, lng: p.coords.longitude },
         accuracy: p.coords.accuracy,
+        heading: p.coords.heading,
+        speed: p.coords.speed,
       }),
     onError,
     { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 }

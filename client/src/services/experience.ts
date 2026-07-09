@@ -18,7 +18,7 @@ import {
 import { absoluteAudioUrl, syncServerTime } from '../api';
 import { AudioEngine, type FrameSource } from '@audioworld/shared';
 import { geoErrorMessage, isSecureEnough, watchUserPosition, type GeoWatch } from './geolocation';
-import { requestOrientationPermission, watchHeading, type OrientationWatch } from './orientation';
+import { requestOrientationPermission, watchHeading, type HeadingWatch } from './orientation';
 
 /** A single audible source, projected for the radar. */
 export interface Blip {
@@ -72,7 +72,7 @@ export interface FrameState {
 export interface EngineStatus {
   mode: 'live' | 'sim';
   geoError: string | null;
-  compass: 'ok' | 'unavailable' | 'denied' | 'sim';
+  compass: 'ok' | 'gps' | 'unavailable' | 'denied' | 'sim';
   insecure: boolean;
 }
 
@@ -129,7 +129,8 @@ export class ExperienceEngine {
   private serverOffset = 0;
 
   private geoWatch: GeoWatch | null = null;
-  private orientationWatch: OrientationWatch | null = null;
+  private headingWatch: HeadingWatch | null = null;
+  private orientationDenied = false;
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Live inputs.
@@ -187,31 +188,24 @@ export class ExperienceEngine {
       this.initSim();
     } else {
       this.status.insecure = !isSecureEnough();
+      this.headingWatch = watchHeading();
       this.geoWatch = watchUserPosition(
         (fix) => {
           this.userLive = fix.coords;
           this.accuracy = fix.accuracy;
+          // Anchor the GPS-course fallback (used when there's no magnetic compass).
+          this.headingWatch?.feedGps(fix.heading, fix.speed);
           this.status.geoError = null;
         },
         (err) => {
           this.status.geoError = geoErrorMessage(err);
         }
       );
-      // Kick off the compass; on iOS this consumes the gesture activation.
+      // Request the compass permission (on iOS this consumes the gesture activation).
+      // Listeners are already attached, so events flow once granted; a denial simply
+      // leaves us on the GPS course-over-ground fallback.
       requestOrientationPermission().then((result) => {
-        if (result === 'denied') {
-          this.status.compass = 'denied';
-          return;
-        }
-        this.orientationWatch = watchHeading(
-          (deg) => {
-            this.headingLive = smoothHeading(this.headingLive, deg);
-            this.status.compass = 'ok';
-          },
-          (s) => {
-            if (s !== 'ok') this.status.compass = s;
-          }
-        );
+        if (result === 'denied') this.orientationDenied = true;
       });
     }
   }
@@ -229,6 +223,24 @@ export class ExperienceEngine {
     // backgrounded tab doesn't teleport them on the first frame back.
     const dtSec = this.lastTickPerf ? Math.min(0.5, (nowPerf - this.lastTickPerf) / 1000) : 0;
     this.lastTickPerf = nowPerf;
+
+    // Live heading: poll the fused compass/GPS-course provider, smooth it, and reflect
+    // the source in the status chip (ok = magnetic compass, gps = course-over-ground).
+    if (!this.sim) {
+      const cur = this.headingWatch?.current();
+      if (cur?.deg != null) this.headingLive = smoothHeading(this.headingLive, cur.deg);
+      this.status.compass =
+        cur?.source === 'compass'
+          ? 'ok'
+          : cur?.source === 'fused' || cur?.source === 'gps'
+            ? 'gps'
+            : this.orientationDenied
+              ? 'denied'
+              : deviceClockSec > 3
+                ? 'unavailable'
+                : this.status.compass;
+    }
+
     const user = this.sim ? this.userSim : this.userLive;
     const headingDeg = this.sim ? this.headingSim : this.headingLive;
     const accuracy = this.sim ? null : this.accuracy;
@@ -414,7 +426,7 @@ export class ExperienceEngine {
 
   dispose(): void {
     this.geoWatch?.stop();
-    this.orientationWatch?.stop();
+    this.headingWatch?.stop();
     if (this.keyHandler) window.removeEventListener('keydown', this.keyHandler);
     this.audio?.dispose();
     this.ctx?.close().catch(() => {});

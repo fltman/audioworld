@@ -11,6 +11,7 @@ export function Readout({ snap }: ReadoutProps) {
   if (snap.insecure) notices.push('needs HTTPS');
   if (snap.compass === 'unavailable') notices.push('no compass');
   if (snap.compass === 'denied') notices.push('compass blocked');
+  if (snap.compass === 'gps') notices.push('GPS heading · keep walking');
   if (snap.mode === 'sim') notices.push('SIM');
 
   const coords =
