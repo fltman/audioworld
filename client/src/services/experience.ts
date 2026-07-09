@@ -286,10 +286,18 @@ export class ExperienceEngine {
         });
       }
       // Capture the first point's own elapsed time (for the start-return ETA below).
+      // A wait-for-listener guide advances on its leash progress, not the wall clock,
+      // so feed progressSec there — otherwise the ETA counts down while it's frozen.
       if (point === this.points[0]) {
-        if (point.type === 'path') firstGuideElapsed = clockSec;
-        else if (point.type === 'path_triggered')
-          firstGuideElapsed = r.state.triggeredAtSec != null ? clockSec - r.state.triggeredAtSec : 0;
+        if (point.type === 'path') {
+          firstGuideElapsed = point.waitForListener ? r.state.progressSec ?? 0 : clockSec;
+        } else if (point.type === 'path_triggered') {
+          if (r.state.triggeredAtSec == null) firstGuideElapsed = 0;
+          else
+            firstGuideElapsed = point.waitForListener
+              ? r.state.progressSec ?? 0
+              : clockSec - r.state.triggeredAtSec;
+        }
       }
       sources.push({
         id: point.id,

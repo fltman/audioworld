@@ -54,10 +54,16 @@ export async function updateCourse(
   id: string,
   input: CourseInput
 ): Promise<Course | null> {
+  // COALESCE: a null param (field omitted in the input) keeps the stored value, so a
+  // partial update never wipes description/flag. An explicit "" / false still applies.
   const { rows } = await pool.query<CourseRow>(
-    `UPDATE courses SET name = $1, description = $2, show_start_wayfinding = $3, updated_at = now()
+    `UPDATE courses SET
+       name = $1,
+       description = COALESCE($2, description),
+       show_start_wayfinding = COALESCE($3, show_start_wayfinding),
+       updated_at = now()
      WHERE id = $4 RETURNING *`,
-    [input.name, input.description ?? null, input.showStartWayfinding ?? false, id]
+    [input.name, input.description ?? null, input.showStartWayfinding ?? null, id]
   );
   return rows[0] ? rowToCourse(rows[0]) : null;
 }

@@ -172,7 +172,12 @@ export function secondsUntilAtStart(point: AudioPoint, elapsedSec: number): numb
   // loop returns every cycle; reverse (ping-pong) only every other cycle.
   const period = point.endBehavior === 'reverse' ? cycle * 2 : cycle;
   const phase = ((elapsedSec % period) + period) % period;
-  return phase === 0 ? 0 : period - phase;
+  // A dwell at the start vertex means the guide sits AT the start for that window
+  // (at the cycle start, and — for reverse — mirrored at the cycle end): ETA 0.
+  const dwell0 = stopAt(point.stops, 0)?.dwellSec ?? 0;
+  if (phase <= dwell0) return 0;
+  if (point.endBehavior === 'reverse' && phase >= period - dwell0) return 0;
+  return period - phase;
 }
 
 /** Position of a source orbiting `center` at radius `circleRadius`, `speed` m/s, at time `tSec`. */

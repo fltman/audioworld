@@ -30,10 +30,13 @@ function validateCourseInput(body: unknown): CourseInput {
   if (typeof b.name !== 'string' || b.name.trim() === '') {
     throw new ValidationError('Course "name" is required');
   }
+  // Undefined (field omitted) means "leave unchanged" on update — updateCourse
+  // COALESCEs it — so a partial PUT can't silently wipe description/flag.
   return {
     name: b.name,
     description: typeof b.description === 'string' ? b.description : undefined,
-    showStartWayfinding: b.showStartWayfinding === true,
+    showStartWayfinding:
+      typeof b.showStartWayfinding === 'boolean' ? b.showStartWayfinding : undefined,
   };
 }
 
@@ -72,6 +75,10 @@ coursesRouter.put(
   asyncHandler(async (req: AuthedRequest, res) => {
     if (!(await loadManageable(req, res))) return;
     const data = await Courses.updateCourse(req.params.id, validateCourseInput(req.body));
+    if (!data) {
+      res.status(404).json({ success: false, error: 'Course not found' });
+      return;
+    }
     res.json({ success: true, data });
   })
 );
