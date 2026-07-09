@@ -33,6 +33,8 @@ interface Props {
   zones?: AcousticZone[];
   /** In-progress zone polygon vertices (while drawing a new zone). */
   zoneDraft?: Coordinates[] | null;
+  /** True while the user is laying down a zone polygon (debounce clicks, free the dblclick). */
+  drawingZone?: boolean;
 }
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
@@ -200,7 +202,8 @@ export default function MapView(props: Props) {
         return;
       }
       const d = stateRef.current.draft;
-      const drawing = !!d && isPathType(d.type) && d.drawingPath;
+      const drawing =
+        (!!d && isPathType(d.type) && d.drawingPath) || !!stateRef.current.drawingZone;
       if (drawing) {
         // Debounce so the two clicks of a double-click don't add stray vertices.
         if (clickTimer.current) window.clearTimeout(clickTimer.current);
@@ -391,15 +394,15 @@ export default function MapView(props: Props) {
     fitToPoints(map, stateRef.current.points);
   }, [props.fitToken]);
 
-  // Free the double-click for finishing a path while drawing.
+  // Free the double-click for finishing a path or zone while drawing.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const d = props.draft;
-    const drawing = !!d && isPathType(d.type) && d.drawingPath;
+    const drawing = (!!d && isPathType(d.type) && d.drawingPath) || !!props.drawingZone;
     if (drawing) map.doubleClickZoom.disable();
     else map.doubleClickZoom.enable();
-  }, [props.draft]);
+  }, [props.draft, props.drawingZone]);
 
   // Geocode a place name via Nominatim and recentre the map on the first hit.
   const goToPlace = async (e: FormEvent) => {

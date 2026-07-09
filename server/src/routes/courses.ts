@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type { AcousticZone, CourseInput, ReverbCharacter } from '@audioworld/shared';
 import * as Courses from '../models/course';
@@ -68,7 +69,7 @@ function parseZones(value: unknown): AcousticZone[] | undefined {
       return { lat: cc.lat, lng: cc.lng };
     });
     const zone: AcousticZone = {
-      id: typeof o.id === 'string' && o.id ? o.id : `zone-${i}`,
+      id: typeof o.id === 'string' && o.id ? o.id : randomUUID(),
       name: typeof o.name === 'string' && o.name.trim() ? o.name : `Zone ${i + 1}`,
       polygon,
       reverb: REVERB_CHARS.includes(o.reverb as ReverbCharacter)

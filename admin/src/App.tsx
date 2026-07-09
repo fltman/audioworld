@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AcousticZone,
   AudioPoint,
@@ -155,7 +155,10 @@ export default function App() {
         name: patch.name ?? current.name,
         description: patch.description ?? current.description,
         showStartWayfinding: patch.showStartWayfinding ?? current.showStartWayfinding ?? false,
-        zones: patch.zones ?? current.zones ?? [],
+        // Only send zones when this update is actually about zones (saveZones); otherwise
+        // omit them so the server COALESCE keeps its saved set and unsaved edits aren't
+        // overwritten with a stale copy from `courses`.
+        ...(patch.zones !== undefined ? { zones: patch.zones } : {}),
       });
       setCourses((prev) => prev.map((c) => (c.id === id ? updated : c)));
     } catch (e) {
@@ -163,9 +166,15 @@ export default function App() {
     }
   };
 
-  // Sync the zone editor to the selected course whenever it changes.
+  // Load the zone editor from the selected course ONCE per selection — when the course
+  // id changes, or when its data first arrives. Don't re-clobber live/unsaved zone edits
+  // when `courses` updates for an unrelated reason (e.g. a course PUT elsewhere).
+  const loadedZonesFor = useRef<string | null>(null);
   useEffect(() => {
+    if (loadedZonesFor.current === courseId) return;
     const c = courses.find((x) => x.id === courseId);
+    if (!c && courseId) return; // course data not loaded yet — wait for it
+    loadedZonesFor.current = courseId;
     setZones(c?.zones ?? []);
     setZoneDraft(null);
   }, [courseId, courses]);
@@ -489,7 +498,10 @@ export default function App() {
                 drawing={zoneDraft != null}
                 draftLen={zoneDraft?.length ?? 0}
                 saving={savingZones}
-                onNew={() => setZoneDraft([])}
+                onNew={() => {
+                  cancelDraft();
+                  setZoneDraft([]);
+                }}
                 onFinish={finishZone}
                 onCancel={() => setZoneDraft(null)}
                 onUpdate={(i, patch) =>
@@ -517,6 +529,7 @@ export default function App() {
         preview={preview}
         zones={zones}
         zoneDraft={zoneDraft}
+        drawingZone={zoneDraft != null}
       />
     </div>
   );
