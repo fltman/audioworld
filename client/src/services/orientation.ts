@@ -20,8 +20,11 @@ interface AbsoluteOrientationEvent extends DeviceOrientationEvent {
 /** Course over ground is only trustworthy while actually walking. */
 const GPS_ANCHOR_MIN_SPEED = 1.0; // m/s
 
+/** A magnetic reading older than this is treated as cold — yield to the GPS fallback. */
+const COMPASS_STALE_MS = 2000;
+
 const norm = (deg: number): number => ((deg % 360) + 360) % 360;
-/** Signed smallest rotation from a to b, in (-180, 180]. */
+/** Signed smallest rotation from a to b, in [-180, 180). */
 const shortestDelta = (a: number, b: number): number => ((b - a + 540) % 360) - 180;
 
 /**
@@ -57,19 +60,22 @@ export async function requestOrientationPermission(): Promise<PermissionResult> 
  */
 export function watchHeading(): HeadingWatch {
   let compassHeading: number | null = null;
-  let compassSeen = false;
+  let compassAt = 0; // perf timestamp of the last absolute reading (staleness guard)
   let alpha: number | null = null; // latest device alpha (relative or absolute)
   let anchorGps: number | null = null; // absolute heading anchor from GPS course
   let anchorRel: number | null = null; // pseudo-heading (360 - alpha) captured at the anchor
 
   const handle = (event: DeviceOrientationEvent) => {
     const e = event as AbsoluteOrientationEvent;
+    let abs: number | null = null;
     if (typeof e.webkitCompassHeading === 'number' && !Number.isNaN(e.webkitCompassHeading)) {
-      compassHeading = norm(e.webkitCompassHeading);
-      compassSeen = true;
+      abs = norm(e.webkitCompassHeading);
     } else if ((e.absolute || event.type === 'deviceorientationabsolute') && e.alpha != null) {
-      compassHeading = norm(360 - e.alpha);
-      compassSeen = true;
+      abs = norm(360 - e.alpha);
+    }
+    if (abs != null) {
+      compassHeading = abs;
+      compassAt = performance.now();
     }
     if (e.alpha != null) alpha = e.alpha;
   };
@@ -98,7 +104,12 @@ export function watchHeading(): HeadingWatch {
       }
     },
     current() {
-      if (compassSeen && compassHeading != null) {
+      // A live magnetic compass wins. If it goes cold (magnetometer lost its fix) but
+      // GPS/relative rotation are still fresh, fall through to the fallback instead of
+      // freezing on the last bearing.
+      const compassLive =
+        compassHeading != null && performance.now() - compassAt < COMPASS_STALE_MS;
+      if (compassLive) {
         return { deg: compassHeading, source: 'compass' };
       }
       if (anchorGps != null && anchorRel != null && alpha != null) {
@@ -107,6 +118,10 @@ export function watchHeading(): HeadingWatch {
       }
       if (anchorGps != null) {
         return { deg: anchorGps, source: 'gps' };
+      }
+      // No live fallback — a stale compass reading still beats nothing.
+      if (compassHeading != null) {
+        return { deg: compassHeading, source: 'compass' };
       }
       return { deg: null, source: 'none' };
     },
