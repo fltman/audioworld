@@ -21,6 +21,7 @@ import MapView from './components/MapView';
 import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
+import FieldCapture from './components/FieldCapture';
 import ZonePanel from './components/ZonePanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
@@ -42,6 +43,7 @@ export default function App() {
   const [savingZones, setSavingZones] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showCapture, setShowCapture] = useState(false);
   const [analytics, setAnalytics] = useState<CourseAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -542,10 +544,24 @@ export default function App() {
             >
               {showAnalytics ? 'Hide analytics' : 'Show analytics'}
             </button>
+            <button
+              type="button"
+              className="btn btn-ghost small"
+              onClick={() => setShowCapture((s) => !s)}
+              title="Drop points at your live GPS position (use on a phone, on-site)"
+            >
+              {showCapture ? 'Hide field capture' : '📍 Field capture'}
+            </button>
           </div>
         )}
         {courseId && showAnalytics && (
           <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
+        )}
+        {courseId && showCapture && (
+          <FieldCapture
+            courseId={courseId}
+            onCreated={(p) => setPoints((prev) => [...prev, p])}
+          />
         )}
 
         {error && (

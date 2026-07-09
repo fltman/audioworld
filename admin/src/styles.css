@@ -997,3 +997,51 @@ input[type='range'] {
 .user-row .select {
   width: auto;
 }
+
+/* --- Field capture ------------------------------------------------------- */
+.field-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fc-fix {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+.fc-coords {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.fc-acc {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.fc-acc--good { color: #4ade80; background: rgba(74, 222, 128, 0.14); }
+.fc-acc--ok { color: #fbbf24; background: rgba(251, 191, 36, 0.14); }
+.fc-acc--poor { color: var(--danger); background: rgba(255, 93, 108, 0.14); }
+.fc-audio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fc-or {
+  color: var(--muted);
+  font-size: 12px;
+}
+.fc-audio-ok {
+  font-size: 13px;
+  color: #4ade80;
+}
+.fc-note {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+}
