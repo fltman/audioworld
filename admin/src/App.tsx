@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AcousticZone,
   AudioPoint,
+  AudioPointInput,
   Coordinates,
   Course,
   CourseAnalytics,
   PointType,
+  SyncMode,
   User,
 } from '@audioworld/shared';
 import { anchorOf, flightCheck } from '@audioworld/shared';
@@ -22,6 +24,7 @@ import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
 import FieldCapture from './components/FieldCapture';
+import BulkBar from './components/BulkBar';
 import ZonePanel from './components/ZonePanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
@@ -44,6 +47,9 @@ export default function App() {
   const [publishing, setPublishing] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showCapture, setShowCapture] = useState(false);
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [analytics, setAnalytics] = useState<CourseAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -143,6 +149,7 @@ export default function App() {
     setDraft(null);
     setFormError(null);
     setPoints([]);
+    setSelectedIds([]);
     void loadPoints(id);
   };
 
@@ -366,6 +373,87 @@ export default function App() {
     }
   };
 
+  // --- Multi-select: clone / delete / bulk-edit a group of points -----------
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const setMultiSelectMode = (on: boolean) => {
+    setMultiSelect(on);
+    if (!on) setSelectedIds([]);
+    else setDraft(null); // leave single-edit so map clicks toggle selection instead
+  };
+
+  // A cloned point: same settings, offset ~18 m so the copy is visible, name suffixed.
+  const clonedInput = (p: AudioPoint): AudioPointInput | null => {
+    const r = draftToInput(pointToDraft(p));
+    if ('error' in r) return null;
+    const input = r.input;
+    input.name = `${input.name} copy`;
+    const off = (c: Coordinates): Coordinates => ({ lat: c.lat - 0.00016, lng: c.lng + 0.00016 });
+    if (input.type === 'static' || input.type === 'static_circling' || input.type === 'follow_user') {
+      input.center = off(input.center);
+    } else {
+      input.path = input.path.map(off);
+    }
+    return input;
+  };
+
+  const selectedPoints = (): AudioPoint[] =>
+    selectedIds.map((id) => points.find((p) => p.id === id)).filter((p): p is AudioPoint => !!p);
+
+  const cloneSelected = async () => {
+    setBulkBusy(true);
+    try {
+      const created: AudioPoint[] = [];
+      for (const p of selectedPoints()) {
+        const input = clonedInput(p);
+        if (input) created.push(await api.createPoint(p.courseId, input));
+      }
+      setPoints((prev) => [...prev, ...created]);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const deleteSelected = async () => {
+    setBulkBusy(true);
+    try {
+      const ids = [...selectedIds];
+      await Promise.all(ids.map((id) => api.deletePoint(id)));
+      const gone = new Set(ids);
+      setPoints((prev) => prev.filter((p) => !gone.has(p.id)));
+      setSelectedIds([]);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  // Push one property onto every selected point (via the proven draft round-trip).
+  const bulkPatch = async (patch: (input: AudioPointInput) => void) => {
+    setBulkBusy(true);
+    try {
+      const updated: AudioPoint[] = [];
+      for (const p of selectedPoints()) {
+        const r = draftToInput(pointToDraft(p));
+        if ('error' in r) continue;
+        patch(r.input);
+        updated.push(await api.updatePoint(p.id, r.input));
+      }
+      const byId = new Map(updated.map((u) => [u.id, u]));
+      setPoints((prev) => prev.map((p) => byId.get(p.id) ?? p));
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+  const bulkVolume = (v: number) => bulkPatch((input) => (input.volume = v));
+  const bulkSync = (mode: SyncMode) => bulkPatch((input) => (input.sync = mode));
+
   const uploadAudio = async (file: File) => {
     setUploading(true);
     setFormError(null);
@@ -552,7 +640,28 @@ export default function App() {
             >
               {showCapture ? 'Hide field capture' : '📍 Field capture'}
             </button>
+            <button
+              type="button"
+              className={`btn small ${multiSelect ? 'btn-accent' : 'btn-ghost'}`}
+              onClick={() => setMultiSelectMode(!multiSelect)}
+              title="Select several points to clone, delete or bulk-edit"
+            >
+              {multiSelect ? 'Done selecting' : '☑ Select multiple'}
+            </button>
           </div>
+        )}
+        {courseId && multiSelect && (
+          <BulkBar
+            count={selectedIds.length}
+            total={points.length}
+            busy={bulkBusy}
+            onSelectAll={() => setSelectedIds(points.map((p) => p.id))}
+            onClear={() => setSelectedIds([])}
+            onClone={() => void cloneSelected()}
+            onDelete={() => void deleteSelected()}
+            onBulkVolume={(v) => void bulkVolume(v)}
+            onBulkSync={(m) => void bulkSync(m)}
+          />
         )}
         {courseId && showAnalytics && (
           <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
@@ -645,6 +754,9 @@ export default function App() {
         onAnchorDrag={anchorDrag}
         onPathVertexDrag={pathVertexDrag}
         onSelectPoint={selectPoint}
+        multiSelect={multiSelect}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
         preview={preview}
         zones={zones}
         zoneDraft={zoneDraft}

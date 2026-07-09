@@ -1045,3 +1045,45 @@ input[type='range'] {
   color: var(--muted);
   padding: 6px 0;
 }
+
+/* --- Multi-select & bulk edit -------------------------------------------- */
+.aw-marker--selected {
+  outline: 3px solid #fff;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--accent), 0 0 10px 2px var(--accent);
+  z-index: 500;
+}
+.bulk-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bulk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bulk-count {
+  font-weight: 700;
+  color: var(--accent);
+}
+.bulk-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bulk-field label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.bulk-field input[type='range'] {
+  flex: 1;
+}

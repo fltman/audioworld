@@ -27,6 +27,12 @@ interface Props {
   onAnchorDrag: (c: Coordinates) => void;
   onPathVertexDrag: (index: number, c: Coordinates) => void;
   onSelectPoint: (id: string) => void;
+  /** Multi-select mode: clicking a point toggles it into the selection instead of editing. */
+  multiSelect?: boolean;
+  /** Ids currently in the multi-select set (highlighted on the map). */
+  selectedIds?: string[];
+  /** Toggle a point in/out of the multi-select set. */
+  onToggleSelect?: (id: string) => void;
   /** When set, the map hosts a draggable virtual listener for the playtest. */
   preview: PreviewEngine | null;
   /** Acoustic zones to draw as filled polygons. */
@@ -41,11 +47,12 @@ interface Props {
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
 
-function markerIcon(color: string, big: boolean, symbol: string): L.DivIcon {
+function markerIcon(color: string, big: boolean, symbol: string, selected = false): L.DivIcon {
   const s = big ? 26 : 22;
+  const cls = selected ? 'aw-marker aw-marker--selected' : 'aw-marker';
   return L.divIcon({
     className: 'aw-marker-wrap',
-    html: `<div class="aw-marker" style="--c:${color};width:${s}px;height:${s}px;line-height:${s}px">${symbol}</div>`,
+    html: `<div class="${cls}" style="--c:${color};width:${s}px;height:${s}px;line-height:${s}px">${symbol}</div>`,
     iconSize: [s, s],
     iconAnchor: [s / 2, s / 2],
   });
@@ -116,7 +123,12 @@ function fitToPoints(map: L.Map, points: AudioPoint[]): void {
   map.fitBounds(L.latLngBounds(coords).pad(0.25), { maxZoom: 17 });
 }
 
-function drawPoint(layer: L.LayerGroup, p: AudioPoint, onClick: () => void): void {
+function drawPoint(
+  layer: L.LayerGroup,
+  p: AudioPoint,
+  onClick: () => void,
+  selected = false
+): void {
   const meta = POINT_TYPE_META[p.type];
   const a = anchorOf(p);
   const isTrigger = triggerRadiusOf(p) !== null;
@@ -153,7 +165,7 @@ function drawPoint(layer: L.LayerGroup, p: AudioPoint, onClick: () => void): voi
     drawPathTimes(layer, p.path, p.speed, p.stops);
   }
 
-  L.marker([a.lat, a.lng], { icon: markerIcon(meta.color, false, meta.short) })
+  L.marker([a.lat, a.lng], { icon: markerIcon(meta.color, selected, meta.short, selected) })
     .on('click', onClick)
     .addTo(layer);
 }
@@ -336,12 +348,22 @@ export default function MapView(props: Props) {
     if (!layer) return;
     layer.clearLayers();
     const hideId = props.draft?.editingId ?? null;
+    const selected = new Set(props.selectedIds ?? []);
     for (const p of props.points) {
       if (hideId && p.id === hideId) continue;
       const id = p.id;
-      drawPoint(layer, p, () => stateRef.current.onSelectPoint(id));
+      drawPoint(
+        layer,
+        p,
+        () => {
+          const s = stateRef.current;
+          if (s.multiSelect) s.onToggleSelect?.(id);
+          else s.onSelectPoint(id);
+        },
+        selected.has(id)
+      );
     }
-  }, [props.points, props.draft?.editingId]);
+  }, [props.points, props.draft?.editingId, props.selectedIds, props.multiSelect]);
 
   // Redraw the live draft geometry.
   useEffect(() => {
