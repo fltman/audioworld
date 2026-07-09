@@ -25,6 +25,8 @@ import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
 import FieldCapture from './components/FieldCapture';
 import BulkBar from './components/BulkBar';
+import Section from './components/Section';
+import CourseSettings from './components/CourseSettings';
 import ZonePanel from './components/ZonePanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
@@ -36,8 +38,7 @@ const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e))
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [showUsers, setShowUsers] = useState(false);
-  const [showSounds, setShowSounds] = useState(false);
+  const [tab, setTab] = useState<'courses' | 'sounds' | 'users'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [points, setPoints] = useState<AudioPoint[]>([]);
@@ -139,8 +140,7 @@ export default function App() {
   const logout = () => {
     setToken(null);
     setUser(null);
-    setShowUsers(false);
-    setShowSounds(false);
+    setTab('courses');
     setPreview(null);
     setCourses([]);
     setCourseId(null);
@@ -571,41 +571,35 @@ export default function App() {
           AudioWorld<span>Admin</span>
         </header>
 
-        <div className="account">
-          <span className="account__email" title={user.email}>
-            {user.email}
-          </span>
-          <span className="account__role">{user.role}</span>
+        <nav className="tabs">
+          <button
+            type="button"
+            className={`tab${tab === 'courses' ? ' is-active' : ''}`}
+            onClick={() => setTab('courses')}
+          >
+            Courses
+          </button>
+          <button
+            type="button"
+            className={`tab${tab === 'sounds' ? ' is-active' : ''}`}
+            onClick={() => setTab('sounds')}
+          >
+            Sounds
+          </button>
           {user.role === 'admin' && (
             <button
               type="button"
-              className="icon-btn"
-              onClick={() => {
-                setShowUsers((s) => !s);
-                setShowSounds(false);
-              }}
+              className={`tab${tab === 'users' ? ' is-active' : ''}`}
+              onClick={() => setTab('users')}
             >
-              {showUsers ? 'Courses' : 'Users'}
+              Users
             </button>
           )}
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => {
-              setShowSounds((s) => !s);
-              setShowUsers(false);
-            }}
-          >
-            {showSounds ? 'Courses' : 'Sounds'}
-          </button>
-          <button type="button" className="icon-btn" onClick={logout}>
-            Sign out
-          </button>
-        </div>
+        </nav>
 
-        {showUsers && user.role === 'admin' ? (
+        {tab === 'users' && user.role === 'admin' ? (
           <UsersPanel me={user} />
-        ) : showSounds ? (
+        ) : tab === 'sounds' ? (
           <SoundLibrary />
         ) : (
           <>
@@ -614,10 +608,6 @@ export default function App() {
           selectedId={courseId}
           onSelect={selectCourse}
           onCreate={createCourse}
-          onDelete={deleteCourse}
-          onUpdate={updateCourse}
-          onExport={exportCourse}
-          onImport={importCourse}
         />
 
         {courseId && (
@@ -627,56 +617,6 @@ export default function App() {
             issues={flightIssues}
             publishing={publishing}
             onPublish={publishCourse}
-          />
-        )}
-
-        {courseId && (
-          <div className="row-actions" style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              className="btn btn-ghost small"
-              onClick={() => setShowAnalytics((s) => !s)}
-            >
-              {showAnalytics ? 'Hide analytics' : 'Show analytics'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost small"
-              onClick={() => setShowCapture((s) => !s)}
-              title="Drop points at your live GPS position (use on a phone, on-site)"
-            >
-              {showCapture ? 'Hide field capture' : '📍 Field capture'}
-            </button>
-            <button
-              type="button"
-              className={`btn small ${multiSelect ? 'btn-accent' : 'btn-ghost'}`}
-              onClick={() => setMultiSelectMode(!multiSelect)}
-              title="Select several points to clone, delete or bulk-edit"
-            >
-              {multiSelect ? 'Done selecting' : '☑ Select multiple'}
-            </button>
-          </div>
-        )}
-        {courseId && multiSelect && (
-          <BulkBar
-            count={selectedIds.length}
-            total={points.length}
-            busy={bulkBusy}
-            onSelectAll={() => setSelectedIds(points.map((p) => p.id))}
-            onClear={() => setSelectedIds([])}
-            onClone={() => void cloneSelected()}
-            onDelete={() => void deleteSelected()}
-            onBulkVolume={(v) => void bulkVolume(v)}
-            onBulkSync={(m) => void bulkSync(m)}
-          />
-        )}
-        {courseId && showAnalytics && (
-          <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
-        )}
-        {courseId && showCapture && (
-          <FieldCapture
-            courseId={courseId}
-            onCreated={(p) => setPoints((prev) => [...prev, p])}
           />
         )}
 
@@ -745,11 +685,84 @@ export default function App() {
                 onDelete={(i) => setZones((z) => z.filter((_, idx) => idx !== i))}
                 onSave={saveZones}
               />
+
+              {currentCourse && (
+                <Section title="Course settings" icon="⚙️" defaultOpen={false}>
+                  <CourseSettings
+                    course={currentCourse}
+                    onUpdate={updateCourse}
+                    onExport={exportCourse}
+                    onImport={importCourse}
+                    onDelete={deleteCourse}
+                  />
+                </Section>
+              )}
+
+              <Section title="Insights & tools" icon="🛠" defaultOpen={false}>
+                <div className="tool-toggles">
+                  <button
+                    type="button"
+                    className={`btn small ${showAnalytics ? 'btn-accent' : 'btn-ghost'}`}
+                    onClick={() => setShowAnalytics((s) => !s)}
+                  >
+                    📊 Analytics
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn small ${showCapture ? 'btn-accent' : 'btn-ghost'}`}
+                    onClick={() => setShowCapture((s) => !s)}
+                    title="Drop points at your live GPS position (use on a phone, on-site)"
+                  >
+                    📍 Field capture
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn small ${multiSelect ? 'btn-accent' : 'btn-ghost'}`}
+                    onClick={() => setMultiSelectMode(!multiSelect)}
+                    title="Select several points to clone, delete or bulk-edit"
+                  >
+                    ☑ Select multiple
+                  </button>
+                </div>
+              </Section>
+
+              {multiSelect && (
+                <BulkBar
+                  count={selectedIds.length}
+                  total={points.length}
+                  busy={bulkBusy}
+                  onSelectAll={() => setSelectedIds(points.map((p) => p.id))}
+                  onClear={() => setSelectedIds([])}
+                  onClone={() => void cloneSelected()}
+                  onDelete={() => void deleteSelected()}
+                  onBulkVolume={(v) => void bulkVolume(v)}
+                  onBulkSync={(m) => void bulkSync(m)}
+                />
+              )}
+              {showAnalytics && (
+                <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
+              )}
+              {showCapture && (
+                <FieldCapture
+                  courseId={courseId}
+                  onCreated={(p) => setPoints((prev) => [...prev, p])}
+                />
+              )}
             </>
           )
         )}
           </>
         )}
+
+        <div className="sidebar-footer">
+          <span className="account__email" title={user.email}>
+            {user.email}
+          </span>
+          <span className="account__role">{user.role}</span>
+          <button type="button" className="icon-btn" onClick={logout}>
+            Sign out
+          </button>
+        </div>
       </aside>
 
       <MapView

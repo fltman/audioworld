@@ -396,18 +396,23 @@ input[type='range'] {
 
 .check {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 13px;
+  line-height: 1.35;
   cursor: pointer;
 }
 
 .check input {
   accent-color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .course-check {
-  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .zone-row {
@@ -1116,4 +1121,104 @@ input[type='range'] {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
+}
+
+/* ---------- Workspace tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- Sticky account footer ---------- */
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+/* ---------- Collapsible section ---------- */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.section-head:hover {
+  color: var(--text);
+}
+.section-chevron {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+  transform: rotate(0deg);
+}
+.section-chevron.is-open {
+  transform: rotate(90deg);
+}
+.section-head__title {
+  flex: 1;
+  text-align: left;
+}
+.section-head__badge {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.section-body {
+  margin-top: 12px;
+}
+
+/* ---------- Course settings + tools ---------- */
+.course-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.course-settings__delete {
+  align-self: flex-start;
+}
+.tool-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.row-actions--wrap {
+  flex-wrap: wrap;
 }
