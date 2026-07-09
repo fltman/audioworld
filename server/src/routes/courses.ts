@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type {
   AcousticZone,
+  AnalyticsReport,
   CourseInput,
   PublishedCourse,
   PublishedSnapshot,
@@ -48,6 +49,25 @@ function validateCourseInput(body: unknown): CourseInput {
     eyesUp: typeof b.eyesUp === 'boolean' ? b.eyesUp : undefined,
     zones: parseZones(b.zones),
   };
+}
+
+/** Sanitize + cap an anonymous analytics report from an untrusted client. */
+function parseAnalyticsReport(body: unknown): AnalyticsReport {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const cells: Record<string, number> = {};
+  if (b.cells && typeof b.cells === 'object' && !Array.isArray(b.cells)) {
+    let n = 0;
+    for (const [k, v] of Object.entries(b.cells as Record<string, unknown>)) {
+      if (n++ >= 4000) break;
+      const secs = typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(3600, v)) : 0;
+      if (secs > 0 && typeof k === 'string' && k.length <= 24) cells[k] = secs;
+    }
+  }
+  const reached: string[] = [];
+  if (Array.isArray(b.reached)) {
+    for (const p of b.reached.slice(0, 1000)) if (typeof p === 'string') reached.push(p);
+  }
+  return { cells, reached };
 }
 
 const REVERB_CHARS: readonly ReverbCharacter[] = [
@@ -200,6 +220,26 @@ coursesRouter.get(
         }
       : { course, points: await Points.listByCourse(req.params.id), published: false };
     res.json({ success: true, data });
+  })
+);
+
+// Public: fold one anonymous, aggregate-only session report into the running counts.
+coursesRouter.post(
+  '/:id/analytics',
+  asyncHandler(async (req, res) => {
+    await Courses.mergeAnalytics(req.params.id, parseAnalyticsReport(req.body));
+    res.json({ success: true, data: { ok: true } });
+  })
+);
+
+// Manage: the aggregate heatmap + funnel (no individual tracks exist).
+coursesRouter.get(
+  '/:id/analytics',
+  requireRole('superuser', 'admin'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const course = await loadManageable(req, res);
+    if (!course) return;
+    res.json({ success: true, data: await Courses.getAnalytics(course.id) });
   })
 );
 

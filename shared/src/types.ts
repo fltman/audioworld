@@ -293,6 +293,27 @@ export interface PublishedCourse {
   published: boolean;
 }
 
+/**
+ * Anonymous, aggregate-only course analytics. No individual tracks or device ids are
+ * ever stored — only running sums, so a single person's path can't be reconstructed.
+ */
+export interface CourseAnalytics {
+  /** Coarse ~11 m grid cell "lat,lng" (4 dp) → total seconds dwelt across all sessions. */
+  cells: Record<string, number>;
+  /** Point id → number of sessions that heard it (funnel). */
+  reached: Record<string, number>;
+  /** Total sessions counted. */
+  sessions: number;
+}
+
+/** What a client posts once, anonymously, at the end of a listening session. */
+export interface AnalyticsReport {
+  /** This session's grid cells → seconds dwelt. */
+  cells: Record<string, number>;
+  /** Point ids heard at least once this session. */
+  reached: string[];
+}
+
 /** Severity of a pre-publish flight-check finding. */
 export type FlightSeverity = 'error' | 'warning';
 

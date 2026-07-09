@@ -55,7 +55,8 @@ ALTER TABLE courses
   ADD COLUMN IF NOT EXISTS show_start_wayfinding boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS eyes_up boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS zones jsonb NOT NULL DEFAULT '[]',
-  ADD COLUMN IF NOT EXISTS published jsonb;
+  ADD COLUMN IF NOT EXISTS published jsonb,
+  ADD COLUMN IF NOT EXISTS analytics jsonb NOT NULL DEFAULT '{"cells":{},"reached":{},"sessions":0}';
 
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);

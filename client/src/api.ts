@@ -1,4 +1,4 @@
-import type { ApiResponse, AudioPoint, Course, PublishedCourse } from '@audioworld/shared';
+import type { AnalyticsReport, ApiResponse, AudioPoint, Course, PublishedCourse } from '@audioworld/shared';
 
 /** REST base. Overridable via VITE_API_URL; falls back to the dev server port. */
 export const API_URL =
@@ -19,6 +19,20 @@ export const getPoints = (courseId: string) =>
   get<AudioPoint[]>(`/api/courses/${courseId}/points`);
 /** The frozen published version a listener plays (falls back to the draft if never published). */
 export const getPublished = (id: string) => get<PublishedCourse>(`/api/courses/${id}/published`);
+
+/** Post one anonymous, aggregate session report (fire-and-forget, survives page close). */
+export function postAnalytics(id: string, report: AnalyticsReport): void {
+  try {
+    void fetch(`${API_URL}/api/courses/${id}/analytics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* ignore — analytics is best-effort */
+  }
+}
 
 /** Server-relative audio paths (`/uploads/...`) become absolute against the API host. */
 export function absoluteAudioUrl(url: string): string {

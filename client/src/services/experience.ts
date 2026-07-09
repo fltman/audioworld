@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AcousticZone,
+  AnalyticsReport,
   AudioPoint,
   Coordinates,
   PointType,
@@ -135,6 +136,9 @@ export class ExperienceEngine {
   /** Eyes-up sonar: perf time of the last nav ping + audible count to detect arrivals. */
   private lastPingAt = 0;
   private lastAudibleCount = 0;
+  /** Anonymous analytics (live only): coarse grid cell → seconds dwelt, + points heard. */
+  private readonly visitedCells = new Map<string, number>();
+  private readonly reachedPoints = new Set<string>();
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
   private readonly stateMemory = new Map<string, SourceState>();
   /** Story flags raised on THIS device (set by visited points, gate other points). */
@@ -310,6 +314,11 @@ export class ExperienceEngine {
     this.smoothedSpeed = this.smoothedSpeed * 0.7 + Math.min(rawSpeed, 15) * 0.3;
     this.prevUser = user;
     const userSpeed = this.sim ? this.smoothedSpeed : this.userSpeedLive;
+    // Anonymous heatmap: accumulate seconds dwelt in each coarse (~11 m) grid cell.
+    if (!this.sim) {
+      const cell = `${user.lat.toFixed(4)},${user.lng.toFixed(4)}`;
+      this.visitedCells.set(cell, (this.visitedCells.get(cell) ?? 0) + dtSec);
+    }
     const frame: FrameSource[] = [];
     const blips: Blip[] = [];
     const sources: MapSource[] = [];
@@ -387,6 +396,7 @@ export class ExperienceEngine {
 
       if (r.audible) {
         blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
+        if (!this.sim) this.reachedPoints.add(point.id);
       }
       // Wayfinding: a compass cue to this sound even when it's out of earshot.
       if (
@@ -537,6 +547,11 @@ export class ExperienceEngine {
 
   getStatus(): EngineStatus {
     return this.status;
+  }
+
+  /** This session's anonymous, aggregate report (coarse cells + points heard). */
+  getAnalytics(): AnalyticsReport {
+    return { cells: Object.fromEntries(this.visitedCells), reached: [...this.reachedPoints] };
   }
 
   setMuted(muted: boolean): void {

@@ -1,10 +1,36 @@
 import type {
   AcousticZone,
+  AnalyticsReport,
   Course,
+  CourseAnalytics,
   CourseInput,
   PublishedSnapshot,
 } from '@audioworld/shared';
 import { pool } from '../db/pool';
+
+const emptyAnalytics = (): CourseAnalytics => ({ cells: {}, reached: {}, sessions: 0 });
+
+/** The aggregate analytics for a course (never individual tracks). */
+export async function getAnalytics(id: string): Promise<CourseAnalytics> {
+  const { rows } = await pool.query<{ analytics: CourseAnalytics | null }>(
+    'SELECT analytics FROM courses WHERE id = $1',
+    [id]
+  );
+  return rows[0]?.analytics ?? emptyAnalytics();
+}
+
+/** Fold one anonymous session report into the running aggregate. */
+export async function mergeAnalytics(id: string, report: AnalyticsReport): Promise<void> {
+  const agg = await getAnalytics(id);
+  for (const [cell, secs] of Object.entries(report.cells)) {
+    agg.cells[cell] = (agg.cells[cell] ?? 0) + secs;
+  }
+  for (const pid of report.reached) {
+    agg.reached[pid] = (agg.reached[pid] ?? 0) + 1;
+  }
+  agg.sessions += 1;
+  await pool.query('UPDATE courses SET analytics = $1 WHERE id = $2', [JSON.stringify(agg), id]);
+}
 
 interface CourseRow {
   id: string;

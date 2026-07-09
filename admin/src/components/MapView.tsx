@@ -35,6 +35,8 @@ interface Props {
   zoneDraft?: Coordinates[] | null;
   /** True while the user is laying down a zone polygon (debounce clicks, free the dblclick). */
   drawingZone?: boolean;
+  /** Aggregate heatmap cells: "lat,lng" (4dp) → seconds dwelt. Drawn as warm circles. */
+  analyticsCells?: Record<string, number>;
 }
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
@@ -162,6 +164,7 @@ export default function MapView(props: Props) {
   const pointsLayerRef = useRef<L.LayerGroup | null>(null);
   const draftLayerRef = useRef<L.LayerGroup | null>(null);
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
+  const analyticsLayerRef = useRef<L.LayerGroup | null>(null);
   const clickTimer = useRef<number | null>(null);
   const stateRef = useRef(props);
   stateRef.current = props;
@@ -190,6 +193,7 @@ export default function MapView(props: Props) {
       maxZoom: 19,
     }).addTo(map);
 
+    analyticsLayerRef.current = L.layerGroup().addTo(map); // heatmap, bottom of the stack
     zonesLayerRef.current = L.layerGroup().addTo(map); // under the point markers
     pointsLayerRef.current = L.layerGroup().addTo(map);
     draftLayerRef.current = L.layerGroup().addTo(map);
@@ -227,8 +231,33 @@ export default function MapView(props: Props) {
       pointsLayerRef.current = null;
       draftLayerRef.current = null;
       zonesLayerRef.current = null;
+      analyticsLayerRef.current = null;
     };
   }, []);
+
+  // Draw the aggregate heatmap: warm circles, opacity by relative dwell time.
+  useEffect(() => {
+    const layer = analyticsLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    const cells = props.analyticsCells;
+    if (!cells) return;
+    const values = Object.values(cells);
+    if (values.length === 0) return;
+    const max = Math.max(...values);
+    for (const [key, v] of Object.entries(cells)) {
+      const [lat, lng] = key.split(',').map(Number);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const t = max > 0 ? Math.min(1, v / max) : 0;
+      L.circle([lat, lng], {
+        radius: 8,
+        stroke: false,
+        fillColor: '#ff6a3d',
+        fillOpacity: 0.12 + t * 0.5,
+        interactive: false,
+      }).addTo(layer);
+    }
+  }, [props.analyticsCells]);
 
   // Draw acoustic zones (filled polygons) + the in-progress zone outline.
   useEffect(() => {

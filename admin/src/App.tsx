@@ -4,6 +4,7 @@ import type {
   AudioPoint,
   Coordinates,
   Course,
+  CourseAnalytics,
   PointType,
   User,
 } from '@audioworld/shared';
@@ -22,6 +23,7 @@ import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
 import ZonePanel from './components/ZonePanel';
 import PublishBar from './components/PublishBar';
+import AnalyticsPanel from './components/AnalyticsPanel';
 import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
@@ -39,6 +41,9 @@ export default function App() {
   const [zoneDraft, setZoneDraft] = useState<Coordinates[] | null>(null);
   const [savingZones, setSavingZones] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analytics, setAnalytics] = useState<CourseAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [fitToken, setFitToken] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -209,6 +214,24 @@ export default function App() {
     }
     setPublishing(false);
   };
+
+  // Fetch the aggregate analytics only while the panel is open.
+  useEffect(() => {
+    if (!showAnalytics || !courseId) {
+      setAnalytics(null);
+      return;
+    }
+    let alive = true;
+    setAnalyticsLoading(true);
+    api
+      .getAnalytics(courseId)
+      .then((a) => alive && setAnalytics(a))
+      .catch((e) => alive && setError(msg(e)))
+      .finally(() => alive && setAnalyticsLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [showAnalytics, courseId]);
 
   const deleteCourse = async (id: string) => {
     try {
@@ -480,6 +503,21 @@ export default function App() {
           />
         )}
 
+        {courseId && (
+          <div className="row-actions" style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn btn-ghost small"
+              onClick={() => setShowAnalytics((s) => !s)}
+            >
+              {showAnalytics ? 'Hide analytics' : 'Show analytics'}
+            </button>
+          </div>
+        )}
+        {courseId && showAnalytics && (
+          <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
+        )}
+
         {error && (
           <div className="banner">
             <span>{error}</span>
@@ -565,6 +603,7 @@ export default function App() {
         zones={zones}
         zoneDraft={zoneDraft}
         drawingZone={zoneDraft != null}
+        analyticsCells={showAnalytics ? analytics?.cells : undefined}
       />
     </div>
   );

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Course } from '@audioworld/shared';
 import { Radar } from '../components/Radar';
 import { MapView } from '../components/MapView';
 import { Readout } from '../components/Readout';
 import { TopBar, type ExperienceView } from '../components/TopBar';
 import { ExperienceEngine, useExperience } from '../services/experience';
+import { postAnalytics } from '../api';
 
 interface ExperienceProps {
   engine: ExperienceEngine;
@@ -18,6 +19,26 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
   // Eyes-up hides the visual HUD on a real device; the sim keeps the radar so a
   // desktop author can still see where they are while testing the sonar.
   const eyesUp = (course.eyesUp ?? false) && !engine.isSim();
+
+  // Send the anonymous aggregate report once, on exit or when the page is hidden.
+  const sentRef = useRef(false);
+  useEffect(() => {
+    const flush = () => {
+      if (sentRef.current || engine.isSim()) return;
+      const report = engine.getAnalytics();
+      if (Object.keys(report.cells).length === 0) return;
+      sentRef.current = true;
+      postAnalytics(course.id, report);
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      flush();
+    };
+  }, [engine, course.id]);
 
   return (
     <div className="screen screen--experience">

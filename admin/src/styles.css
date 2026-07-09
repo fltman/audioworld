@@ -432,6 +432,45 @@ input[type='range'] {
   color: var(--muted);
 }
 
+.funnel {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.funnel__row {
+  display: grid;
+  grid-template-columns: 1fr 90px 34px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.funnel__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.funnel__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.funnel__bar > span {
+  display: block;
+  height: 100%;
+  background: #ff6a3d;
+  border-radius: 999px;
+}
+.funnel__pct {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
 .publish__head {
   display: flex;
   align-items: center;

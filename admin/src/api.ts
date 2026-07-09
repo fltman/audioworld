@@ -4,6 +4,7 @@ import type {
   AudioPointInput,
   AuthResult,
   Course,
+  CourseAnalytics,
   CourseInput,
   Role,
   UploadListItem,
@@ -104,6 +105,7 @@ export const api = {
     request<{ id: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
   publishCourse: (id: string) =>
     request<Course>(`/api/courses/${id}/publish`, { method: 'POST' }),
+  getAnalytics: (id: string) => request<CourseAnalytics>(`/api/courses/${id}/analytics`),
 
   listPoints: (courseId: string) =>
     request<AudioPoint[]>(`/api/courses/${courseId}/points`),
