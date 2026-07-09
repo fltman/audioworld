@@ -1,4 +1,4 @@
-import type { ApiResponse, AudioPoint, Course } from '@audioworld/shared';
+import type { ApiResponse, AudioPoint, Course, PublishedCourse } from '@audioworld/shared';
 
 /** REST base. Overridable via VITE_API_URL; falls back to the dev server port. */
 export const API_URL =
@@ -17,6 +17,8 @@ export const getCourses = () => get<Course[]>('/api/courses');
 export const getCourse = (id: string) => get<Course>(`/api/courses/${id}`);
 export const getPoints = (courseId: string) =>
   get<AudioPoint[]>(`/api/courses/${courseId}/points`);
+/** The frozen published version a listener plays (falls back to the draft if never published). */
+export const getPublished = (id: string) => get<PublishedCourse>(`/api/courses/${id}/published`);
 
 /** Server-relative audio paths (`/uploads/...`) become absolute against the API host. */
 export function absoluteAudioUrl(url: string): string {

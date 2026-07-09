@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AudioPoint, Course } from '@audioworld/shared';
-import { getCourse, getPoints } from '../api';
+import { getPublished } from '../api';
 import { ExperienceEngine } from '../services/experience';
 import { isSecureEnough } from '../services/geolocation';
 import { StartMap } from '../components/StartMap';
@@ -30,13 +30,12 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
     let alive = true;
     const load = async () => {
       try {
-        const [c, p] = await Promise.all([
-          initialCourse ? Promise.resolve(initialCourse) : getCourse(courseId),
-          getPoints(courseId),
-        ]);
+        // Play the frozen published version (the server falls back to the live draft
+        // if the course was never published).
+        const pub = await getPublished(courseId);
         if (!alive) return;
-        setCourse(c);
-        setPoints(p);
+        setCourse(pub.course);
+        setPoints(pub.points);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : 'Failed to load course');
       }

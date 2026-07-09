@@ -243,8 +243,39 @@ export interface Course {
    * a moving guide, the cue also shows an ETA for when it returns to the start.
    */
   showStartWayfinding?: boolean;
+  /** When the course was last published (frozen for listeners), or null/absent if never. */
+  publishedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The frozen, playable snapshot stored when a course is published. */
+export interface PublishedSnapshot {
+  name: string;
+  description?: string;
+  showStartWayfinding?: boolean;
+  zones?: AcousticZone[];
+  points: AudioPoint[];
+  publishedAt: string;
+}
+
+/** What a listener gets for a course: the published snapshot as a playable course + points. */
+export interface PublishedCourse {
+  course: Course;
+  points: AudioPoint[];
+  /** True when this is the frozen published version (false = live-draft fallback). */
+  published: boolean;
+}
+
+/** Severity of a pre-publish flight-check finding. */
+export type FlightSeverity = 'error' | 'warning';
+
+/** One issue found by the pre-publish flight check / flag linter. */
+export interface FlightIssue {
+  severity: FlightSeverity;
+  message: string;
+  /** The offending point, when the issue is point-specific. */
+  pointId?: string;
 }
 
 /**

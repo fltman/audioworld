@@ -1,4 +1,9 @@
-import type { AcousticZone, Course, CourseInput } from '@audioworld/shared';
+import type {
+  AcousticZone,
+  Course,
+  CourseInput,
+  PublishedSnapshot,
+} from '@audioworld/shared';
 import { pool } from '../db/pool';
 
 interface CourseRow {
@@ -8,6 +13,7 @@ interface CourseRow {
   owner_id: string | null;
   show_start_wayfinding: boolean;
   zones: AcousticZone[] | null;
+  published: PublishedSnapshot | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -20,9 +26,30 @@ function rowToCourse(row: CourseRow): Course {
     ownerId: row.owner_id ?? null,
     showStartWayfinding: row.show_start_wayfinding,
     zones: row.zones ?? [],
+    publishedAt: row.published?.publishedAt ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
+}
+
+/** Freeze a playable snapshot as the published version. */
+export async function publish(id: string, snapshot: PublishedSnapshot): Promise<Course | null> {
+  // Publishing is not a content edit — leave updated_at alone so a freshly published
+  // course reads as "no unpublished changes" (publishedAt >= updatedAt).
+  const { rows } = await pool.query<CourseRow>(
+    'UPDATE courses SET published = $1 WHERE id = $2 RETURNING *',
+    [JSON.stringify(snapshot), id]
+  );
+  return rows[0] ? rowToCourse(rows[0]) : null;
+}
+
+/** The frozen published snapshot, or null if the course was never published. */
+export async function getPublished(id: string): Promise<PublishedSnapshot | null> {
+  const { rows } = await pool.query<{ published: PublishedSnapshot | null }>(
+    'SELECT published FROM courses WHERE id = $1',
+    [id]
+  );
+  return rows[0]?.published ?? null;
 }
 
 export async function listCourses(): Promise<Course[]> {

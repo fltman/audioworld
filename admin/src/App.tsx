@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AcousticZone,
   AudioPoint,
@@ -7,7 +7,7 @@ import type {
   PointType,
   User,
 } from '@audioworld/shared';
-import { anchorOf } from '@audioworld/shared';
+import { anchorOf, flightCheck } from '@audioworld/shared';
 import { api, getToken, setToken } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
 import { isPathType } from './pointTypes';
@@ -21,6 +21,7 @@ import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
 import ZonePanel from './components/ZonePanel';
+import PublishBar from './components/PublishBar';
 import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
@@ -37,6 +38,7 @@ export default function App() {
   const [zones, setZones] = useState<AcousticZone[]>([]);
   const [zoneDraft, setZoneDraft] = useState<Coordinates[] | null>(null);
   const [savingZones, setSavingZones] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [fitToken, setFitToken] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -193,6 +195,18 @@ export default function App() {
     setSavingZones(true);
     await updateCourse(courseId, { zones });
     setSavingZones(false);
+  };
+
+  const publishCourse = async () => {
+    if (!courseId) return;
+    setPublishing(true);
+    try {
+      const updated = await api.publishCourse(courseId);
+      setCourses((prev) => prev.map((c) => (c.id === courseId ? updated : c)));
+    } catch (e) {
+      setError(msg(e));
+    }
+    setPublishing(false);
   };
 
   const deleteCourse = async (id: string) => {
@@ -357,6 +371,16 @@ export default function App() {
   const visibleCourses =
     user?.role === 'admin' ? courses : courses.filter((c) => c.ownerId === user?.id);
 
+  // Publish state: flight-check the live draft, and flag whether it has changed since
+  // the last publish (any point/course edit newer than publishedAt).
+  const currentCourse = courses.find((c) => c.id === courseId) ?? null;
+  const publishedAt = currentCourse?.publishedAt ?? null;
+  const flightIssues = useMemo(() => flightCheck(points, zones), [points, zones]);
+  const dirty =
+    !publishedAt ||
+    (currentCourse ? currentCourse.updatedAt > publishedAt : false) ||
+    points.some((p) => p.updatedAt > publishedAt);
+
   if (!authReady) {
     return (
       <div className="app">
@@ -444,6 +468,16 @@ export default function App() {
           onDelete={deleteCourse}
           onUpdate={updateCourse}
         />
+
+        {courseId && (
+          <PublishBar
+            publishedAt={publishedAt}
+            dirty={dirty}
+            issues={flightIssues}
+            publishing={publishing}
+            onPublish={publishCourse}
+          />
+        )}
 
         {error && (
           <div className="banner">

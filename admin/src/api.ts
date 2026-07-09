@@ -102,6 +102,8 @@ export const api = {
     request<Course>(`/api/courses/${id}`, jsonBody('PUT', input)),
   deleteCourse: (id: string) =>
     request<{ id: string }>(`/api/courses/${id}`, { method: 'DELETE' }),
+  publishCourse: (id: string) =>
+    request<Course>(`/api/courses/${id}/publish`, { method: 'POST' }),
 
   listPoints: (courseId: string) =>
     request<AudioPoint[]>(`/api/courses/${courseId}/points`),

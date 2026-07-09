@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
-import type { AcousticZone, CourseInput, ReverbCharacter } from '@audioworld/shared';
+import type {
+  AcousticZone,
+  CourseInput,
+  PublishedCourse,
+  PublishedSnapshot,
+  ReverbCharacter,
+} from '@audioworld/shared';
+import { flightCheck } from '@audioworld/shared';
 import * as Courses from '../models/course';
 import * as Points from '../models/point';
 import { ValidationError } from '../lib/mapping';
@@ -133,6 +140,63 @@ coursesRouter.delete(
     if (!(await loadManageable(req, res))) return;
     await Courses.removeCourse(req.params.id);
     res.json({ success: true, data: { id: req.params.id } });
+  })
+);
+
+// Freeze the current draft as the published version (blocked on flight-check errors).
+coursesRouter.post(
+  '/:id/publish',
+  requireRole('superuser', 'admin'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const course = await loadManageable(req, res);
+    if (!course) return;
+    const points = await Points.listByCourse(course.id);
+    const issues = flightCheck(points, course.zones);
+    if (issues.some((i) => i.severity === 'error')) {
+      res.status(422).json({
+        success: false,
+        error: 'Fix the flight-check errors before publishing.',
+        data: issues,
+      });
+      return;
+    }
+    const snapshot: PublishedSnapshot = {
+      name: course.name,
+      description: course.description,
+      showStartWayfinding: course.showStartWayfinding,
+      zones: course.zones,
+      points,
+      publishedAt: new Date().toISOString(),
+    };
+    res.json({ success: true, data: await Courses.publish(course.id, snapshot) });
+  })
+);
+
+// Public: the frozen published snapshot a listener plays (falls back to the live
+// draft if the course was never published, so a link always plays something).
+coursesRouter.get(
+  '/:id/published',
+  asyncHandler(async (req, res) => {
+    const course = await Courses.getCourse(req.params.id);
+    if (!course) {
+      res.status(404).json({ success: false, error: 'Course not found' });
+      return;
+    }
+    const snap = await Courses.getPublished(req.params.id);
+    const data: PublishedCourse = snap
+      ? {
+          course: {
+            ...course,
+            name: snap.name,
+            description: snap.description,
+            showStartWayfinding: snap.showStartWayfinding,
+            zones: snap.zones,
+          },
+          points: snap.points,
+          published: true,
+        }
+      : { course, points: await Points.listByCourse(req.params.id), published: false };
+    res.json({ success: true, data });
   })
 );
 

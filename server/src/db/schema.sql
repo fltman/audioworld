@@ -53,7 +53,8 @@ ALTER TABLE audio_points
 ALTER TABLE courses
   ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS show_start_wayfinding boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS zones jsonb NOT NULL DEFAULT '[]';
+  ADD COLUMN IF NOT EXISTS zones jsonb NOT NULL DEFAULT '[]',
+  ADD COLUMN IF NOT EXISTS published jsonb;
 
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
