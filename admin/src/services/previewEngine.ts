@@ -7,6 +7,7 @@ import {
   dopplerRate,
   elevationRad,
   isGloballyTimed,
+  polygonCrossings,
   relativeBearing,
   resolveSource,
   zoneAt,
@@ -171,8 +172,14 @@ export class PreviewEngine {
         point.type === 'path_triggered' ||
         (point.type === 'follow_user' && (point.mode ?? 'attach') !== 'attach');
       const playbackRate = isMover ? dopplerRate(r.distance, prevDist ?? null, dtSec) : 1;
-      const cutoffHz = airCutoffHz(r.distance, radius);
       const elevation = elevationRad(point.height ?? 0, r.distance);
+      let walls = 0;
+      if (r.position && this.zones.length > 0) {
+        for (const z of this.zones) walls += polygonCrossings(user, r.position, z.polygon);
+      }
+      const air = airCutoffHz(r.distance, radius);
+      const cutoffHz =
+        walls > 0 ? Math.min(air, Math.max(260, Math.round(2200 * Math.pow(0.42, walls)))) : air;
 
       if (r.audible) {
         audible.push({ id: point.id, name: point.name, distance: r.distance, az, gain });

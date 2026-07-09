@@ -87,6 +87,36 @@ export function attenuation(distance: number, radius: number, maxVolume: number)
   return maxVolume * (1 - t * t);
 }
 
+const ccw = (a: Coordinates, b: Coordinates, c: Coordinates): number =>
+  (c.lat - a.lat) * (b.lng - a.lng) - (b.lat - a.lat) * (c.lng - a.lng);
+
+/** Do the open segments a-b and c-d properly cross? (Collinear/touching = false.) */
+export function segmentsIntersect(
+  a: Coordinates,
+  b: Coordinates,
+  c: Coordinates,
+  d: Coordinates
+): boolean {
+  const d1 = ccw(c, d, a);
+  const d2 = ccw(c, d, b);
+  const d3 = ccw(a, b, c);
+  const d4 = ccw(a, b, d);
+  return (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  );
+}
+
+/** How many of a polygon's edges the segment a-b crosses — i.e. how many "walls"
+ *  of the region lie between the two points (0 = clear line of sight). */
+export function polygonCrossings(a: Coordinates, b: Coordinates, polygon: Coordinates[]): number {
+  let n = 0;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    if (segmentsIntersect(a, b, polygon[j]!, polygon[i]!)) n++;
+  }
+  return n;
+}
+
 /**
  * Is a coordinate inside a polygon? Ray-casting on lat/lng treated as a plane — exact
  * enough at the scale of a walkable acoustic zone. Polygon needs >= 3 vertices.
