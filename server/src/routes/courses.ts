@@ -51,6 +51,17 @@ function validateCourseInput(body: unknown): CourseInput {
   };
 }
 
+/** A cell key must be a real "lat,lng" grid coordinate — not an arbitrary string, so
+ *  the aggregate's key space is bounded by geography, not attacker choice. */
+function isCellKey(k: string): boolean {
+  if (k.length > 24) return false;
+  const c = k.indexOf(',');
+  if (c <= 0) return false;
+  const lat = Number(k.slice(0, c));
+  const lng = Number(k.slice(c + 1));
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
 /** Sanitize + cap an anonymous analytics report from an untrusted client. */
 function parseAnalyticsReport(body: unknown): AnalyticsReport {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -60,14 +71,32 @@ function parseAnalyticsReport(body: unknown): AnalyticsReport {
     for (const [k, v] of Object.entries(b.cells as Record<string, unknown>)) {
       if (n++ >= 4000) break;
       const secs = typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(3600, v)) : 0;
-      if (secs > 0 && typeof k === 'string' && k.length <= 24) cells[k] = secs;
+      if (secs > 0 && typeof k === 'string' && isCellKey(k)) cells[k] = secs;
     }
   }
   const reached: string[] = [];
   if (Array.isArray(b.reached)) {
-    for (const p of b.reached.slice(0, 1000)) if (typeof p === 'string') reached.push(p);
+    for (const p of b.reached.slice(0, 1000)) {
+      if (typeof p === 'string' && p.length <= 64) reached.push(p);
+    }
   }
   return { cells, reached };
+}
+
+// Lightweight in-memory rate limit for the public analytics POST (single instance).
+const analyticsHits = new Map<string, { count: number; resetAt: number }>();
+function analyticsRateOk(ip: string): boolean {
+  const now = Date.now();
+  if (analyticsHits.size > 5000) {
+    for (const [k, e] of analyticsHits) if (now > e.resetAt) analyticsHits.delete(k);
+  }
+  const e = analyticsHits.get(ip);
+  if (!e || now > e.resetAt) {
+    analyticsHits.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  e.count += 1;
+  return e.count <= 30; // 30 posts / minute / IP
 }
 
 const REVERB_CHARS: readonly ReverbCharacter[] = [
@@ -227,6 +256,10 @@ coursesRouter.get(
 coursesRouter.post(
   '/:id/analytics',
   asyncHandler(async (req, res) => {
+    if (!analyticsRateOk(req.ip ?? 'unknown')) {
+      res.status(429).json({ success: false, error: 'Too many requests' });
+      return;
+    }
     await Courses.mergeAnalytics(req.params.id, parseAnalyticsReport(req.body));
     res.json({ success: true, data: { ok: true } });
   })

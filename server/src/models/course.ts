@@ -19,17 +19,47 @@ export async function getAnalytics(id: string): Promise<CourseAnalytics> {
   return rows[0]?.analytics ?? emptyAnalytics();
 }
 
-/** Fold one anonymous session report into the running aggregate. */
+/** Hard caps so the aggregate blob can never grow without bound (DoS guard). */
+const MAX_CELLS = 6000;
+const MAX_REACHED = 1000;
+
+/**
+ * Fold one anonymous session report into the running aggregate — atomically, under a
+ * row lock, so concurrent posts can't lose updates, and bounded so a hostile client
+ * can't inflate the JSONB blob indefinitely.
+ */
 export async function mergeAnalytics(id: string, report: AnalyticsReport): Promise<void> {
-  const agg = await getAnalytics(id);
-  for (const [cell, secs] of Object.entries(report.cells)) {
-    agg.cells[cell] = (agg.cells[cell] ?? 0) + secs;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ analytics: CourseAnalytics | null }>(
+      'SELECT analytics FROM courses WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (!rows[0]) {
+      await client.query('ROLLBACK');
+      return; // unknown course — nothing to merge
+    }
+    const agg = rows[0].analytics ?? emptyAnalytics();
+    for (const [cell, secs] of Object.entries(report.cells)) {
+      if (agg.cells[cell] != null || Object.keys(agg.cells).length < MAX_CELLS) {
+        agg.cells[cell] = (agg.cells[cell] ?? 0) + secs;
+      }
+    }
+    for (const pid of report.reached) {
+      if (agg.reached[pid] != null || Object.keys(agg.reached).length < MAX_REACHED) {
+        agg.reached[pid] = (agg.reached[pid] ?? 0) + 1;
+      }
+    }
+    agg.sessions += 1;
+    await client.query('UPDATE courses SET analytics = $1 WHERE id = $2', [JSON.stringify(agg), id]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
-  for (const pid of report.reached) {
-    agg.reached[pid] = (agg.reached[pid] ?? 0) + 1;
-  }
-  agg.sessions += 1;
-  await pool.query('UPDATE courses SET analytics = $1 WHERE id = $2', [JSON.stringify(agg), id]);
 }
 
 interface CourseRow {
