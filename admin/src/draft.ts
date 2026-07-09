@@ -3,6 +3,7 @@ import type {
   AudioPointInput,
   AudioSource,
   Coordinates,
+  FollowMode,
   PathEndBehavior,
   PathStop,
   PlaybackOptions,
@@ -46,6 +47,20 @@ export interface DraftState {
   initialRadius: number;
   triggerRadius: number;
   endBehavior: PathEndBehavior;
+  /** Wait-for-listener leash + toggle (path / path_triggered). */
+  waitForListener: boolean;
+  waitRadius: number;
+  /** Show a compass arrow + distance in the client (path / path_triggered). */
+  showWayfinding: boolean;
+  /** follow_user behavior + per-mode params. */
+  mode: FollowMode;
+  maxSpeed: number;
+  disengageDistance: number;
+  followRadius: number;
+  followSpeed: number;
+  /** Story flags this point sets / requires (comma-separated text). */
+  setsFlags: string;
+  requiresFlags: string;
 }
 
 const NUMERIC_DEFAULTS = {
@@ -54,7 +69,23 @@ const NUMERIC_DEFAULTS = {
   speed: 2,
   initialRadius: 30,
   triggerRadius: 40,
+  waitRadius: 60,
+  maxSpeed: 1.5,
+  disengageDistance: 80,
+  followRadius: 8,
+  followSpeed: 2,
 };
+
+/** Non-numeric draft fields shared by freshDraft + pointToDraft's base. */
+const FLAG_DEFAULTS = {
+  waitForListener: false,
+  showWayfinding: false,
+  mode: 'attach' as FollowMode,
+};
+
+/** Parse "OLD-LADY, KEY" -> ["OLD-LADY","KEY"]. */
+const parseFlags = (s: string): string[] =>
+  s.split(',').map((f) => f.trim()).filter((f) => f.length > 0);
 
 export function freshDraft(type: PointType, courseId: string): DraftState {
   return {
@@ -75,6 +106,9 @@ export function freshDraft(type: PointType, courseId: string): DraftState {
     triggerRadius: type === 'static' ? 0 : NUMERIC_DEFAULTS.triggerRadius,
     loopGapSec: 0,
     endBehavior: 'loop',
+    ...FLAG_DEFAULTS,
+    setsFlags: '',
+    requiresFlags: '',
   };
 }
 
@@ -96,6 +130,9 @@ export function pointToDraft(point: AudioPoint): DraftState {
     drawingPath: false,
     ...NUMERIC_DEFAULTS,
     endBehavior: 'loop',
+    ...FLAG_DEFAULTS,
+    setsFlags: (point.setsFlags ?? []).join(', '),
+    requiresFlags: (point.requiresFlags ?? []).join(', '),
   };
 
   switch (point.type) {
@@ -122,9 +159,21 @@ export function pointToDraft(point: AudioPoint): DraftState {
         radius: point.radius,
         speed: point.speed,
         endBehavior: point.endBehavior,
+        waitForListener: point.waitForListener ?? false,
+        waitRadius: point.waitRadius ?? NUMERIC_DEFAULTS.waitRadius,
+        showWayfinding: point.showWayfinding ?? false,
       };
     case 'follow_user':
-      return { ...base, center: point.center, initialRadius: point.initialRadius };
+      return {
+        ...base,
+        center: point.center,
+        initialRadius: point.initialRadius,
+        mode: point.mode ?? 'attach',
+        maxSpeed: point.maxSpeed ?? NUMERIC_DEFAULTS.maxSpeed,
+        disengageDistance: point.disengageDistance ?? NUMERIC_DEFAULTS.disengageDistance,
+        followRadius: point.followRadius ?? NUMERIC_DEFAULTS.followRadius,
+        followSpeed: point.followSpeed ?? NUMERIC_DEFAULTS.followSpeed,
+      };
     case 'path_triggered':
       return {
         ...base,
@@ -133,6 +182,9 @@ export function pointToDraft(point: AudioPoint): DraftState {
         triggerRadius: point.triggerRadius,
         speed: point.speed,
         endBehavior: point.endBehavior,
+        waitForListener: point.waitForListener ?? false,
+        waitRadius: point.waitRadius ?? NUMERIC_DEFAULTS.waitRadius,
+        showWayfinding: point.showWayfinding ?? false,
       };
   }
 }
@@ -176,6 +228,8 @@ export function draftToInput(d: DraftState): DraftResult {
     volume: d.volume,
     sync: d.sync,
     startAt: d.startAt,
+    setsFlags: parseFlags(d.setsFlags),
+    requiresFlags: parseFlags(d.requiresFlags),
   };
 
   switch (d.type) {
@@ -213,12 +267,25 @@ export function draftToInput(d: DraftState): DraftResult {
           radius: d.radius,
           speed: d.speed,
           endBehavior: d.endBehavior,
+          waitForListener: d.waitForListener,
+          waitRadius: d.waitRadius,
+          showWayfinding: d.showWayfinding,
         },
       };
     case 'follow_user':
       if (!d.center) return { error: 'Click the map to place the start point.' };
       return {
-        input: { ...common, type: 'follow_user', center: d.center, initialRadius: d.initialRadius },
+        input: {
+          ...common,
+          type: 'follow_user',
+          center: d.center,
+          initialRadius: d.initialRadius,
+          mode: d.mode,
+          maxSpeed: d.maxSpeed,
+          disengageDistance: d.disengageDistance,
+          followRadius: d.followRadius,
+          followSpeed: d.followSpeed,
+        },
       };
     case 'path_triggered':
       if (d.path.length < 2) return { error: 'Draw at least two path points.' };
@@ -231,6 +298,9 @@ export function draftToInput(d: DraftState): DraftResult {
           triggerRadius: d.triggerRadius,
           speed: d.speed,
           endBehavior: d.endBehavior,
+          waitForListener: d.waitForListener,
+          waitRadius: d.waitRadius,
+          showWayfinding: d.showWayfinding,
         },
       };
   }

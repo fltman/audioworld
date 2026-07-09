@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react';
-import type { PathEndBehavior, PathStop, PlaybackOptions } from '@audioworld/shared';
+import type { FollowMode, PathEndBehavior, PathStop, PlaybackOptions } from '@audioworld/shared';
 import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
@@ -69,8 +69,10 @@ export default function PointForm(props: Props) {
   const { draft, onChange, onSave, onCancel, onDelete, onUpload, saving, uploading, error } = props;
   const meta = POINT_TYPE_META[draft.type];
   const { audio, playback } = draft;
-  // Global (shared) timing only makes sense for the continuously-moving types.
-  const canSync = draft.type === 'path' || draft.type === 'static_circling';
+  // Global (shared) timing only makes sense for the continuously-moving types, and a
+  // wait-for-listener path is inherently individual (each device has its own leash).
+  const canSync =
+    (draft.type === 'path' && !draft.waitForListener) || draft.type === 'static_circling';
 
   const vertexTimes = isPathType(draft.type)
     ? pathVertexTimes(draft.path, draft.speed, draft.stops)
@@ -333,6 +335,107 @@ export default function PointForm(props: Props) {
           </div>
         </div>
       )}
+
+      {draft.type === 'follow_user' && (
+        <div className="form-field">
+          <span className="label">Follow behavior</span>
+          <select
+            className="select"
+            value={draft.mode}
+            onChange={(e) => onChange({ mode: e.currentTarget.value as FollowMode })}
+          >
+            <option value="attach">Attach — rides on top of you</option>
+            <option value="chase">Chase — pursues; you can outrun it</option>
+            <option value="orbit">Orbit — circles around you</option>
+            <option value="sideToSide">Side to side — sweeps left ↔ right</option>
+          </select>
+          {draft.mode === 'chase' && (
+            <div className="number-grid">
+              <NumberField
+                label="Max speed (m/s)"
+                value={draft.maxSpeed}
+                onValue={(n) => onChange({ maxSpeed: n })}
+                step={0.5}
+              />
+              <NumberField
+                label="Give-up distance (m)"
+                value={draft.disengageDistance}
+                onValue={(n) => onChange({ disengageDistance: n })}
+              />
+            </div>
+          )}
+          {(draft.mode === 'orbit' || draft.mode === 'sideToSide') && (
+            <div className="number-grid">
+              <NumberField
+                label="Follow radius (m)"
+                value={draft.followRadius}
+                onValue={(n) => onChange({ followRadius: n })}
+                step={0.5}
+              />
+              <NumberField
+                label={draft.mode === 'orbit' ? 'Orbit speed (m/s)' : 'Sweep speed (m/s)'}
+                value={draft.followSpeed}
+                onValue={(n) => onChange({ followSpeed: n })}
+                step={0.5}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {isPathType(draft.type) && (
+        <div className="checks">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.showWayfinding}
+              onChange={(e) => onChange({ showWayfinding: e.currentTarget.checked })}
+            />
+            Show direction &amp; distance to this sound
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.waitForListener}
+              onChange={(e) =>
+                onChange(
+                  e.currentTarget.checked
+                    ? { waitForListener: true, sync: 'individual', startAt: undefined }
+                    : { waitForListener: false }
+                )
+              }
+            />
+            Wait for the listener (pause when out of leash range)
+          </label>
+        </div>
+      )}
+
+      {isPathType(draft.type) && draft.waitForListener && (
+        <NumberField
+          label="Leash / resume radius (m)"
+          value={draft.waitRadius}
+          onValue={(n) => onChange({ waitRadius: n })}
+        />
+      )}
+
+      <label className="form-field">
+        <span className="label">Sets flags when visited</span>
+        <input
+          className="input"
+          placeholder="OLD-LADY, KEY (comma-separated)"
+          value={draft.setsFlags}
+          onChange={(e) => onChange({ setsFlags: e.currentTarget.value })}
+        />
+      </label>
+      <label className="form-field">
+        <span className="label">Requires flags to activate</span>
+        <input
+          className="input"
+          placeholder="OLD-LADY (silent until set)"
+          value={draft.requiresFlags}
+          onChange={(e) => onChange({ requiresFlags: e.currentTarget.value })}
+        />
+      </label>
 
       {canSync && (
         <div className="form-field">

@@ -73,6 +73,17 @@ export interface BaseAudioPoint {
   sync: SyncMode;
   /** For global points: epoch ms when the shared motion/audio clock starts (t=0). */
   startAt?: number;
+  /**
+   * Story flags this point RAISES on the visitor's device the first time it is
+   * heard/reached (e.g. ["OLD-LADY"]). Other points can gate on them.
+   */
+  setsFlags?: string[];
+  /**
+   * Story flags REQUIRED for this point to activate. Until every listed flag has
+   * been raised, the point stays inert — silent and untriggerable. This is what
+   * turns a course into a branching adventure (visit A → unlocks B).
+   */
+  requiresFlags?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -125,13 +136,44 @@ export interface PathAudioPoint extends BaseAudioPoint {
   radius: number;
   speed: number;
   endBehavior: PathEndBehavior;
+  /**
+   * "Wait for the listener": the source only advances along the path while the user
+   * is within `waitRadius` (a leash, typically wider than the audible radius). Step
+   * outside it and the source pauses in place until you come back — so a guide never
+   * runs off without you. Forces individual timing.
+   */
+  waitForListener?: boolean;
+  /** Leash radius (m) for `waitForListener`. Absent = use the audible `radius`. */
+  waitRadius?: number;
+  /** When true the client shows a compass arrow + distance to the source (wayfinding). */
+  showWayfinding?: boolean;
 }
+
+/**
+ * How a `follow_user` source behaves once the user has triggered it.
+ * - attach:     rides right on top of the user, always audible (the original behavior).
+ * - chase:      pursues the user at up to `maxSpeed`; outrun it and you hear it fall
+ *               behind, get more than `disengageDistance` ahead and it gives up + goes silent.
+ * - orbit:      circles the moving user at `followRadius`, `followSpeed` m/s.
+ * - sideToSide: sweeps from the user's left side to their right at `followRadius`.
+ */
+export type FollowMode = 'attach' | 'chase' | 'orbit' | 'sideToSide';
 
 /** Sits at `center` until the user enters `initialRadius`; then it follows the user. */
 export interface FollowUserPoint extends BaseAudioPoint {
   type: 'follow_user';
   center: Coordinates;
   initialRadius: number;
+  /** Follow behavior; absent = 'attach' (the original glued-on-top behavior). */
+  mode?: FollowMode;
+  /** chase: metres/second the pursuer can move toward the user. */
+  maxSpeed?: number;
+  /** chase: give-up distance (m) — the pursuer stops + goes silent once the user is this far ahead. */
+  disengageDistance?: number;
+  /** orbit/sideToSide: distance (m) the source holds from the user. */
+  followRadius?: number;
+  /** orbit/sideToSide: metres/second around the user (orbit) / sweep rate (sideToSide). */
+  followSpeed?: number;
 }
 
 /** Rests at the path start until the user comes within `triggerRadius`, then travels the path. */
@@ -143,6 +185,13 @@ export interface PathTriggeredPoint extends BaseAudioPoint {
   triggerRadius: number;
   speed: number;
   endBehavior: PathEndBehavior;
+  /** "Wait for the listener" — see PathAudioPoint. The source pauses along the path
+   *  whenever the user steps outside `waitRadius`, resuming when they return. */
+  waitForListener?: boolean;
+  /** Leash radius (m) for `waitForListener`. Absent = use `triggerRadius`. */
+  waitRadius?: number;
+  /** When true the client shows a compass arrow + distance to the source (wayfinding). */
+  showWayfinding?: boolean;
 }
 
 /** Discriminated union over `type`. */

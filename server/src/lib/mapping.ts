@@ -1,6 +1,7 @@
 import type {
   AudioPoint,
   Coordinates,
+  FollowMode,
   PathEndBehavior,
   PathStop,
   PlaybackOptions,
@@ -139,6 +140,14 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
     startAt = body.startAt != null ? new Date(num(body.startAt, 'startAt')) : new Date();
   }
 
+  // Story flags apply to every type, so they live alongside the geometry in `config`
+  // (rowToPoint spreads config back onto the point) — no dedicated columns needed.
+  const config = configForType(pointType, body);
+  const setsFlags = flagList(body.setsFlags, 'setsFlags');
+  if (setsFlags) config.setsFlags = setsFlags;
+  const requiresFlags = flagList(body.requiresFlags, 'requiresFlags');
+  if (requiresFlags) config.requiresFlags = requiresFlags;
+
   return {
     course_id: courseId,
     name: body.name,
@@ -150,7 +159,7 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
     audio_tags: audioTags,
     volume,
     playback: normalizePlayback(body.playback),
-    config: configForType(pointType, body),
+    config,
     sync,
     start_at: startAt,
   };
@@ -182,30 +191,68 @@ function configForType(
       };
     case 'path': {
       const path = coordArray(body.path, 'path');
-      return {
+      const config: Record<string, unknown> = {
         path,
         stops: pathStops(body.stops, path.length),
         radius: num(body.radius, 'radius'),
         speed: num(body.speed, 'speed'),
         endBehavior: endBehavior(body.endBehavior),
       };
+      addWaitAndWayfinding(config, body);
+      return config;
     }
-    case 'follow_user':
-      return {
+    case 'follow_user': {
+      const config: Record<string, unknown> = {
         center: coord(body.center, 'center'),
         initialRadius: num(body.initialRadius, 'initialRadius'),
       };
+      if (body.mode != null) config.mode = followMode(body.mode);
+      if (body.maxSpeed != null) config.maxSpeed = num(body.maxSpeed, 'maxSpeed');
+      if (body.disengageDistance != null)
+        config.disengageDistance = num(body.disengageDistance, 'disengageDistance');
+      if (body.followRadius != null) config.followRadius = num(body.followRadius, 'followRadius');
+      if (body.followSpeed != null) config.followSpeed = num(body.followSpeed, 'followSpeed');
+      return config;
+    }
     case 'path_triggered': {
       const path = coordArray(body.path, 'path');
-      return {
+      const config: Record<string, unknown> = {
         path,
         stops: pathStops(body.stops, path.length),
         triggerRadius: num(body.triggerRadius, 'triggerRadius'),
         speed: num(body.speed, 'speed'),
         endBehavior: endBehavior(body.endBehavior),
       };
+      addWaitAndWayfinding(config, body);
+      return config;
     }
   }
+}
+
+/** Copy the optional wait-for-listener + wayfinding settings shared by both path types. */
+function addWaitAndWayfinding(config: Record<string, unknown>, body: Record<string, unknown>): void {
+  if (body.waitForListener != null) config.waitForListener = Boolean(body.waitForListener);
+  if (body.waitRadius != null) {
+    const r = num(body.waitRadius, 'waitRadius');
+    if (r < 0) throw new ValidationError('waitRadius must be >= 0');
+    config.waitRadius = r;
+  }
+  if (body.showWayfinding != null) config.showWayfinding = Boolean(body.showWayfinding);
+}
+
+function followMode(value: unknown): FollowMode {
+  if (value === 'attach' || value === 'chase' || value === 'orbit' || value === 'sideToSide') {
+    return value;
+  }
+  throw new ValidationError('mode must be "attach", "chase", "orbit" or "sideToSide"');
+}
+
+/** Normalize a story-flag list: trimmed non-empty strings, or undefined if none. */
+function flagList(value: unknown, field: string): string[] | undefined {
+  if (value == null) return undefined;
+  if (!Array.isArray(value)) throw new ValidationError(`"${field}" must be an array of strings`);
+  const flags = value.map((f) => String(f).trim()).filter((f) => f.length > 0);
+  return flags.length > 0 ? flags : undefined;
 }
 
 function normalizePlayback(value: unknown): PlaybackOptions {

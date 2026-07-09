@@ -1,4 +1,4 @@
-import type { AudioPoint, Coordinates } from '@audioworld/shared';
+import type { AudioPoint, Coordinates, SourceState } from '@audioworld/shared';
 import {
   attenuation,
   audibleRadiusOf,
@@ -37,8 +37,10 @@ export class PreviewEngine {
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
   private startedAtPerf = 0;
+  private lastTickPerf = 0;
   private serverOffset = 0;
-  private readonly triggerMemory = new Map<string, number | null>();
+  private readonly stateMemory = new Map<string, SourceState>();
+  private readonly flags = new Set<string>();
   private points: AudioPoint[];
 
   listener: Coordinates;
@@ -79,9 +81,11 @@ export class PreviewEngine {
   walk(bearingDeg: number, meters = STEP_M): void {
     this.listener = destinationPoint(this.listener, ((bearingDeg % 360) + 360) % 360, meters);
   }
-  /** Re-arm triggers and restart the local clock (fresh playthrough). */
+  /** Re-arm triggers + flags and restart the local clock (fresh playthrough). */
   reset(): void {
-    this.triggerMemory.clear();
+    this.stateMemory.clear();
+    this.flags.clear();
+    this.lastTickPerf = 0;
     this.startedAtPerf = performance.now();
   }
 
@@ -95,18 +99,27 @@ export class PreviewEngine {
 
   /** Resolve every point for the current listener, update audio, return audible sources. */
   tick(): PreviewFrame {
-    const deviceClockSec = (performance.now() - this.startedAtPerf) / 1000;
+    const nowPerf = performance.now();
+    const deviceClockSec = (nowPerf - this.startedAtPerf) / 1000;
+    const dtSec = this.lastTickPerf ? Math.min(0.5, (nowPerf - this.lastTickPerf) / 1000) : 0;
+    this.lastTickPerf = nowPerf;
     const user = this.listener;
     const heading = this.heading;
     const frame: FrameSource[] = [];
     const audible: PreviewBlip[] = [];
+    const raised: string[] = [];
 
     for (const point of this.points) {
       const startAt = isGloballyTimed(point) ? point.startAt : undefined;
       const clockSec = startAt != null ? (this.syncedNow() - startAt) / 1000 : deviceClockSec;
-      const memory = this.triggerMemory.get(point.id) ?? null;
-      const r = resolveSource(point, { user, clockSec, triggeredAtSec: memory });
-      this.triggerMemory.set(point.id, r.triggeredAtSec);
+      let state = this.stateMemory.get(point.id);
+      if (!state) {
+        state = { triggeredAtSec: null };
+        this.stateMemory.set(point.id, state);
+      }
+      const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
+      this.stateMemory.set(point.id, r.state);
+      if (r.audible && point.setsFlags) raised.push(...point.setsFlags);
 
       const radius = audibleRadiusOf(point);
       const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
@@ -154,6 +167,8 @@ export class PreviewEngine {
         });
       }
     }
+
+    for (const f of raised) this.flags.add(f);
 
     this.audio?.update(frame);
     return { listener: user, heading, audible };

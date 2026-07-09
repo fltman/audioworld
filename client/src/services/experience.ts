@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AudioPoint, Coordinates, PointType } from '@audioworld/shared';
+import type { AudioPoint, Coordinates, PointType, SourceState } from '@audioworld/shared';
 import {
   anchorOf,
   attenuation,
@@ -37,6 +37,17 @@ export interface MapSource {
   audibleRadius: number;
 }
 
+/** A wayfinding cue: which way + how far to a sound you're navigating to (even out of range). */
+export interface Waypoint {
+  id: string;
+  name: string;
+  /** Relative azimuth, degrees clockwise from the user's heading. */
+  az: number;
+  distance: number;
+  /** True once you're within earshot (the sound itself takes over). */
+  audible: boolean;
+}
+
 /** Everything the HUD renders for one animation frame. */
 export interface FrameState {
   user: Coordinates | null;
@@ -44,6 +55,7 @@ export interface FrameState {
   accuracy: number | null;
   blips: Blip[];
   sources: MapSource[];
+  waypoints: Waypoint[];
   audibleCount: number;
 }
 
@@ -88,11 +100,16 @@ export interface EngineOptions {
 export class ExperienceEngine {
   private readonly points: AudioPoint[];
   private readonly sim: boolean;
-  private readonly triggerMemory = new Map<string, number | null>();
+  /** Per-point movement/trigger memory the resolver reads + writes each frame. */
+  private readonly stateMemory = new Map<string, SourceState>();
+  /** Story flags raised on THIS device (set by visited points, gate other points). */
+  private readonly flags = new Set<string>();
 
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
   private startedAtPerf = 0;
+  /** performance.now() of the previous tick, for the inter-frame delta. */
+  private lastTickPerf = 0;
   /** ms to add to Date.now() to match the server clock (for global/shared points). */
   private serverOffset = 0;
 
@@ -190,20 +207,29 @@ export class ExperienceEngine {
 
   /** Resolve every point for now, update audio, return the drawable frame. */
   tick(): FrameState {
-    const deviceClockSec = (performance.now() - this.startedAtPerf) / 1000;
+    const nowPerf = performance.now();
+    const deviceClockSec = (nowPerf - this.startedAtPerf) / 1000;
+    // Inter-frame delta for integrated movers (chase, wait-for-listener). Clamp so a
+    // backgrounded tab doesn't teleport them on the first frame back.
+    const dtSec = this.lastTickPerf ? Math.min(0.5, (nowPerf - this.lastTickPerf) / 1000) : 0;
+    this.lastTickPerf = nowPerf;
     const user = this.sim ? this.userSim : this.userLive;
     const headingDeg = this.sim ? this.headingSim : this.headingLive;
     const accuracy = this.sim ? null : this.accuracy;
 
     if (!user) {
       this.audio?.update([]);
-      return { user: null, headingDeg, accuracy, blips: [], sources: [], audibleCount: 0 };
+      return { user: null, headingDeg, accuracy, blips: [], sources: [], waypoints: [], audibleCount: 0 };
     }
 
     const heading = headingDeg ?? 0;
     const frame: FrameSource[] = [];
     const blips: Blip[] = [];
     const sources: MapSource[] = [];
+    const waypoints: Waypoint[] = [];
+    // Flags raised this frame are merged in AFTER the loop so ordering is irrelevant
+    // (a gated point reacts on the next frame — imperceptible).
+    const raised: string[] = [];
 
     for (const point of this.points) {
       // Global/shared points are clocked from the server-synced wall clock (anchored
@@ -212,9 +238,15 @@ export class ExperienceEngine {
       const startAt = isGloballyTimed(point) ? point.startAt : undefined;
       const clockSec = startAt != null ? (this.syncedNow() - startAt) / 1000 : deviceClockSec;
 
-      const memory = this.triggerMemory.get(point.id) ?? null;
-      const r = resolveSource(point, { user, clockSec, triggeredAtSec: memory });
-      this.triggerMemory.set(point.id, r.triggeredAtSec);
+      let state = this.stateMemory.get(point.id);
+      if (!state) {
+        state = { triggeredAtSec: null };
+        this.stateMemory.set(point.id, state);
+      }
+      const r = resolveSource(point, { user, clockSec, dtSec, heading, state, flags: this.flags });
+      this.stateMemory.set(point.id, r.state);
+      // Visiting (hearing) a point raises its story flags for the rest of the session.
+      if (r.audible && point.setsFlags) raised.push(...point.setsFlags);
 
       const radius = audibleRadiusOf(point);
       // A distance of 0 means the source rides on the user (follow_user): keep it
@@ -224,6 +256,14 @@ export class ExperienceEngine {
 
       if (r.audible) {
         blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
+      }
+      // Wayfinding: a compass cue to this sound even when it's out of earshot.
+      if (
+        (point.type === 'path' || point.type === 'path_triggered') &&
+        point.showWayfinding &&
+        r.position
+      ) {
+        waypoints.push({ id: point.id, name: point.name, az, distance: r.distance, audible: r.audible });
       }
       sources.push({
         id: point.id,
@@ -279,8 +319,10 @@ export class ExperienceEngine {
       }
     }
 
+    for (const f of raised) this.flags.add(f);
+
     this.audio?.update(frame);
-    return { user, headingDeg, accuracy, blips, sources, audibleCount: blips.length };
+    return { user, headingDeg, accuracy, blips, sources, waypoints, audibleCount: blips.length };
   }
 
   getStatus(): EngineStatus {
@@ -389,6 +431,7 @@ export function useExperience(engine: ExperienceEngine) {
     accuracy: null,
     blips: [],
     sources: [],
+    waypoints: [],
     audibleCount: 0,
   });
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>

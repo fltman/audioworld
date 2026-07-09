@@ -165,10 +165,30 @@ export function audibleRadiusOf(point: AudioPoint): number {
     case 'path':
       return point.radius;
     case 'follow_user':
-      return point.initialRadius;
+      switch (point.mode) {
+        // Chase fades out over the give-up distance; orbit/sideToSide hug the user,
+        // so the audible field must be a few times their hold radius to stay loud.
+        case 'chase':
+          return point.disengageDistance ?? point.initialRadius;
+        case 'orbit':
+        case 'sideToSide':
+          return Math.max((point.followRadius ?? 8) * 4, point.initialRadius);
+        default:
+          return point.initialRadius;
+      }
     case 'path_triggered':
       return point.triggerRadius;
   }
+}
+
+/**
+ * The "leash" radius for a wait-for-listener path: the source only advances while
+ * the user is within this. Falls back to the audible radius when unset.
+ */
+export function waitRadiusOf(point: AudioPoint): number {
+  if (point.type === 'path') return point.waitRadius ?? point.radius;
+  if (point.type === 'path_triggered') return point.waitRadius ?? point.triggerRadius;
+  return 0;
 }
 
 /** The proximity radius that triggers a point, or null if the point has no trigger. */
@@ -203,10 +223,25 @@ export function anchorOf(point: AudioPoint): Coordinates {
  * per-device clock). Only the continuously-moving types can be globally synced.
  */
 export function isGloballyTimed(point: AudioPoint): boolean {
+  // A wait-for-listener path advances on each user's own leash, so it can't share a
+  // global clock — it is inherently individual.
+  if (point.type === 'path' && point.waitForListener) return false;
   return (
     point.sync === 'global' &&
     (point.type === 'path' || point.type === 'static_circling')
   );
+}
+
+/** Per-point, per-device memory the caller persists between frames. */
+export interface SourceState {
+  /** When this point was triggered for this user (client seconds), or null if not yet. */
+  triggeredAtSec: number | null;
+  /** wait-for-listener: path-progress seconds, advanced only while the user is in the leash. */
+  progressSec?: number;
+  /** chase: the pursuer's integrated world position. */
+  chaserPos?: Coordinates | null;
+  /** chase: true once the user has outrun it (stays given-up until reset). */
+  disengaged?: boolean;
 }
 
 export interface ResolveInput {
@@ -214,8 +249,14 @@ export interface ResolveInput {
   user: Coordinates;
   /** Monotonic seconds from a fixed client origin (drives continuous movers). */
   clockSec: number;
-  /** When this point was triggered for this user (monotonic seconds), or null if not yet. */
-  triggeredAtSec: number | null;
+  /** Seconds since the previous frame; drives integrated movers (chase, wait). 0 on the first frame. */
+  dtSec: number;
+  /** User compass heading, degrees clockwise from north (for heading-relative movers). */
+  heading: number;
+  /** Per-point memory; the returned `state` must be persisted for the next frame. */
+  state: SourceState;
+  /** Story flags currently raised on this device (for `requiresFlags` gating). */
+  flags: ReadonlySet<string>;
 }
 
 export interface ResolveOutput {
@@ -227,20 +268,51 @@ export interface ResolveOutput {
   distance: number;
   /** Whether the user is within the audible range. */
   audible: boolean;
-  /** Possibly-updated trigger memory — the caller must persist this for the next frame. */
-  triggeredAtSec: number | null;
+  /** Updated per-point memory — the caller must persist this for the next frame. */
+  state: SourceState;
   /** For a path with stops: the stop the source is currently dwelling at, else null. */
   atStop?: PathStop | null;
 }
 
+/** True only if every required flag has been raised (empty/absent = always satisfied). */
+function flagsSatisfied(point: AudioPoint, flags: ReadonlySet<string>): boolean {
+  const req = point.requiresFlags;
+  if (!req || req.length === 0) return true;
+  for (const f of req) if (!flags.has(f)) return false;
+  return true;
+}
+
 /**
- * Pure resolver: given a point, the user, a clock and the point's trigger memory,
- * compute where the sound is and whether it can be heard. Stateless — the caller
- * owns the `triggeredAtSec` memory and feeds the returned value back next frame.
+ * Advance a wait-for-listener path: the source only moves while the user is within
+ * `leashRadius`. Mutates `state.progressSec` and reports the current position/audibility.
+ */
+function advanceWaitProgress(
+  state: SourceState,
+  path: Coordinates[],
+  speed: number,
+  endBehavior: PathEndBehavior,
+  stops: PathStop[] | undefined,
+  user: Coordinates,
+  audibleRadius: number,
+  leashRadius: number,
+  dtSec: number
+): { position: Coordinates; audible: boolean; atStop: PathStop | null } {
+  const progress = state.progressSec ?? 0;
+  const st = pathStateAtTime(path, speed, endBehavior, stops, progress);
+  const leashDist = calculateDistance(user, st.position);
+  // Advance only while the listener is inside the leash; otherwise hold (wait).
+  state.progressSec = leashDist <= leashRadius ? progress + dtSec : progress;
+  return { position: st.position, audible: leashDist <= audibleRadius, atStop: st.atStop };
+}
+
+/**
+ * Resolver: given a point, the user, clocks and the point's memory, compute where
+ * the sound is and whether it can be heard. The returned `state` carries updated
+ * memory the caller feeds back next frame.
  */
 export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOutput {
-  const { user, clockSec } = input;
-  let triggeredAtSec = input.triggeredAtSec;
+  const { user, clockSec, dtSec, heading, flags } = input;
+  const state: SourceState = { ...input.state };
 
   const out = (
     position: Coordinates,
@@ -251,20 +323,25 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
     bearing: calculateBearing(user, position),
     distance: calculateDistance(user, position),
     audible,
-    triggeredAtSec,
+    state,
     atStop,
   });
+
+  // Gated points stay inert (silent, untriggerable) until their flags are raised.
+  if (!flagsSatisfied(point, flags)) {
+    return out(anchorOf(point), false);
+  }
 
   switch (point.type) {
     case 'static': {
       const d = calculateDistance(user, point.center);
       if (point.triggerRadius != null && point.triggerRadius > 0) {
         // Jumpscare: silent until armed by coming within triggerRadius, then
-        // audible within the normal radius. Arm before out() reads triggeredAtSec.
-        if (triggeredAtSec === null && d <= point.triggerRadius) {
-          triggeredAtSec = clockSec;
+        // audible within the normal radius. Arm before out() reads state.
+        if (state.triggeredAtSec === null && d <= point.triggerRadius) {
+          state.triggeredAtSec = clockSec;
         }
-        return out(point.center, triggeredAtSec !== null && d <= point.radius);
+        return out(point.center, state.triggeredAtSec !== null && d <= point.radius);
       }
       return out(point.center, d <= point.radius);
     }
@@ -276,6 +353,13 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
     }
 
     case 'path': {
+      if (point.waitForListener) {
+        const w = advanceWaitProgress(
+          state, point.path, point.speed, point.endBehavior, point.stops,
+          user, point.radius, waitRadiusOf(point), dtSec
+        );
+        return out(w.position, w.audible, w.atStop);
+      }
       const st =
         point.stops && point.stops.length > 0
           ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, clockSec)
@@ -289,39 +373,83 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
     }
 
     case 'follow_user': {
-      if (triggeredAtSec === null) {
+      const mode = point.mode ?? 'attach';
+      // Trigger when the user first enters initialRadius; seed the chaser at center.
+      if (state.triggeredAtSec === null) {
         if (calculateDistance(user, point.center) <= point.initialRadius) {
-          triggeredAtSec = clockSec;
+          state.triggeredAtSec = clockSec;
+          if (mode === 'chase') state.chaserPos = point.center;
+        } else {
+          return out(point.center, false);
         }
       }
-      if (triggeredAtSec !== null) {
-        // The source rides along with the user: right on top, always audible.
-        return { position: user, bearing: 0, distance: 0, audible: true, triggeredAtSec };
+      const elapsed = clockSec - (state.triggeredAtSec ?? clockSec);
+
+      switch (mode) {
+        case 'chase': {
+          const maxSpeed = point.maxSpeed ?? 1.5;
+          const giveUp = point.disengageDistance ?? point.initialRadius;
+          let pos = state.chaserPos ?? point.center;
+          const dist = calculateDistance(pos, user);
+          // Outrun it (or already gave up) → it stops where it is and falls silent.
+          if (state.disengaged || dist > giveUp) {
+            state.disengaged = true;
+            state.chaserPos = pos;
+            return out(pos, false);
+          }
+          const step = Math.min(maxSpeed * dtSec, dist);
+          if (step > 0) pos = destinationPoint(pos, calculateBearing(pos, user), step);
+          state.chaserPos = pos;
+          return out(pos, true);
+        }
+        case 'orbit': {
+          const r = point.followRadius ?? 8;
+          const pos = circlingPosition(user, r, point.followSpeed ?? 2, elapsed);
+          return out(pos, true);
+        }
+        case 'sideToSide': {
+          const r = point.followRadius ?? 8;
+          if (r <= 0) return { position: user, bearing: 0, distance: 0, audible: true, state };
+          // Sweep the azimuth ±90° around the user's facing at an angular rate ~ speed/radius.
+          const omega = (point.followSpeed ?? 2) / r;
+          const bearing = (((heading + 90 * Math.sin(omega * elapsed)) % 360) + 360) % 360;
+          const pos = destinationPoint(user, bearing, r);
+          return out(pos, true);
+        }
+        default:
+          // 'attach': rides right on top of the user, always audible.
+          return { position: user, bearing: 0, distance: 0, audible: true, state };
       }
-      return out(point.center, false);
     }
 
     case 'path_triggered': {
       const start = point.path[0] ?? user;
-      if (triggeredAtSec === null) {
+      if (state.triggeredAtSec === null) {
         if (calculateDistance(user, start) <= point.triggerRadius) {
-          triggeredAtSec = clockSec;
+          state.triggeredAtSec = clockSec;
+          state.progressSec = 0;
+        } else {
+          return out(start, false);
         }
       }
-      if (triggeredAtSec !== null) {
-        const elapsed = clockSec - triggeredAtSec;
-        const st =
-          point.stops && point.stops.length > 0
-            ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, elapsed)
-            : {
-                position: pointAlongPath(point.path, point.speed * elapsed, point.endBehavior)
-                  .position,
-                atStop: null as PathStop | null,
-              };
-        const d = calculateDistance(user, st.position);
-        return out(st.position, d <= point.triggerRadius, st.atStop);
+      if (point.waitForListener) {
+        const w = advanceWaitProgress(
+          state, point.path, point.speed, point.endBehavior, point.stops,
+          user, point.triggerRadius, waitRadiusOf(point), dtSec
+        );
+        return out(w.position, w.audible, w.atStop);
       }
-      return out(start, false);
+      const elapsed = clockSec - (state.triggeredAtSec ?? clockSec);
+      const st =
+        point.stops && point.stops.length > 0
+          ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, elapsed)
+          : {
+              position: pointAlongPath(point.path, point.speed * elapsed, point.endBehavior)
+                .position,
+              atStop: null as PathStop | null,
+            };
+      const d = calculateDistance(user, st.position);
+      return out(st.position, d <= point.triggerRadius, st.atStop);
     }
   }
 }
