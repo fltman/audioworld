@@ -3,11 +3,30 @@ import type { FollowMode, PathEndBehavior, PathStop, PlaybackOptions } from '@au
 import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
+import { absoluteAudioUrl } from '../api';
 
 /** Seconds -> m:ss. */
 function fmtTime(sec: number): string {
   const s = Math.max(0, Math.round(sec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Load only an audio clip's metadata and resolve its duration in seconds (null on failure). */
+function measureAudioDuration(url: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    const finish = (v: number | null) => {
+      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('error', onErr);
+      resolve(v);
+    };
+    const onMeta = () => finish(Number.isFinite(audio.duration) ? audio.duration : null);
+    const onErr = () => finish(null);
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('error', onErr);
+    audio.src = url;
+  });
 }
 
 interface Props {
@@ -314,6 +333,14 @@ export default function PointForm(props: Props) {
                           : undefined,
                       })
                     }
+                    onBlur={async (e) => {
+                      const raw = e.currentTarget.value.trim();
+                      // Auto-fill the dwell from the clip length only when it hasn't
+                      // been set yet, so a re-blur never clobbers a manual value.
+                      if (!raw || (stop?.dwellSec ?? 0) > 0) return;
+                      const dur = await measureAudioDuration(absoluteAudioUrl(raw));
+                      if (dur) upsertStop(i, { dwellSec: Math.ceil(dur) });
+                    }}
                   />
                   <label className="stop-row__up" title="Upload clip">
                     &#8593;
@@ -324,8 +351,20 @@ export default function PointForm(props: Props) {
                       onChange={async (e) => {
                         const f = e.currentTarget.files?.[0];
                         if (!f) return;
-                        const url = await props.onUploadFile(f);
-                        if (url) upsertStop(i, { audio: { kind: 'upload', url, title: f.name } });
+                        // Measure the clip locally while it uploads, then set the dwell
+                        // to its length so the guide pauses long enough to finish it.
+                        const obj = URL.createObjectURL(f);
+                        const [url, dur] = await Promise.all([
+                          props.onUploadFile(f),
+                          measureAudioDuration(obj),
+                        ]);
+                        URL.revokeObjectURL(obj);
+                        if (url) {
+                          upsertStop(i, {
+                            audio: { kind: 'upload', url, title: f.name },
+                            ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
+                          });
+                        }
                       }}
                     />
                   </label>
