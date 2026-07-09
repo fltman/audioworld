@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Course } from '@audioworld/shared';
 import ShareCourse from './ShareCourse';
 
@@ -9,6 +9,8 @@ interface Props {
   onCreate: (name: string, description: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, patch: Partial<Course>) => void;
+  onExport: (id: string) => void;
+  onImport: (file: File) => void;
 }
 
 export default function CourseBar({
@@ -18,7 +20,10 @@ export default function CourseBar({
   onCreate,
   onDelete,
   onUpdate,
+  onExport,
+  onImport,
 }: Props) {
+  const importInput = useRef<HTMLInputElement | null>(null);
   const selected = courses.find((c) => c.id === selectedId) ?? null;
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -95,6 +100,25 @@ export default function CourseBar({
         <button type="button" className="btn btn-accent" onClick={() => setCreating(true)}>
           New
         </button>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          title="Import a .audioworld course file"
+          onClick={() => importInput.current?.click()}
+        >
+          Import
+        </button>
+        <input
+          ref={importInput}
+          type="file"
+          accept=".audioworld,application/json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            if (file) onImport(file);
+            e.currentTarget.value = ''; // allow re-importing the same file
+          }}
+        />
       </div>
 
       {selected && (
@@ -128,6 +152,14 @@ export default function CourseBar({
             onClick={() => setSharing((s) => !s)}
           >
             {sharing ? 'Hide share' : 'Share link & QR'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost small"
+            title="Download this course as a portable .audioworld file"
+            onClick={() => onExport(selectedId)}
+          >
+            Export
           </button>
           {!confirmDelete && (
             <button

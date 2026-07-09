@@ -154,6 +154,34 @@ export default function App() {
     }
   };
 
+  const exportCourse = async (id: string) => {
+    try {
+      const blob = await api.exportCourse(id);
+      const course = courses.find((c) => c.id === id);
+      const safe = (course?.name || 'course').replace(/[^\w.-]+/g, '_').slice(0, 60) || 'course';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safe}.audioworld`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
+  const importCourse = async (file: File) => {
+    try {
+      const c = await api.importCourse(file);
+      setCourses((prev) => [...prev, c]);
+      selectCourse(c.id);
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
+
   const updateCourse = async (id: string, patch: Partial<Course>) => {
     const current = courses.find((c) => c.id === id);
     if (!current) return;
@@ -491,6 +519,8 @@ export default function App() {
           onCreate={createCourse}
           onDelete={deleteCourse}
           onUpdate={updateCourse}
+          onExport={exportCourse}
+          onImport={importCourse}
         />
 
         {courseId && (

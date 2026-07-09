@@ -107,6 +107,20 @@ export const api = {
     request<Course>(`/api/courses/${id}/publish`, { method: 'POST' }),
   getAnalytics: (id: string) => request<CourseAnalytics>(`/api/courses/${id}/analytics`),
 
+  // Export returns a raw .audioworld file (not the JSON envelope), so it bypasses request().
+  exportCourse: async (id: string): Promise<Blob> => {
+    const headers = new Headers();
+    if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+    const res = await fetch(`${BASE}/api/courses/${id}/export`, { headers });
+    if (!res.ok) throw new ApiError(`Export failed (${res.status}).`, res.status);
+    return res.blob();
+  },
+  importCourse: (file: File) => {
+    const form = new FormData();
+    form.append('bundle', file);
+    return request<Course>('/api/courses/import', { method: 'POST', body: form });
+  },
+
   listPoints: (courseId: string) =>
     request<AudioPoint[]>(`/api/courses/${courseId}/points`),
   createPoint: (courseId: string, input: AudioPointInput) =>

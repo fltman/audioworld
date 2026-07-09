@@ -369,6 +369,31 @@ export type CourseInput = Pick<
   'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones'
 >;
 
+/** One audio clip travelling inside a course bundle, base64-inlined. */
+export interface CourseBundleAsset {
+  /** The original `/uploads/...` path — used only as a bundle-internal lookup key. */
+  url: string;
+  filename: string;
+  mime: string;
+  /** base64-encoded file bytes. */
+  data: string;
+}
+
+/**
+ * A fully self-contained, portable course: its settings, points, zones and every
+ * referenced audio clip. Written as a `.audioworld` file for backup or moving a
+ * course between instances. On import the assets get fresh names and all urls are
+ * rewritten, so a bundle never depends on the source instance's files.
+ */
+export interface CourseBundle {
+  format: 'audioworld-course';
+  version: 1;
+  exportedAt: string;
+  course: Pick<Course, 'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones'>;
+  points: AudioPoint[];
+  assets: CourseBundleAsset[];
+}
+
 /** Result of an audio-file upload. */
 export interface UploadResult {
   url: string;

@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Router } from 'express';
+import multer from 'multer';
 import type {
   AcousticZone,
   AnalyticsReport,
+  CourseBundle,
   CourseInput,
   PublishedCourse,
   PublishedSnapshot,
@@ -13,6 +17,8 @@ import * as Courses from '../models/course';
 import * as Points from '../models/point';
 import { ValidationError } from '../lib/mapping';
 import { asyncHandler } from '../lib/http';
+import { buildBundle, extForAsset, rewritePointUrls, rewriteZoneUrls } from '../lib/bundle';
+import { UPLOAD_DIR } from '../env';
 import { canManageCourse, requireRole, type AuthedRequest } from '../lib/auth';
 
 export const coursesRouter = Router();
@@ -97,6 +103,59 @@ function analyticsRateOk(ip: string): boolean {
   }
   e.count += 1;
   return e.count <= 30; // 30 posts / minute / IP
+}
+
+// A course bundle is uploaded as a file (multipart), so the base64-inlined audio
+// isn't bound by express.json's small body limit. 60 MB of bundle ≈ 45 MB of audio.
+const bundleUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 60 * 1024 * 1024 },
+});
+
+const MAX_BUNDLE_POINTS = 500;
+const MAX_BUNDLE_ASSETS = 500;
+const MAX_ASSET_B64 = 34 * 1024 * 1024; // ~25 MB decoded
+
+/** Parse + validate an uploaded .audioworld bundle from an untrusted file. */
+function parseBundle(buf: Buffer): CourseBundle {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(buf.toString('utf8'));
+  } catch {
+    throw new ValidationError('Not a valid .audioworld file');
+  }
+  if (!raw || typeof raw !== 'object') throw new ValidationError('Bundle must be an object');
+  const b = raw as Record<string, unknown>;
+  if (b.format !== 'audioworld-course' || b.version !== 1) {
+    throw new ValidationError('Unsupported bundle format or version');
+  }
+  const courseIn = validateCourseInput(b.course); // reuses name/zones validation
+  if (!Array.isArray(b.points) || b.points.length > MAX_BUNDLE_POINTS) {
+    throw new ValidationError(`Bundle "points" must be an array of at most ${MAX_BUNDLE_POINTS}`);
+  }
+  if (!Array.isArray(b.assets) || b.assets.length > MAX_BUNDLE_ASSETS) {
+    throw new ValidationError(`Bundle "assets" must be an array of at most ${MAX_BUNDLE_ASSETS}`);
+  }
+  for (const a of b.assets) {
+    const o = a as Record<string, unknown>;
+    if (
+      typeof o?.url !== 'string' ||
+      typeof o?.filename !== 'string' ||
+      typeof o?.mime !== 'string' ||
+      typeof o?.data !== 'string'
+    ) {
+      throw new ValidationError('Each asset needs string url, filename, mime and data');
+    }
+    if (o.data.length > MAX_ASSET_B64) throw new ValidationError('An audio asset is too large');
+  }
+  return {
+    format: 'audioworld-course',
+    version: 1,
+    exportedAt: typeof b.exportedAt === 'string' ? b.exportedAt : '',
+    course: courseIn,
+    points: b.points as CourseBundle['points'],
+    assets: b.assets as CourseBundle['assets'],
+  };
 }
 
 const REVERB_CHARS: readonly ReverbCharacter[] = [
@@ -273,6 +332,62 @@ coursesRouter.get(
     const course = await loadManageable(req, res);
     if (!course) return;
     res.json({ success: true, data: await Courses.getAnalytics(course.id) });
+  })
+);
+
+// Export a course as a portable, self-contained .audioworld file (audio inlined).
+coursesRouter.get(
+  '/:id/export',
+  requireRole('superuser', 'admin'),
+  asyncHandler(async (req: AuthedRequest, res) => {
+    const course = await loadManageable(req, res);
+    if (!course) return;
+    const points = await Points.listByCourse(course.id);
+    const bundle = buildBundle(course, points);
+    const safe = (course.name || 'course').replace(/[^\w.-]+/g, '_').slice(0, 60) || 'course';
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.audioworld"`);
+    res.send(JSON.stringify(bundle));
+  })
+);
+
+// Import a .audioworld file as a brand-new course owned by the importer. Assets are
+// written under fresh UUID names (bundle filenames are never used as paths) and every
+// audio url is rewritten, so the restored course never depends on the source instance.
+coursesRouter.post(
+  '/import',
+  requireRole('superuser', 'admin'),
+  (req, res, next) => {
+    bundleUpload.single('bundle')(req, res, (err: unknown) => {
+      if (err) {
+        res
+          .status(400)
+          .json({ success: false, error: err instanceof Error ? err.message : 'Upload failed' });
+        return;
+      }
+      next();
+    });
+  },
+  asyncHandler(async (req: AuthedRequest, res) => {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No bundle file (field "bundle")' });
+      return;
+    }
+    const bundle = parseBundle(req.file.buffer);
+
+    const urlMap = new Map<string, string>();
+    for (const asset of bundle.assets) {
+      const name = randomUUID() + extForAsset(asset);
+      writeFileSync(join(UPLOAD_DIR, name), Buffer.from(asset.data, 'base64'));
+      urlMap.set(asset.url, `/uploads/${name}`);
+    }
+
+    const zones = rewriteZoneUrls(bundle.course.zones ?? [], urlMap);
+    const course = await Courses.createCourse({ ...bundle.course, zones }, req.user!.id);
+    for (const point of bundle.points) {
+      await Points.create(course.id, rewritePointUrls(point, urlMap));
+    }
+    res.status(201).json({ success: true, data: course });
   })
 );
 
