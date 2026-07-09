@@ -143,9 +143,12 @@ export class ExperienceEngine {
   private readonly locked = new Set<string>();
   /** Previous-frame distance per point, for Doppler radial velocity. */
   private readonly prevDistance = new Map<string, number>();
-  /** Previous listener position + smoothed speed, for the hold-still gate. */
+  /** Sim-mode speed: per-frame from discrete key steps (GPS path uses fixes instead). */
   private prevUser: Coordinates | null = null;
   private smoothedSpeed = 0;
+  /** Live speed for the hold-still gate, derived from GPS fixes (~1 Hz), not RAF frames. */
+  private userSpeedLive = 0;
+  private prevFix: { coords: Coordinates; t: number } | null = null;
 
   private ctx: AudioContext | null = null;
   private audio: AudioEngine | null = null;
@@ -224,6 +227,17 @@ export class ExperienceEngine {
           this.accuracy = fix.accuracy;
           // Anchor the GPS-course fallback (used when there's no magnetic compass).
           this.headingWatch?.feedGps(fix.heading, fix.speed);
+          // Hold-still speed: use the device's own reading, else the fix-to-fix delta
+          // over the ELAPSED fix interval (never the render-frame delta).
+          const now = performance.now();
+          let spd = 0;
+          if (fix.speed != null && fix.speed >= 0) {
+            spd = fix.speed;
+          } else if (this.prevFix) {
+            spd = calculateDistance(this.prevFix.coords, fix.coords) / Math.max(0.25, (now - this.prevFix.t) / 1000);
+          }
+          this.userSpeedLive = this.userSpeedLive * 0.5 + Math.min(spd, 15) * 0.5;
+          this.prevFix = { coords: fix.coords, t: now };
           this.status.geoError = null;
         },
         (err) => {
@@ -290,11 +304,12 @@ export class ExperienceEngine {
     }
 
     const heading = headingDeg ?? 0;
-    // Listener speed (smoothed + jitter-clamped) drives the hold-still gate.
+    // Hold-still speed. Sim moves in discrete key steps, so per-frame is fine there;
+    // live GPS speed comes from the fix callback (~1 Hz), never the render frame.
     const rawSpeed = this.prevUser && dtSec > 0 ? calculateDistance(this.prevUser, user) / dtSec : 0;
     this.smoothedSpeed = this.smoothedSpeed * 0.7 + Math.min(rawSpeed, 15) * 0.3;
     this.prevUser = user;
-    const userSpeed = this.smoothedSpeed;
+    const userSpeed = this.sim ? this.smoothedSpeed : this.userSpeedLive;
     const frame: FrameSource[] = [];
     const blips: Blip[] = [];
     const sources: MapSource[] = [];
