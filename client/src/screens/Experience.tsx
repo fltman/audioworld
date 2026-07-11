@@ -59,6 +59,12 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
         onExit={onExit}
       />
 
+      {muted && (
+        <button type="button" className="mute-banner" onClick={toggleMute}>
+          🔇 Sound is muted — tap to unmute
+        </button>
+      )}
+
       {powerMode === 'saver' && (
         <div className="power-chip" role="status">
           🔋 Power saver — the map updates less often to save battery. The sound is

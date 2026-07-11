@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AudioPoint, Course } from '@audioworld/shared';
 import { getPublished } from '../api';
 import { ExperienceEngine, type RunSnapshot } from '../services/experience';
@@ -38,31 +38,29 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
   const [pack, setPack] = useState<PackMeta | null>(() => packMeta(courseId));
   const [downloading, setDownloading] = useState<PackProgress | null>(null);
   const [resumable, setResumable] = useState<RunSnapshot | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // Load the frozen published version (server falls back to the live draft if never
+  // published). Retryable so a flaky-connection failure isn't a dead end.
+  const load = useCallback(async () => {
+    setLoadFailed(false);
+    try {
+      const pub = await getPublished(courseId);
+      setCourse(pub.course);
+      setPoints(pub.points);
+      // Offer resume only for a PUBLISHED course: an unpublished draft can be edited
+      // freely without changing the run key, so a restored run might not match it.
+      setResumable(
+        pub.course.publishedAt ? readResumable(runKey(courseId, pub.course.publishedAt)) : null
+      );
+    } catch {
+      setLoadFailed(true);
+    }
+  }, [courseId]);
 
   useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        // Play the frozen published version (the server falls back to the live draft
-        // if the course was never published).
-        const pub = await getPublished(courseId);
-        if (!alive) return;
-        setCourse(pub.course);
-        setPoints(pub.points);
-        // Offer resume only for a PUBLISHED course: an unpublished draft can be edited
-        // freely without changing the run key, so a restored run might not match it.
-        setResumable(
-          pub.course.publishedAt ? readResumable(runKey(courseId, pub.course.publishedAt)) : null
-        );
-      } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : 'Failed to load course');
-      }
-    };
     void load();
-    return () => {
-      alive = false;
-    };
-  }, [courseId, initialCourse]);
+  }, [load]);
 
   const ready = !!course && !!points && !busy;
 
@@ -135,8 +133,28 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
       </button>
 
       <div className="gate-body">
-        <h1 className="gate-title">{course?.name ?? 'Loading…'}</h1>
-        {course?.description && <p className="gate-desc">{course.description}</p>}
+        <h1 className="gate-title">
+          {course?.name ?? (loadFailed ? 'Couldn’t load this walk' : 'Loading…')}
+        </h1>
+
+        {!course && loadFailed && (
+          <>
+            <p className="gate-desc">Check your connection and try again.</p>
+            <button type="button" className="btn-primary" onClick={() => void load()}>
+              Try again
+            </button>
+          </>
+        )}
+
+        {course && (
+          <>
+            {course.description && <p className="gate-desc">{course.description}</p>}
+            <p className="gate-explainer">
+              🎧 A GPS sound walk — put on headphones and walk; the sounds sit in the real world
+              around you.
+            </p>
+          </>
+        )}
 
         {points && points.length > 0 && (
           <>
@@ -179,51 +197,67 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
           </div>
         )}
 
-        <div className="audio-check">
-          <p className="audio-check__title">Check your sound first</p>
-          <ul className="audio-check__list">
-            <li>🎧 Put on headphones</li>
-            <li>🔊 Turn the volume up</li>
-            <li>
-              Heard nothing?{' '}
-              <button type="button" className="linkish" onClick={() => window.location.reload()}>
-                Reload the page
+        {course && (
+          <>
+            <div className="audio-check">
+              <p className="audio-check__title">Check your sound first</p>
+              <ul className="audio-check__list">
+                <li>🎧 Put on headphones</li>
+                <li>🔊 Turn the volume up</li>
+                <li>
+                  Heard nothing?{' '}
+                  <button type="button" className="linkish" onClick={() => window.location.reload()}>
+                    Reload the page
+                  </button>
+                </li>
+              </ul>
+              <button
+                type="button"
+                className="btn-test"
+                disabled={testing}
+                onClick={() => void runTest()}
+              >
+                {testing ? 'Playing…' : tested ? 'Play test sound again' : '▶ Play test sound'}
               </button>
-            </li>
-          </ul>
-          <button type="button" className="btn-test" disabled={testing} onClick={() => void runTest()}>
-            {testing ? 'Playing…' : tested ? 'Play test sound again' : '▶ Play test sound'}
-          </button>
-          {tested && (
-            <p className="audio-check__ok">You should have heard a tone sweep left → right.</p>
-          )}
-        </div>
+              {tested && (
+                <p className="audio-check__ok">You should have heard a tone sweep left → right.</p>
+              )}
+            </div>
 
-        <button
-          className="btn-primary"
-          disabled={!ready}
-          onClick={() => void handleStart(preferSim, resumable ?? undefined)}
-        >
-          {busy
-            ? 'Starting…'
-            : resumable
-              ? 'Resume walk'
-              : preferSim
-                ? 'Start simulation'
-                : 'Start listening'}
-        </button>
+            {!preferSim && (
+              <p className="gate-hint gate-hint--prime">
+                Starting will ask for your location and compass — that’s how the sound knows where
+                you are.
+              </p>
+            )}
 
-        {resumable && !busy && (
-          <button type="button" className="linkish" onClick={startOver}>
-            Start over from the beginning
-          </button>
+            <button
+              className="btn-primary"
+              disabled={!ready}
+              onClick={() => void handleStart(preferSim, resumable ?? undefined)}
+            >
+              {busy
+                ? 'Starting…'
+                : resumable
+                  ? 'Resume walk'
+                  : preferSim
+                    ? 'Start simulation'
+                    : 'Start listening'}
+            </button>
+
+            {resumable && !busy && (
+              <button type="button" className="linkish" onClick={startOver}>
+                Start over from the beginning
+              </button>
+            )}
+
+            <p className="gate-hint">Put on headphones and face any direction — you are the center.</p>
+
+            <button className="link-sim" disabled={busy} onClick={() => void handleStart(!preferSim)}>
+              {preferSim ? 'Use real sensors' : 'Simulate on desktop'}
+            </button>
+          </>
         )}
-
-        <p className="gate-hint">Put on headphones and face any direction — you are the center.</p>
-
-        <button className="link-sim" disabled={busy} onClick={() => void handleStart(!preferSim)}>
-          {preferSim ? 'Use real sensors' : 'Simulate on desktop'}
-        </button>
       </div>
     </div>
   );

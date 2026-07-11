@@ -529,6 +529,13 @@ export default function App() {
     !publishedAt ||
     (currentCourse ? currentCourse.updatedAt > publishedAt : false) ||
     points.some((p) => p.updatedAt > publishedAt);
+  // Whether the local zone edits differ from what's saved on the course — drives the
+  // "Save zone changes" button (which must stay available even when the last zone is
+  // deleted, so an empty set can be persisted).
+  const zonesDirty = useMemo(
+    () => JSON.stringify(zones) !== JSON.stringify(currentCourse?.zones ?? []),
+    [zones, currentCourse]
+  );
 
   if (!authReady) {
     return (
@@ -610,13 +617,19 @@ export default function App() {
           onCreate={createCourse}
         />
 
-        {courseId && (
+        {courseId && currentCourse && (
           <PublishBar
+            courseId={courseId}
+            courseName={currentCourse.name}
             publishedAt={publishedAt}
             dirty={dirty}
             issues={flightIssues}
             publishing={publishing}
             onPublish={publishCourse}
+            onFixIssue={(id) => {
+              editPoint(id);
+              setFitToken((t) => t + 1);
+            }}
           />
         )}
 
@@ -673,6 +686,7 @@ export default function App() {
                 drawing={zoneDraft != null}
                 draftLen={zoneDraft?.length ?? 0}
                 saving={savingZones}
+                dirty={zonesDirty}
                 onNew={() => {
                   cancelDraft();
                   setZoneDraft([]);

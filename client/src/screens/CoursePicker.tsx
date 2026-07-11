@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Course } from '@audioworld/shared';
 import { getCourses } from '../api';
 
@@ -8,17 +8,20 @@ interface CoursePickerProps {
 
 export function CoursePicker({ onPick }: CoursePickerProps) {
   const [courses, setCourses] = useState<Course[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(async () => {
+    setFailed(false);
+    try {
+      setCourses(await getCourses());
+    } catch {
+      setFailed(true);
+    }
+  }, []);
 
   useEffect(() => {
-    let alive = true;
-    getCourses()
-      .then((c) => alive && setCourses(c))
-      .catch((e) => alive && setError(e instanceof Error ? e.message : 'Failed to load courses'));
-    return () => {
-      alive = false;
-    };
-  }, []);
+    void load();
+  }, [load]);
 
   return (
     <div className="screen screen--picker">
@@ -27,9 +30,18 @@ export function CoursePicker({ onPick }: CoursePickerProps) {
         <p>Walk into a soundscape and hear where every source is.</p>
       </div>
 
-      {error && <div className="notice notice--error">{error}</div>}
-      {!courses && !error && <div className="notice">Loading courses…</div>}
-      {courses && courses.length === 0 && <div className="notice">No courses yet.</div>}
+      {failed && (
+        <div className="notice notice--error">
+          <p>Couldn’t load the walks — check your connection.</p>
+          <button type="button" className="btn-test" onClick={() => void load()}>
+            Try again
+          </button>
+        </div>
+      )}
+      {!courses && !failed && <div className="notice">Loading walks…</div>}
+      {courses && courses.length === 0 && !failed && (
+        <div className="notice">No walks published yet.</div>
+      )}
 
       <ul className="course-list">
         {courses?.map((course) => (

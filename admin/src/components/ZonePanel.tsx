@@ -7,6 +7,8 @@ interface Props {
   drawing: boolean;
   draftLen: number;
   saving: boolean;
+  /** True when local zones differ from the saved course zones (drives the Save button). */
+  dirty: boolean;
   onNew: () => void;
   onFinish: () => void;
   onCancel: () => void;
@@ -21,6 +23,7 @@ export default function ZonePanel({
   drawing,
   draftLen,
   saving,
+  dirty,
   onNew,
   onFinish,
   onCancel,
@@ -30,7 +33,10 @@ export default function ZonePanel({
 }: Props) {
   return (
     <section className="section">
-      <div className="section-title">Acoustic zones ({zones.length})</div>
+      <div className="section-title">
+        Acoustic zones ({zones.length})
+        {dirty && <span className="section-head__badge">· unsaved</span>}
+      </div>
 
       {drawing ? (
         <div className="geo-status">
@@ -95,9 +101,9 @@ export default function ZonePanel({
         </div>
       ))}
 
-      {zones.length > 0 && (
+      {dirty && (
         <button type="button" className="btn btn-accent" onClick={onSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save zones'}
+          {saving ? 'Saving…' : 'Save zone changes'}
         </button>
       )}
     </section>

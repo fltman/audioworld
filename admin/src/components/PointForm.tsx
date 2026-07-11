@@ -209,6 +209,15 @@ export default function PointForm(props: Props) {
           </div>
         )}
 
+        {audio.url.trim() && (
+          <audio
+            className="clip-preview"
+            controls
+            preload="none"
+            src={absoluteAudioUrl(audio.url.trim())}
+          />
+        )}
+
         {(() => {
           const variants: LocalizedClip[] = audio.variants ?? [];
           const setVariants = (vs: LocalizedClip[]) =>

@@ -531,14 +531,37 @@ input[type='range'] {
   border-left: 3px solid transparent;
 }
 .flight__item--error {
-  color: #c23a5e;
+  color: #ff9fb1; /* light tint on dark — passes WCAG AA (was dark-on-dark) */
   background: rgba(255, 122, 156, 0.12);
   border-color: #ff7a9c;
 }
 .flight__item--warn {
-  color: #b07d1a;
+  color: #ffcf6b;
   background: rgba(255, 207, 107, 0.12);
   border-color: #ffcf6b;
+}
+/* A flight-check issue tied to a point is a button that jumps to it. */
+.flight__fix {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.flight__fix:hover {
+  filter: brightness(1.15);
+}
+
+/* Inline clip preview under the point's audio field. */
+.clip-preview {
+  width: 100%;
+  height: 34px;
+  margin-top: 8px;
 }
 
 .number-grid {
@@ -1221,4 +1244,21 @@ input[type='range'] {
 }
 .row-actions--wrap {
   flex-wrap: wrap;
+}
+
+/* ---------- Keyboard focus visibility ---------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.input:focus-visible,
+.textarea:focus-visible,
+.select:focus-visible {
+  outline-offset: 0;
+}
+/* Mouse focus on inputs keeps the subtle border; keyboard users get the ring above. */
+.input:focus:not(:focus-visible),
+.textarea:focus:not(:focus-visible),
+.select:focus:not(:focus-visible) {
+  outline: none;
 }
