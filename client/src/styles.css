@@ -678,3 +678,228 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* --- Field scout ---------------------------------------------------------- */
+.screen--scout {
+  gap: 12px;
+  overflow-y: auto;
+}
+.scout-center {
+  justify-content: center;
+  align-items: stretch;
+}
+.scout-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 360px;
+  width: 100%;
+  margin: 0 auto;
+}
+.scout-title {
+  font-size: 26px;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.scout-input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 14px 14px;
+  font-size: 16px; /* >=16px so iOS doesn't zoom on focus */
+  font-family: inherit;
+}
+.scout-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.scout-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.scout-topbar > button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.scout-topbar__title {
+  flex: 1;
+  text-align: center;
+  font-weight: 650;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scout-new {
+  display: flex;
+  gap: 8px;
+}
+.scout-new .scout-input {
+  flex: 1;
+}
+.scout-set-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scout-set-list li {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.scout-set-card {
+  flex: 1;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.scout-set-card__name {
+  font-size: 17px;
+  font-weight: 650;
+}
+.scout-set-card__meta {
+  font-size: 13px;
+  color: var(--muted);
+}
+.scout-set-del {
+  color: var(--danger);
+  padding: 0 14px;
+}
+.screen--scout-editor {
+  overflow: hidden;
+}
+.scout-map-wrap {
+  flex: 1;
+  min-height: 220px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.scout-map {
+  width: 100%;
+  height: 100%;
+}
+.scout-pin-wrap {
+  background: none;
+  border: none;
+}
+.scout-pin {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ff8a3d;
+  color: #1a1200;
+  border: 2px solid #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.scout-pin.is-sel {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.15);
+}
+.fc-acc {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.fc-acc--good {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.14);
+}
+.fc-acc--ok {
+  color: var(--warn);
+  background: rgba(255, 212, 121, 0.14);
+}
+.fc-acc--poor {
+  color: var(--danger);
+  background: rgba(255, 107, 122, 0.14);
+}
+.scout-mark {
+  align-self: stretch;
+  margin-top: 0;
+}
+.scout-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--accent);
+  background: var(--panel);
+}
+.scout-note-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.scout-textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 12px;
+  font-size: 16px;
+  font-family: inherit;
+}
+.scout-note-editor__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.scout-note-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.scout-note-editor__actions .btn-primary {
+  flex: 1;
+  margin-top: 0;
+  padding: 14px;
+}
+.scout-audio-ok {
+  color: #4ade80;
+  font-size: 13px;
+}
+.btn-test.is-on {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.scout-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+.scout-selected__note {
+  font-size: 14px;
+  color: var(--text);
+}

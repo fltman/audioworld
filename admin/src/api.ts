@@ -7,6 +7,7 @@ import type {
   CourseAnalytics,
   CourseInput,
   Role,
+  ScoutSet,
   UploadListItem,
   UploadResult,
   User,
@@ -135,6 +136,10 @@ export const api = {
     form.append('file', file);
     return request<UploadResult>('/api/upload', { method: 'POST', body: form });
   },
+  // Scout sets — captured in the field on a phone, shown as a read-only reference layer.
+  listScouts: () => request<ScoutSet[]>('/api/scouts'),
+  getScout: (id: string) => request<ScoutSet>(`/api/scouts/${id}`),
+
   listUploads: () => request<UploadListItem[]>('/api/upload'),
   setUploadDescription: (filename: string, description: string) =>
     request<{ filename: string; description: string }>(

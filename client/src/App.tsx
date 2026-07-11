@@ -3,6 +3,7 @@ import type { Course } from '@audioworld/shared';
 import { CoursePicker } from './screens/CoursePicker';
 import { StartGate } from './screens/StartGate';
 import { Experience } from './screens/Experience';
+import { Scout } from './screens/Scout';
 import type { ExperienceEngine } from './services/experience';
 
 type Phase =
@@ -26,6 +27,10 @@ function initialPhase(): Phase {
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>(initialPhase);
+  // Field-scouting is a separate authoring flow reached at ?scout — it has its own login.
+  const [scouting, setScouting] = useState(() => PARAMS.get('scout') !== null);
+
+  if (scouting) return <Scout onExit={() => setScouting(false)} />;
 
   switch (phase.name) {
     case 'picker':

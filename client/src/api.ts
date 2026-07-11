@@ -1,4 +1,15 @@
-import type { AnalyticsReport, ApiResponse, AudioPoint, Course, PublishedCourse } from '@audioworld/shared';
+import type {
+  AnalyticsReport,
+  ApiResponse,
+  AudioPoint,
+  AuthResult,
+  Course,
+  PublishedCourse,
+  ScoutSet,
+  ScoutWaypointInput,
+  UploadResult,
+  User,
+} from '@audioworld/shared';
 
 /** REST base. Overridable via VITE_API_URL; falls back to the dev server port. */
 export const API_URL =
@@ -11,6 +22,78 @@ async function get<T>(path: string): Promise<T> {
     throw new Error(json.error || `Request failed (${res.status}): ${path}`);
   }
   return json.data;
+}
+
+// --- Author auth (only the scouting flow needs it; listening stays anonymous) ---
+
+const SCOUT_TOKEN_KEY = 'audioworld.scout.token';
+let scoutToken: string | null = localStorage.getItem(SCOUT_TOKEN_KEY);
+
+export function getScoutToken(): string | null {
+  return scoutToken;
+}
+export function setScoutToken(token: string | null): void {
+  scoutToken = token;
+  if (token) localStorage.setItem(SCOUT_TOKEN_KEY, token);
+  else localStorage.removeItem(SCOUT_TOKEN_KEY);
+}
+
+/** Thrown on an authed request failure, carrying the status (401 ⇒ re-login). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+}
+
+async function authed<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (scoutToken) headers.set('Authorization', `Bearer ${scoutToken}`);
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let json: ApiResponse<T>;
+  try {
+    json = (await res.json()) as ApiResponse<T>;
+  } catch {
+    throw new ApiError(`Request failed (${res.status})`, res.status);
+  }
+  if (!json.success || json.data === undefined) {
+    throw new ApiError(json.error || `Request failed (${res.status})`, res.status);
+  }
+  return json.data;
+}
+
+const jsonBody = (method: string, body: unknown): RequestInit => ({
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
+export async function scoutLogin(email: string, password: string): Promise<AuthResult> {
+  const res = await fetch(`${API_URL}/api/auth/login`, jsonBody('POST', { email, password }));
+  const json = (await res.json()) as ApiResponse<AuthResult>;
+  if (!json.success || !json.data) throw new ApiError(json.error || 'Login failed', res.status);
+  setScoutToken(json.data.token);
+  return json.data;
+}
+export const scoutMe = () => authed<User>('/api/auth/me');
+
+export const listScouts = () => authed<ScoutSet[]>('/api/scouts');
+export const createScout = (name: string) => authed<ScoutSet>('/api/scouts', jsonBody('POST', { name }));
+export const getScout = (id: string) => authed<ScoutSet>(`/api/scouts/${id}`);
+export const deleteScout = (id: string) =>
+  authed<{ id: string }>(`/api/scouts/${id}`, { method: 'DELETE' });
+export const addWaypoint = (id: string, wp: ScoutWaypointInput) =>
+  authed<ScoutSet>(`/api/scouts/${id}/waypoints`, jsonBody('POST', wp));
+export const deleteWaypoint = (id: string, wpId: string) =>
+  authed<ScoutSet>(`/api/scouts/${id}/waypoints/${wpId}`, { method: 'DELETE' });
+
+/** Upload a recorded voice note (author-authenticated). */
+export function uploadVoiceNote(file: File): Promise<UploadResult> {
+  const form = new FormData();
+  form.append('file', file);
+  return authed<UploadResult>('/api/upload', { method: 'POST', body: form });
 }
 
 export const getCourses = () => get<Course[]>('/api/courses');

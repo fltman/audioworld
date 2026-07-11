@@ -409,6 +409,37 @@ export interface CourseBundle {
   assets: CourseBundleAsset[];
 }
 
+/**
+ * A single scouted location: a place marked in the field (on a phone, on the move)
+ * with a typed/dictated note and/or a recorded voice note. Scout sets are overlaid as
+ * a read-only reference layer in the admin to guide where real audio points go.
+ */
+export interface ScoutWaypoint {
+  id: string;
+  lat: number;
+  lng: number;
+  /** Typed or dictated note about this spot. */
+  note?: string;
+  /** Optional recorded voice note (`/uploads/...`), played back in the admin. */
+  audioUrl?: string;
+  /** GPS accuracy (m) when it was dropped, so the author knows how precise it is. */
+  accuracy?: number;
+  createdAt: string;
+}
+
+/** A named collection of scouted waypoints, owned by its author. */
+export interface ScoutSet {
+  id: string;
+  name: string;
+  ownerId: string | null;
+  waypoints: ScoutWaypoint[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Payload to append a waypoint to a set (server assigns id + createdAt). */
+export type ScoutWaypointInput = Omit<ScoutWaypoint, 'id' | 'createdAt'>;
+
 /** Result of an audio-file upload. */
 export interface UploadResult {
   url: string;

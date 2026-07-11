@@ -58,5 +58,17 @@ ALTER TABLE courses
   ADD COLUMN IF NOT EXISTS published jsonb,
   ADD COLUMN IF NOT EXISTS analytics jsonb NOT NULL DEFAULT '{"cells":{},"reached":{},"sessions":0}';
 
+-- Scout sets: waypoints-with-notes captured in the field on a phone, overlaid as a
+-- read-only reference layer in the admin while authoring a course.
+CREATE TABLE IF NOT EXISTS scouts (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  owner_id    uuid REFERENCES users(id) ON DELETE SET NULL,
+  waypoints   jsonb NOT NULL DEFAULT '[]',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
+CREATE INDEX IF NOT EXISTS scouts_owner_id_idx ON scouts(owner_id);

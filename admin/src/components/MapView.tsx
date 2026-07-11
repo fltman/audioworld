@@ -8,10 +8,12 @@ import {
   type AcousticZone,
   type AudioPoint,
   type Coordinates,
+  type ScoutWaypoint,
 } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { draftAudibleRadius } from '../draft';
 import { POINT_TYPE_META, POINT_TYPE_ORDER, isPathType } from '../pointTypes';
+import { absoluteAudioUrl } from '../api';
 import type { PreviewEngine } from '../services/previewEngine';
 
 const ACCENT = '#7c5cff';
@@ -43,6 +45,8 @@ interface Props {
   drawingZone?: boolean;
   /** Aggregate heatmap cells: "lat,lng" (4dp) → seconds dwelt. Drawn as warm circles. */
   analyticsCells?: Record<string, number>;
+  /** Read-only scout waypoints overlaid as a reference layer while authoring. */
+  scoutWaypoints?: ScoutWaypoint[];
 }
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
@@ -183,6 +187,7 @@ export default function MapView(props: Props) {
   const draftLayerRef = useRef<L.LayerGroup | null>(null);
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const analyticsLayerRef = useRef<L.LayerGroup | null>(null);
+  const scoutLayerRef = useRef<L.LayerGroup | null>(null);
   const clickTimer = useRef<number | null>(null);
   const stateRef = useRef(props);
   stateRef.current = props;
@@ -214,6 +219,7 @@ export default function MapView(props: Props) {
     analyticsLayerRef.current = L.layerGroup().addTo(map); // heatmap, bottom of the stack
     zonesLayerRef.current = L.layerGroup().addTo(map); // under the point markers
     pointsLayerRef.current = L.layerGroup().addTo(map);
+    scoutLayerRef.current = L.layerGroup().addTo(map); // reference pins above points
     draftLayerRef.current = L.layerGroup().addTo(map);
 
     map.on('click', (e: L.LeafletMouseEvent) => {
@@ -250,6 +256,7 @@ export default function MapView(props: Props) {
       draftLayerRef.current = null;
       zonesLayerRef.current = null;
       analyticsLayerRef.current = null;
+      scoutLayerRef.current = null;
     };
   }, []);
 
@@ -276,6 +283,32 @@ export default function MapView(props: Props) {
       }).addTo(layer);
     }
   }, [props.analyticsCells]);
+
+  // Draw the scout reference layer: numbered pins with the field note (+ voice note) in
+  // a popup, so the author can place real points using the scouted spots as a guide.
+  useEffect(() => {
+    const layer = scoutLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    const wps = props.scoutWaypoints;
+    if (!wps) return;
+    wps.forEach((w, i) => {
+      const icon = L.divIcon({
+        className: 'scout-ref-wrap',
+        html: `<div class="scout-ref">${i + 1}</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+      const noteHtml = w.note ? `<div class="scout-pop__note">${esc(w.note)}</div>` : '';
+      const audioHtml = w.audioUrl
+        ? `<audio controls preload="none" src="${absoluteAudioUrl(w.audioUrl)}" style="width:220px"></audio>`
+        : '';
+      const accHtml = w.accuracy != null ? `<div class="scout-pop__acc">±${Math.round(w.accuracy)} m</div>` : '';
+      L.marker([w.lat, w.lng], { icon })
+        .bindPopup(`<div class="scout-pop"><b>#${i + 1}</b>${noteHtml}${audioHtml}${accHtml}</div>`)
+        .addTo(layer);
+    });
+  }, [props.scoutWaypoints]);
 
   // Draw acoustic zones (filled polygons) + the in-progress zone outline.
   useEffect(() => {
