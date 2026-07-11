@@ -7,6 +7,8 @@ import type {
   Course,
   CourseAnalytics,
   PointType,
+  ScoutSet,
+  ScoutWaypoint,
   SyncMode,
   User,
 } from '@audioworld/shared';
@@ -23,7 +25,6 @@ import MapView from './components/MapView';
 import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
-import FieldCapture from './components/FieldCapture';
 import BulkBar from './components/BulkBar';
 import Section from './components/Section';
 import CourseSettings from './components/CourseSettings';
@@ -47,7 +48,9 @@ export default function App() {
   const [savingZones, setSavingZones] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showCapture, setShowCapture] = useState(false);
+  const [scoutSets, setScoutSets] = useState<ScoutSet[]>([]);
+  const [scoutId, setScoutId] = useState<string | null>(null);
+  const [scoutWaypoints, setScoutWaypoints] = useState<ScoutWaypoint[]>([]);
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -133,9 +136,29 @@ export default function App() {
       } catch (e) {
         setError(msg(e));
       }
+      // Scout sets for the reference-layer picker (best-effort).
+      try {
+        setScoutSets(await api.listScouts());
+      } catch {
+        /* ignore — reference layers just won't be offered */
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const selectScout = async (id: string) => {
+    setScoutId(id || null);
+    if (!id) {
+      setScoutWaypoints([]);
+      return;
+    }
+    try {
+      const set = await api.getScout(id);
+      setScoutWaypoints(set.waypoints);
+    } catch (e) {
+      setError(msg(e));
+    }
+  };
 
   const logout = () => {
     setToken(null);
@@ -723,20 +746,32 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    className={`btn small ${showCapture ? 'btn-accent' : 'btn-ghost'}`}
-                    onClick={() => setShowCapture((s) => !s)}
-                    title="Drop points at your live GPS position (use on a phone, on-site)"
-                  >
-                    📍 Field capture
-                  </button>
-                  <button
-                    type="button"
                     className={`btn small ${multiSelect ? 'btn-accent' : 'btn-ghost'}`}
                     onClick={() => setMultiSelectMode(!multiSelect)}
                     title="Select several points to clone, delete or bulk-edit"
                   >
                     ☑ Select multiple
                   </button>
+                </div>
+
+                <div className="scout-ref-picker">
+                  <label className="label">Scout reference layer</label>
+                  <select
+                    className="select"
+                    value={scoutId ?? ''}
+                    onChange={(e) => void selectScout(e.currentTarget.value)}
+                  >
+                    <option value="">None</option>
+                    {scoutSets.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        📍 {s.name} ({s.waypoints.length})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="hint">
+                    Waypoints + notes you captured in the field (on your phone at{' '}
+                    <code>/?scout</code>) appear on the map as a guide.
+                  </p>
                 </div>
               </Section>
 
@@ -755,12 +790,6 @@ export default function App() {
               )}
               {showAnalytics && (
                 <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
-              )}
-              {showCapture && (
-                <FieldCapture
-                  courseId={courseId}
-                  onCreated={(p) => setPoints((prev) => [...prev, p])}
-                />
               )}
             </>
           )
@@ -796,6 +825,7 @@ export default function App() {
         zoneDraft={zoneDraft}
         drawingZone={zoneDraft != null}
         analyticsCells={showAnalytics ? analytics?.cells : undefined}
+        scoutWaypoints={scoutWaypoints}
       />
     </div>
   );
