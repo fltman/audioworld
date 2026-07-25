@@ -448,6 +448,13 @@ export interface UploadResult {
   mimetype: string;
 }
 
+/** A voice available for TTS generation (from the ElevenLabs account). */
+export interface ElevenVoice {
+  id: string;
+  name: string;
+  category?: string;
+}
+
 /** One clip as listed in the sound library (existence from disk, description from the DB). */
 export interface UploadListItem {
   url: string;

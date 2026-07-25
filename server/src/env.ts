@@ -18,6 +18,10 @@ export const UPLOAD_DIR = resolve(process.env.UPLOAD_DIR || './uploads');
 /** Allowed CORS origin ('*' for any). */
 export const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
 
+/** ElevenLabs API key for in-admin sound-effect + TTS generation. Empty = feature off
+ *  (the generate endpoints return 503). Kept server-side only — never sent to a client. */
+export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY ?? '';
+
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DEV_SECRET = 'dev-insecure-secret-change-me';
 

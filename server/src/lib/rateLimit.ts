@@ -1,12 +1,13 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 
 interface RateOptions {
   /** Sliding window length in ms. */
   windowMs: number;
   /** Max requests allowed per key per window. */
   max: number;
-  /** Optional key derivation (defaults to client IP). */
-  key?: (ip: string) => string;
+  /** Optional key derivation from the request (defaults to client IP). Key on the
+   *  authenticated user for per-account limits that a client can't dodge by rotating IPs. */
+  key?: (req: Request) => string;
 }
 
 /**
@@ -22,7 +23,7 @@ export function rateLimit({ windowMs, max, key }: RateOptions): RequestHandler {
     if (hits.size > 5000) {
       for (const [k, e] of hits) if (now > e.resetAt) hits.delete(k);
     }
-    const id = key ? key(req.ip ?? 'unknown') : (req.ip ?? 'unknown');
+    const id = key ? key(req) : (req.ip ?? 'unknown');
     const e = hits.get(id);
     if (!e || now > e.resetAt) {
       hits.set(id, { count: 1, resetAt: now + windowMs });

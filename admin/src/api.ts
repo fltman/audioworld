@@ -6,6 +6,7 @@ import type {
   Course,
   CourseAnalytics,
   CourseInput,
+  ElevenVoice,
   Role,
   ScoutSet,
   UploadListItem,
@@ -146,4 +147,11 @@ export const api = {
       `/api/upload/${encodeURIComponent(filename)}`,
       jsonBody('PATCH', { description })
     ),
+
+  // ElevenLabs generation — saved straight into the sound library. 503 if unconfigured.
+  listVoices: () => request<ElevenVoice[]>('/api/generate/voices'),
+  generateSfx: (prompt: string, durationSec?: number) =>
+    request<UploadResult>('/api/generate/sound-effect', jsonBody('POST', { prompt, durationSec })),
+  generateTts: (text: string, voiceId: string, modelId?: string) =>
+    request<UploadResult>('/api/generate/tts', jsonBody('POST', { text, voiceId, modelId })),
 };

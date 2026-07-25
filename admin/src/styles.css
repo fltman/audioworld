@@ -1306,3 +1306,43 @@ input[type='range'] {
   color: var(--muted);
   margin: 0;
 }
+
+/* ---------- Generate panel (ElevenLabs) ---------- */
+.gen-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line-2, var(--accent));
+  border-radius: 10px;
+  background: rgba(124, 92, 255, 0.06);
+}
+.gen-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.gen-dur {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.gen-dur input {
+  width: 90px;
+}
+.gen-hint,
+.gen-note {
+  font-size: 12px;
+}
+.gen-off {
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+.error {
+  color: var(--danger);
+  font-size: 12.5px;
+}
