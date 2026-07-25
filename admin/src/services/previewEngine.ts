@@ -172,7 +172,7 @@ export class PreviewEngine {
 
       const radius = audibleRadiusOf(point);
       const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
-      const gain = r.audible ? attenuation(r.distance, radius, point.volume) : 0;
+      const gain = r.audible ? attenuation(r.distance, radius, point.volume) * r.directionalGain : 0;
 
       const prevDist = this.prevDistance.get(point.id);
       this.prevDistance.set(point.id, r.distance);

@@ -508,7 +508,7 @@ export class ExperienceEngine {
       // A distance of 0 means the source rides on the user (follow_user): keep it
       // centered rather than panning off the placeholder bearing.
       const az = r.distance === 0 ? 0 : relativeBearing(r.bearing, heading);
-      const gain = r.audible ? attenuation(r.distance, radius, point.volume) : 0;
+      const gain = r.audible ? attenuation(r.distance, radius, point.volume) * r.directionalGain : 0;
 
       // Spatial polish: Doppler on movers, air-absorption + elevation on everything.
       const prevDist = this.prevDistance.get(point.id);

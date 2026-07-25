@@ -395,6 +395,10 @@ export interface ResolveOutput {
   distance: number;
   /** Whether the user is within the audible range. */
   audible: boolean;
+  /** Directional gain 0..1 from a facing/spread wedge (1 = omnidirectional). The caller
+   *  multiplies this into the distance gain; it's 0 when the listener is outside the wedge
+   *  (in which case `audible` is also false). */
+  directionalGain: number;
   /** Updated per-point memory — the caller must persist this for the next frame. */
   state: SourceState;
   /** For a path with stops: the stop the source is currently dwelling at, else null. */
@@ -437,6 +441,34 @@ function advanceWaitProgress(
  * the sound is and whether it can be heard. The returned `state` carries updated
  * memory the caller feeds back next frame.
  */
+/** Soft-edge width (degrees) at the boundary of a directional wedge, so crossing it
+ *  fades rather than clicks. */
+const DIRECTIONAL_EDGE_DEG = 18;
+
+/**
+ * Directional-audibility gain (0..1) for a facing/spread wedge. 1 = omnidirectional (no
+ * wedge, or the listener is inside the core); fades to 0 across the wedge edge; 0 outside.
+ * Only static / path / path_triggered carry facing+spread; everything else is 1.
+ */
+export function directionalGainOf(
+  point: AudioPoint,
+  sourcePos: Coordinates,
+  user: Coordinates
+): number {
+  if (point.type !== 'static' && point.type !== 'path' && point.type !== 'path_triggered') return 1;
+  const { facing, spread } = point;
+  if (facing == null || spread == null || spread >= 360) return 1;
+  // At/near the source itself the wedge is meaningless — you're on top of it.
+  if (calculateDistance(sourcePos, user) < 3) return 1;
+  const half = spread / 2;
+  const brgToListener = calculateBearing(sourcePos, user); // source → listener
+  const diff = Math.abs((((brgToListener - facing) % 360) + 540) % 360 - 180); // 0..180
+  if (diff >= half) return 0;
+  const soft = Math.min(DIRECTIONAL_EDGE_DEG, half);
+  if (diff <= half - soft) return 1;
+  return (half - diff) / soft;
+}
+
 export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOutput {
   const { user, clockSec, dtSec, heading, flags, userSpeed } = input;
   const state: SourceState = { ...input.state };
@@ -445,14 +477,18 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
     position: Coordinates,
     audible: boolean,
     atStop: PathStop | null = null
-  ): ResolveOutput => ({
-    position,
-    bearing: calculateBearing(user, position),
-    distance: calculateDistance(user, position),
-    audible,
-    state,
-    atStop,
-  });
+  ): ResolveOutput => {
+    const dg = directionalGainOf(point, position, user);
+    return {
+      position,
+      bearing: calculateBearing(user, position),
+      distance: calculateDistance(user, position),
+      audible: audible && dg > 0,
+      directionalGain: dg,
+      state,
+      atStop,
+    };
+  };
 
   // Gated points stay inert (silent, untriggerable) until their flags are raised.
   if (!flagsSatisfied(point, flags)) {
@@ -556,7 +592,7 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
         }
         case 'sideToSide': {
           const r = point.followRadius ?? 8;
-          if (r <= 0) return { position: user, bearing: 0, distance: 0, audible: true, state };
+          if (r <= 0) return { position: user, bearing: 0, distance: 0, audible: true, directionalGain: 1, state };
           // Sweep the azimuth ±90° around the user's facing at an angular rate ~ speed/radius.
           const omega = (point.followSpeed ?? 2) / r;
           const bearing = (((heading + 90 * Math.sin(omega * elapsed)) % 360) + 360) % 360;
@@ -565,7 +601,7 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
         }
         default:
           // 'attach': rides right on top of the user, always audible.
-          return { position: user, bearing: 0, distance: 0, audible: true, state };
+          return { position: user, bearing: 0, distance: 0, audible: true, directionalGain: 1, state };
       }
     }
 

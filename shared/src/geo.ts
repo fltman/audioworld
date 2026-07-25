@@ -76,6 +76,26 @@ export function relativeBearing(targetDeg: number, referenceDeg: number): number
 }
 
 /**
+ * A pie-slice polygon for a directional-audibility wedge: the centre, then an arc of
+ * `radiusM` swept from `facingDeg - spread/2` to `facingDeg + spread/2`. Used to draw
+ * the audible sector on the map instead of a full circle.
+ */
+export function sectorPolygon(
+  center: Coordinates,
+  radiusM: number,
+  facingDeg: number,
+  spreadDeg: number,
+  steps = 24
+): Coordinates[] {
+  const half = spreadDeg / 2;
+  const pts: Coordinates[] = [center];
+  for (let i = 0; i <= steps; i++) {
+    pts.push(destinationPoint(center, facingDeg - half + (spreadDeg * i) / steps, radiusM));
+  }
+  return pts;
+}
+
+/**
  * Distance-based attenuation curve. Returns a gain multiplier 0..maxVolume.
  * Silent at/after `radius`; smooth inverse-square-ish falloff toward the source.
  */

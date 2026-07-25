@@ -225,6 +225,7 @@ function configForType(
         if (stillSec > 0) config.stillSec = stillSec;
       }
       if (body.fleeOnMove) config.fleeOnMove = true;
+      addDirectional(config, body);
       return config;
     }
     case 'static_circling':
@@ -283,6 +284,20 @@ function addWaitAndWayfinding(config: Record<string, unknown>, body: Record<stri
     config.waitRadius = r;
   }
   if (body.showWayfinding != null) config.showWayfinding = Boolean(body.showWayfinding);
+  addDirectional(config, body);
+}
+
+/** Directional audibility (facing bearing + wedge spread). Stored only when the wedge is
+ *  actually limited (spread < 360); omitted/full = omnidirectional. */
+function addDirectional(config: Record<string, unknown>, body: Record<string, unknown>): void {
+  if (body.facing == null && body.spread == null) return;
+  const spread = num(body.spread, 'spread');
+  if (spread <= 0 || spread > 360) throw new ValidationError('spread must be between 1 and 360');
+  if (spread >= 360) return; // full circle = omnidirectional; don't store
+  let facing = num(body.facing, 'facing');
+  facing = ((facing % 360) + 360) % 360;
+  config.facing = facing;
+  config.spread = spread;
 }
 
 function followMode(value: unknown): FollowMode {

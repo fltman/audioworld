@@ -55,6 +55,10 @@ export interface DraftState {
   waitRadius: number;
   /** Show a compass arrow + distance in the client (path / path_triggered). */
   showWayfinding: boolean;
+  /** Directional audibility wedge (static / path / path_triggered). */
+  directional: boolean;
+  facing: number;
+  spread: number;
   /** follow_user behavior + per-mode params. */
   mode: FollowMode;
   maxSpeed: number;
@@ -83,6 +87,8 @@ const NUMERIC_DEFAULTS = {
   followSpeed: 2,
   height: 0,
   stillSec: 0,
+  facing: 0,
+  spread: 180,
 };
 
 /** Non-numeric draft fields shared by freshDraft + pointToDraft's base. */
@@ -90,12 +96,29 @@ const FLAG_DEFAULTS = {
   waitForListener: false,
   showWayfinding: false,
   fleeOnMove: false,
+  directional: false,
   mode: 'attach' as FollowMode,
 };
 
 /** Parse "OLD-LADY, KEY" -> ["OLD-LADY","KEY"]. */
 const parseFlags = (s: string): string[] =>
   s.split(',').map((f) => f.trim()).filter((f) => f.length > 0);
+
+/** Directional-wedge draft fields read back from a stored point. */
+const directionalDraft = (p: {
+  facing?: number;
+  spread?: number;
+}): { directional: boolean; facing: number; spread: number } => ({
+  directional: p.spread != null && p.spread < 360,
+  facing: p.facing ?? 0,
+  spread: p.spread ?? NUMERIC_DEFAULTS.spread,
+});
+
+/** Emit facing/spread only when the wedge is actually on + limited (else omit = omni). */
+const dirFields = (d: DraftState): { facing?: number; spread?: number } =>
+  d.directional && d.spread > 0 && d.spread < 360
+    ? { facing: ((d.facing % 360) + 360) % 360, spread: d.spread }
+    : {};
 
 export function freshDraft(type: PointType, courseId: string): DraftState {
   return {
@@ -152,6 +175,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     case 'static':
       return {
         ...base,
+        ...directionalDraft(point),
         center: point.center,
         radius: point.radius,
         triggerRadius: point.triggerRadius ?? 0,
@@ -169,6 +193,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     case 'path':
       return {
         ...base,
+        ...directionalDraft(point),
         path: [...point.path],
         stops: point.stops ? point.stops.map((s) => ({ ...s })) : [],
         radius: point.radius,
@@ -192,6 +217,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     case 'path_triggered':
       return {
         ...base,
+        ...directionalDraft(point),
         path: [...point.path],
         stops: point.stops ? point.stops.map((s) => ({ ...s })) : [],
         triggerRadius: point.triggerRadius,
@@ -261,6 +287,7 @@ export function draftToInput(d: DraftState): DraftResult {
           ...(d.triggerRadius > 0 ? { triggerRadius: d.triggerRadius } : {}),
           ...(d.stillSec > 0 ? { stillSec: d.stillSec } : {}),
           ...(d.fleeOnMove ? { fleeOnMove: true } : {}),
+          ...dirFields(d),
         },
       };
     case 'static_circling':
@@ -289,6 +316,7 @@ export function draftToInput(d: DraftState): DraftResult {
           waitForListener: d.waitForListener,
           waitRadius: d.waitRadius,
           showWayfinding: d.showWayfinding,
+          ...dirFields(d),
         },
       };
     case 'follow_user':
@@ -320,6 +348,7 @@ export function draftToInput(d: DraftState): DraftResult {
           waitForListener: d.waitForListener,
           waitRadius: d.waitRadius,
           showWayfinding: d.showWayfinding,
+          ...dirFields(d),
         },
       };
   }

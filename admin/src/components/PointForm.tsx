@@ -378,6 +378,43 @@ export default function PointForm(props: Props) {
         />
       </div>
 
+      {(draft.type === 'static' ||
+        draft.type === 'path' ||
+        draft.type === 'path_triggered') && (
+        <div className="form-field">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={draft.directional}
+              onChange={(e) => onChange({ directional: e.currentTarget.checked })}
+            />
+            Directional — radiates one way (not heard behind it)
+          </label>
+          {draft.directional && (
+            <>
+              <div className="number-grid">
+                <NumberField
+                  label="Facing (° from N)"
+                  value={draft.facing}
+                  onValue={(n) => onChange({ facing: ((n % 360) + 360) % 360 })}
+                  min={0}
+                />
+                <NumberField
+                  label="Spread (° wide)"
+                  value={draft.spread}
+                  onValue={(n) => onChange({ spread: Math.max(10, Math.min(350, n)) })}
+                  min={10}
+                />
+              </div>
+              <p className="geo-status">
+                A wedge facing that compass bearing; listeners outside it don't hear the sound. So a
+                source against a building faces the street — heard there, not behind it.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {draft.type === 'static' && (
         <p className="geo-status">
           0 disables the jumpscare. Above 0, the point stays silent until you come within it, then

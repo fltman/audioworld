@@ -137,6 +137,14 @@ export interface StaticPoint extends BaseAudioPoint {
    * flees (goes silent) until you settle again.
    */
   fleeOnMove?: boolean;
+  /**
+   * Directional audibility. With `spread` < 360 the sound only radiates into a wedge:
+   * `facing` is the compass bearing (° from north) it points and `spread` is the wedge's
+   * full angular width (°). A listener outside the wedge doesn't hear it — e.g. a source
+   * against a building, audible on the street side but not behind it. Omitted = all around.
+   */
+  facing?: number;
+  spread?: number;
 }
 
 /** Source that orbits `center` at `circleRadius`, moving `speed` m/s along the circle. */
@@ -184,6 +192,10 @@ export interface PathAudioPoint extends BaseAudioPoint {
   waitRadius?: number;
   /** When true the client shows a compass arrow + distance to the source (wayfinding). */
   showWayfinding?: boolean;
+  /** Directional audibility (see StaticPoint.facing/spread) — the travelling sound only
+   *  radiates into a wedge facing an absolute compass bearing. Omitted = all around. */
+  facing?: number;
+  spread?: number;
 }
 
 /**
@@ -229,6 +241,10 @@ export interface PathTriggeredPoint extends BaseAudioPoint {
   waitRadius?: number;
   /** When true the client shows a compass arrow + distance to the source (wayfinding). */
   showWayfinding?: boolean;
+  /** Directional audibility (see StaticPoint.facing/spread) — the travelling sound only
+   *  radiates into a wedge facing an absolute compass bearing. Omitted = all around. */
+  facing?: number;
+  spread?: number;
 }
 
 /** Discriminated union over `type`. */

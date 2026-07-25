@@ -4,6 +4,7 @@ import {
   anchorOf,
   audibleRadiusOf,
   pathVertexTimes,
+  sectorPolygon,
   triggerRadiusOf,
   type AcousticZone,
   type AudioPoint,
@@ -143,15 +144,33 @@ function drawPoint(
   const a = anchorOf(p);
   const isTrigger = triggerRadiusOf(p) !== null;
 
-  L.circle([a.lat, a.lng], {
-    radius: audibleRadiusOf(p),
-    color: meta.color,
-    weight: 1.5,
-    fillColor: meta.color,
-    fillOpacity: 0.08,
-    dashArray: isTrigger ? '6 6' : undefined,
-    interactive: false,
-  }).addTo(layer);
+  // A directional static point shows its audible wedge instead of a full circle.
+  const dir = p.type === 'static' && p.spread != null && p.spread < 360;
+  if (dir) {
+    L.polygon(
+      sectorPolygon(a, audibleRadiusOf(p), p.facing ?? 0, p.spread!).map(
+        (c) => [c.lat, c.lng] as [number, number]
+      ),
+      {
+        color: meta.color,
+        weight: 1.5,
+        fillColor: meta.color,
+        fillOpacity: 0.1,
+        dashArray: isTrigger ? '6 6' : undefined,
+        interactive: false,
+      }
+    ).addTo(layer);
+  } else {
+    L.circle([a.lat, a.lng], {
+      radius: audibleRadiusOf(p),
+      color: meta.color,
+      weight: 1.5,
+      fillColor: meta.color,
+      fillOpacity: 0.08,
+      dashArray: isTrigger ? '6 6' : undefined,
+      interactive: false,
+    }).addTo(layer);
+  }
 
   if (p.type === 'static_circling') {
     L.circle([p.center.lat, p.center.lng], {
@@ -448,7 +467,15 @@ export default function MapView(props: Props) {
     }
 
     if (!d.center) return;
-    if (radius > 0) {
+    const draftDir = d.type === 'static' && d.directional && d.spread > 0 && d.spread < 360;
+    if (radius > 0 && draftDir) {
+      L.polygon(
+        sectorPolygon(d.center, radius, d.facing, d.spread).map(
+          (c) => [c.lat, c.lng] as [number, number]
+        ),
+        { color: ACCENT, weight: 1.5, fillColor: meta.color, fillOpacity: 0.12, interactive: false }
+      ).addTo(layer);
+    } else if (radius > 0) {
       L.circle([d.center.lat, d.center.lng], {
         radius,
         color: ACCENT,
