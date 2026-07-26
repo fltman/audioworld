@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import type {
   Character,
   FollowMode,
@@ -10,7 +10,7 @@ import type {
 import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
-import { absoluteAudioUrl } from '../api';
+import { absoluteAudioUrl, api } from '../api';
 
 /** Seconds -> m:ss. */
 function fmtTime(sec: number): string {
@@ -105,10 +105,23 @@ export default function PointForm(props: Props) {
   const { draft, onChange, onSave, onCancel, onDelete, onUpload, saving, uploading, error } = props;
   const meta = POINT_TYPE_META[draft.type];
   const { audio, playback } = draft;
+  // The guide assigned to this point (if any) — drives per-stop narration in its voice.
+  const assignedGuide = props.characters.find((c) => c.id === draft.characterId);
   // Global (shared) timing only makes sense for the continuously-moving types, and a
   // wait-for-listener path is inherently individual (each device has its own leash).
   const canSync =
     (draft.type === 'path' && !draft.waitForListener) || draft.type === 'static_circling';
+
+  // Per-stop narration draft text + in-flight/error state (transient; not persisted).
+  const [narrateText, setNarrateText] = useState<Record<number, string>>({});
+  const [narrating, setNarrating] = useState<number | null>(null);
+  const [narrateError, setNarrateError] = useState<{ index: number; msg: string } | null>(null);
+  // Reset the transient narration UI when switching to a different point.
+  useEffect(() => {
+    setNarrateText({});
+    setNarrating(null);
+    setNarrateError(null);
+  }, [draft.editingId]);
 
   const vertexTimes = isPathType(draft.type)
     ? pathVertexTimes(draft.path, draft.speed, draft.stops)
@@ -120,6 +133,27 @@ export default function PointForm(props: Props) {
       ? draft.stops.map((s) => (s.index === index ? { ...s, ...patch } : s))
       : [...draft.stops, { index, dwellSec: 0, ...patch }];
     onChange({ stops });
+  };
+
+  // Synthesize this stop's line in the assigned guide's voice → saved to the library
+  // once, attached as the stop's clip, with dwell set to the clip length.
+  const narrateStop = async (index: number) => {
+    const text = (narrateText[index] ?? '').trim();
+    if (!text || !assignedGuide?.voiceId) return;
+    setNarrating(index);
+    setNarrateError(null);
+    try {
+      const res = await api.generateTts(text, assignedGuide.voiceId, 'eleven_v3');
+      const dur = await measureAudioDuration(absoluteAudioUrl(res.url));
+      upsertStop(index, {
+        audio: { kind: 'upload', url: res.url, title: `${assignedGuide.name} — stop ${index + 1}` },
+        ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
+      });
+    } catch (e) {
+      setNarrateError({ index, msg: e instanceof Error ? e.message : 'Narration failed' });
+    } finally {
+      setNarrating(null);
+    }
   };
 
   return (
@@ -450,7 +484,8 @@ export default function PointForm(props: Props) {
             {draft.path.map((_, i) => {
               const stop = draft.stops.find((s) => s.index === i);
               return (
-                <div key={i} className="stop-row">
+                <div key={i} className="stop-entry">
+                <div className="stop-row">
                   <span className="stop-row__t">
                     #{i + 1}
                     <em>{fmtTime(vertexTimes[i] ?? 0)}</em>
@@ -517,6 +552,32 @@ export default function PointForm(props: Props) {
                       }}
                     />
                   </label>
+                </div>
+                {assignedGuide?.voiceId && (
+                  <details className="stop-narrate">
+                    <summary>✨ Narrate in {assignedGuide.voiceName ?? 'the guide’s voice'}</summary>
+                    <textarea
+                      className="textarea"
+                      placeholder="What the guide says at this stop… eleven_v3 tags like [warmly], [pauses] work."
+                      value={narrateText[i] ?? ''}
+                      onChange={(e) =>
+                        setNarrateText((t) => ({ ...t, [i]: e.currentTarget.value }))
+                      }
+                    />
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-accent small"
+                        disabled={narrating !== null || !(narrateText[i]?.trim())}
+                        onClick={() => void narrateStop(i)}
+                      >
+                        {narrating === i ? 'Generating…' : 'Generate & attach'}
+                      </button>
+                      <span className="muted gen-note">Uses ElevenLabs credits.</span>
+                    </div>
+                    {narrateError?.index === i && <div className="error">{narrateError.msg}</div>}
+                  </details>
+                )}
                 </div>
               );
             })}

@@ -909,11 +909,32 @@ input[type='range'] {
   flex-direction: column;
   gap: 6px;
 }
+.stop-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .stop-row {
   display: grid;
   grid-template-columns: auto 52px 1fr 28px;
   gap: 6px;
   align-items: center;
+}
+.stop-narrate {
+  font-size: 12px;
+}
+.stop-narrate > summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 0 2px 4px;
+  list-style-position: inside;
+}
+.stop-narrate > summary:hover {
+  color: var(--text);
+}
+.stop-narrate .textarea {
+  margin-top: 6px;
+  min-height: 56px;
 }
 .stop-row__t {
   font-size: 11px;
