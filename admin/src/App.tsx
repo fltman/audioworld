@@ -33,6 +33,7 @@ import BulkBar from './components/BulkBar';
 import Section from './components/Section';
 import CourseSettings from './components/CourseSettings';
 import DiscoverPanel from './components/DiscoverPanel';
+import ScoutConvertPanel from './components/ScoutConvertPanel';
 import ZonePanel from './components/ZonePanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
@@ -861,6 +862,15 @@ export default function App() {
                     <code>/?scout</code>) appear on the map as a guide.
                   </p>
                 </div>
+
+                {scoutId && (
+                  <ScoutConvertPanel
+                    key={scoutId}
+                    waypoints={scoutWaypoints}
+                    courseId={courseId}
+                    onPointsCreated={(pts) => setPoints((prev) => [...prev, ...pts])}
+                  />
+                )}
               </Section>
 
               <Section title="Discover places" icon="🔍" defaultOpen={false}>

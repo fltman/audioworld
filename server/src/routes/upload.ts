@@ -37,6 +37,20 @@ const AUDIO_EXT_BY_MIME: Record<string, string> = {
 const safeAudioExt = (mimetype: string): string =>
   AUDIO_EXT_BY_MIME[mimetype.toLowerCase()] ?? '.bin';
 
+// Same rationale for images (POI photos): server-chosen extension from a mime allowlist,
+// so a crafted upload can never be served as an executable/HTML type on our origin.
+const IMAGE_EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/heic': '.heic',
+  'image/heif': '.heif',
+};
+const safeImageExt = (mimetype: string): string =>
+  IMAGE_EXT_BY_MIME[mimetype.toLowerCase()] ?? '.bin';
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   // Never trust the client's filename/extension — derive it from the validated type.
@@ -49,6 +63,20 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('audio/')) cb(null, true);
     else cb(new Error('Only audio files are allowed'));
+  },
+});
+
+const imageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => cb(null, randomUUID() + safeImageExt(file.mimetype)),
+});
+const imageUpload = multer({
+  storage: imageStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (Object.prototype.hasOwnProperty.call(IMAGE_EXT_BY_MIME, file.mimetype.toLowerCase())) {
+      cb(null, true);
+    } else cb(new Error('Only JPEG, PNG, WebP, GIF or HEIC images are allowed'));
   },
 });
 
@@ -95,6 +123,28 @@ uploadRouter.patch(
 
 uploadRouter.post('/', (req, res) => {
   upload.single('file')(req, res, (err: unknown) => {
+    if (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      res.status(400).json({ success: false, error: message });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'No file uploaded (field "file")' });
+      return;
+    }
+    const data: UploadResult = {
+      url: `/uploads/${req.file.filename}`,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    };
+    res.status(201).json({ success: true, data });
+  });
+});
+
+// POI photos (scouting). Separate allowlist/limit from audio; same safe-extension policy.
+uploadRouter.post('/image', (req, res) => {
+  imageUpload.single('file')(req, res, (err: unknown) => {
     if (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
       res.status(400).json({ success: false, error: message });

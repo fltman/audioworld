@@ -22,6 +22,14 @@ export const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
  *  (the generate endpoints return 503). Kept server-side only — never sent to a client. */
 export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY ?? '';
 
+/** OpenRouter API key for the vision LLM that turns a captured POI's note + photos into
+ *  narration. Empty = feature off (/api/interpret returns 503). Server-side only. */
+export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
+/** Vision-capable model slug (OpenRouter). Overridable so the default can be swapped
+ *  without a code change. Defaults to a cheap/fast Gemini vision model. */
+export const OPENROUTER_VISION_MODEL =
+  process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash';
+
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DEV_SECRET = 'dev-insecure-secret-change-me';
 

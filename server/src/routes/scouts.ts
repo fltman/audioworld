@@ -52,6 +52,13 @@ function parseWaypoint(body: unknown): ScoutWaypointInput {
   if (typeof b.audioUrl === 'string' && b.audioUrl.startsWith('/uploads/')) {
     out.audioUrl = b.audioUrl.slice(0, 200);
   }
+  if (Array.isArray(b.photos)) {
+    const photos = b.photos
+      .filter((p): p is string => typeof p === 'string' && p.startsWith('/uploads/'))
+      .slice(0, 8)
+      .map((p) => p.slice(0, 200));
+    if (photos.length) out.photos = photos;
+  }
   if (typeof b.accuracy === 'number' && Number.isFinite(b.accuracy)) {
     out.accuracy = Math.max(0, Math.min(10000, b.accuracy));
   }

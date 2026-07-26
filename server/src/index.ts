@@ -9,6 +9,7 @@ import { scoutsRouter } from './routes/scouts';
 import { charactersRouter } from './routes/characters';
 import { generateRouter } from './routes/generate';
 import { discoverRouter } from './routes/discover';
+import { interpretRouter } from './routes/interpret';
 import { uploadRouter } from './routes/upload';
 import { authRouter } from './routes/auth';
 import { usersRouter } from './routes/users';
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
   app.use('/api/characters', charactersRouter);
   app.use('/api/generate', generateRouter);
   app.use('/api/discover', discoverRouter);
+  app.use('/api/interpret', interpretRouter);
   app.use('/api/upload', uploadRouter);
 
   app.use(errorHandler);

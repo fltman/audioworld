@@ -96,6 +96,13 @@ export function uploadVoiceNote(file: File): Promise<UploadResult> {
   return authed<UploadResult>('/api/upload', { method: 'POST', body: form });
 }
 
+/** Upload a POI photo (author-authenticated). */
+export function uploadScoutImage(file: File): Promise<UploadResult> {
+  const form = new FormData();
+  form.append('file', file);
+  return authed<UploadResult>('/api/upload/image', { method: 'POST', body: form });
+}
+
 export const getCourses = () => get<Course[]>('/api/courses');
 export const getCourse = (id: string) => get<Course>(`/api/courses/${id}`);
 export const getPoints = (courseId: string) =>

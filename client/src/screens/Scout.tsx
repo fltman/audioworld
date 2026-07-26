@@ -12,6 +12,7 @@ import {
   scoutLogin,
   scoutMe,
   setScoutToken,
+  uploadScoutImage,
   uploadVoiceNote,
 } from '../api';
 import { ScoutMap } from '../components/ScoutMap';
@@ -85,6 +86,8 @@ export function Scout({ onExit }: ScoutProps) {
   const [draft, setDraft] = useState<Fix | null>(null);
   const [noteText, setNoteText] = useState('');
   const [draftAudioUrl, setDraftAudioUrl] = useState<string | null>(null);
+  const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [dictating, setDictating] = useState(false);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -171,6 +174,22 @@ export function Scout({ onExit }: ScoutProps) {
     setDraft({ ...fix });
     setNoteText('');
     setDraftAudioUrl(null);
+    setDraftPhotos([]);
+  };
+
+  const addPhotos = async (files: FileList) => {
+    setPhotoBusy(true);
+    try {
+      for (const f of Array.from(files).slice(0, 8)) {
+        // Cap at 8 photos per waypoint (matches the server), oldest kept.
+        const r = await uploadScoutImage(f);
+        setDraftPhotos((prev) => (prev.length >= 8 ? prev : [...prev, r.url]));
+      }
+    } catch {
+      setError('Could not upload a photo');
+    } finally {
+      setPhotoBusy(false);
+    }
   };
 
   const toggleDictation = () => {
@@ -232,6 +251,7 @@ export function Scout({ onExit }: ScoutProps) {
         accuracy: draft.accuracy,
         note: noteText.trim() || undefined,
         audioUrl: draftAudioUrl ?? undefined,
+        photos: draftPhotos.length ? draftPhotos : undefined,
       });
       setActive(updated);
       setDraft(null);
@@ -430,7 +450,40 @@ export function Scout({ onExit }: ScoutProps) {
               {recording ? '⏹ Stop' : draftAudioUrl ? '🔴 Re-record' : '🔴 Voice note'}
             </button>
             {draftAudioUrl && <span className="scout-audio-ok">♪ attached</span>}
+            <label className={`btn-test ${photoBusy ? 'is-on' : ''}`}>
+              {photoBusy ? '📷 Uploading…' : `📷 Photo${draftPhotos.length ? ` (${draftPhotos.length})` : ''}`}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                hidden
+                disabled={photoBusy || draftPhotos.length >= 8}
+                onChange={(e) => {
+                  const files = e.currentTarget.files;
+                  if (files && files.length) void addPhotos(files);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </label>
           </div>
+          {draftPhotos.length > 0 && (
+            <div className="scout-photos">
+              {draftPhotos.map((url, i) => (
+                <div key={url} className="scout-photo">
+                  <img src={absoluteAudioUrl(url)} alt={`Photo ${i + 1}`} />
+                  <button
+                    type="button"
+                    className="scout-photo__del"
+                    title="Remove photo"
+                    onClick={() => setDraftPhotos((prev) => prev.filter((u) => u !== url))}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="scout-note-editor__actions">
             <button className="btn-primary" disabled={busy} onClick={() => void saveWaypoint()}>
               {busy ? 'Saving…' : 'Save waypoint'}
@@ -449,6 +502,15 @@ export function Scout({ onExit }: ScoutProps) {
       {selected && !draft && (
         <div className="scout-selected">
           <div className="scout-selected__note">{selected.note || <em>No note</em>}</div>
+          {selected.photos && selected.photos.length > 0 && (
+            <div className="scout-photos">
+              {selected.photos.map((url, i) => (
+                <div key={url} className="scout-photo">
+                  <img src={absoluteAudioUrl(url)} alt={`Photo ${i + 1}`} />
+                </div>
+              ))}
+            </div>
+          )}
           {selected.audioUrl && (
             <audio
               className="clip-preview"

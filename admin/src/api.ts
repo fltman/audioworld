@@ -12,6 +12,7 @@ import type {
   DiscoveredPlace,
   ElevenVoice,
   PlaceCategory,
+  PoiInterpretation,
   Role,
   ScoutSet,
   UploadListItem,
@@ -165,6 +166,10 @@ export const api = {
   // Find notable places (OpenStreetMap) within a map area, to turn into audio points.
   discover: (bbox: BBox, categories: PlaceCategory[]) =>
     request<DiscoveredPlace[]>('/api/discover', jsonBody('POST', { bbox, categories })),
+
+  // AI-read a captured POI's note + photos into audio-point narration. 503 if unconfigured.
+  interpretPoi: (note: string | undefined, photos: string[]) =>
+    request<PoiInterpretation>('/api/interpret', jsonBody('POST', { note, photos })),
 
   // ElevenLabs generation — saved straight into the sound library. 503 if unconfigured.
   listVoices: () => request<ElevenVoice[]>('/api/generate/voices'),

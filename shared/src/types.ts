@@ -446,9 +446,19 @@ export interface ScoutWaypoint {
   note?: string;
   /** Optional recorded voice note (`/uploads/...`), played back in the admin. */
   audioUrl?: string;
+  /** Photos of the spot (`/uploads/...`), shown in admin and fed to the AI interpreter. */
+  photos?: string[];
   /** GPS accuracy (m) when it was dropped, so the author knows how precise it is. */
   accuracy?: number;
   createdAt: string;
+}
+
+/** AI reading of a captured POI (its note + photos) into ready audio-point narration. */
+export interface PoiInterpretation {
+  /** A short point name/title. */
+  title: string;
+  /** Narration script to be spoken by a guide voice. */
+  narration: string;
 }
 
 /** A named collection of scouted waypoints, owned by its author. */
