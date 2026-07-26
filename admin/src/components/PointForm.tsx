@@ -67,18 +67,23 @@ const readNum = (e: ChangeEvent<HTMLInputElement>): number => {
   return Number.isFinite(v) ? v : 0;
 };
 
+/** Common travel paces as a m/s reference, since Speed is entered in m/s. */
+const SPEED_HINT = 'Walk 5 km/h ≈ 1.4 · jog 9 km/h ≈ 2.5 · bike 15 km/h ≈ 4.2 (m/s)';
+
 function NumberField({
   label,
   value,
   onValue,
   step = 1,
   min = 0,
+  hint,
 }: {
   label: string;
   value: number;
   onValue: (n: number) => void;
   step?: number;
   min?: number;
+  hint?: string;
 }) {
   return (
     <label className="form-field">
@@ -91,6 +96,7 @@ function NumberField({
         value={value}
         onChange={(e) => onValue(readNum(e))}
       />
+      {hint && <span className="field-hint">{hint}</span>}
     </label>
   );
 }
@@ -340,14 +346,14 @@ export default function PointForm(props: Props) {
         {draft.type === 'static_circling' && (
           <>
             <NumberField label="Orbit radius (m)" value={draft.circleRadius} onValue={(n) => onChange({ circleRadius: n })} />
-            <NumberField label="Speed (m/s)" value={draft.speed} onValue={(n) => onChange({ speed: n })} step={0.5} />
+            <NumberField label="Speed (m/s)" value={draft.speed} onValue={(n) => onChange({ speed: n })} step={0.5} hint={SPEED_HINT} />
             <NumberField label="Audible radius (m)" value={draft.radius} onValue={(n) => onChange({ radius: n })} />
           </>
         )}
         {draft.type === 'path' && (
           <>
             <NumberField label="Audible radius (m)" value={draft.radius} onValue={(n) => onChange({ radius: n })} />
-            <NumberField label="Speed (m/s)" value={draft.speed} onValue={(n) => onChange({ speed: n })} step={0.5} />
+            <NumberField label="Speed (m/s)" value={draft.speed} onValue={(n) => onChange({ speed: n })} step={0.5} hint={SPEED_HINT} />
           </>
         )}
         {draft.type === 'follow_user' && (
@@ -356,7 +362,7 @@ export default function PointForm(props: Props) {
         {draft.type === 'path_triggered' && (
           <>
             <NumberField label="Trigger radius (m)" value={draft.triggerRadius} onValue={(n) => onChange({ triggerRadius: n })} />
-            <NumberField label="Speed (m/s)" value={draft.speed} onValue={(n) => onChange({ speed: n })} step={0.5} />
+            <NumberField label="Speed (m/s)" value={draft.speed} onValue={(n) => onChange({ speed: n })} step={0.5} hint={SPEED_HINT} />
           </>
         )}
         {(draft.type === 'path' || draft.type === 'path_triggered') && (
@@ -538,6 +544,7 @@ export default function PointForm(props: Props) {
                 value={draft.maxSpeed}
                 onValue={(n) => onChange({ maxSpeed: n })}
                 step={0.5}
+                hint={SPEED_HINT}
               />
               <NumberField
                 label="Give-up distance (m)"
@@ -559,6 +566,7 @@ export default function PointForm(props: Props) {
                 value={draft.followSpeed}
                 onValue={(n) => onChange({ followSpeed: n })}
                 step={0.5}
+                hint={SPEED_HINT}
               />
             </div>
           )}
