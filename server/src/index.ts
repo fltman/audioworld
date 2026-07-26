@@ -7,6 +7,7 @@ import { coursesRouter } from './routes/courses';
 import { pointsRouter } from './routes/points';
 import { scoutsRouter } from './routes/scouts';
 import { generateRouter } from './routes/generate';
+import { discoverRouter } from './routes/discover';
 import { uploadRouter } from './routes/upload';
 import { authRouter } from './routes/auth';
 import { usersRouter } from './routes/users';
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
   app.use('/api/points', pointsRouter);
   app.use('/api/scouts', scoutsRouter);
   app.use('/api/generate', generateRouter);
+  app.use('/api/discover', discoverRouter);
   app.use('/api/upload', uploadRouter);
 
   app.use(errorHandler);

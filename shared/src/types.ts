@@ -471,6 +471,40 @@ export interface ElevenVoice {
   category?: string;
 }
 
+/** A notable place found by searching an area (via OpenStreetMap), before it's turned
+ *  into an audio point. */
+export interface DiscoveredPlace {
+  name: string;
+  lat: number;
+  lng: number;
+  /** OSM category that matched, e.g. "museum", "memorial", "artwork", "viewpoint". */
+  kind: string;
+  /** Short description from OSM tags, if any (a starting point for narration). */
+  description?: string;
+  /** Wikipedia reference ("sv:Nobelmuseet") from OSM, if any. */
+  wikipedia?: string;
+}
+
+/** A geographic bounding box (south/west/north/east in degrees). */
+export interface BBox {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
+/** Place categories the author can search for (the server maps each to OSM filters). */
+export const PLACE_CATEGORIES = [
+  { key: 'museum', label: 'Museums & galleries' },
+  { key: 'historic', label: 'Historic & monuments' },
+  { key: 'artwork', label: 'Public artworks' },
+  { key: 'viewpoint', label: 'Viewpoints' },
+  { key: 'attraction', label: 'Attractions' },
+  { key: 'religious', label: 'Religious sites' },
+  { key: 'park', label: 'Parks & nature' },
+] as const;
+export type PlaceCategory = (typeof PLACE_CATEGORIES)[number]['key'];
+
 /** One clip as listed in the sound library (existence from disk, description from the DB). */
 export interface UploadListItem {
   url: string;

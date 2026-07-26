@@ -8,7 +8,9 @@ import {
   triggerRadiusOf,
   type AcousticZone,
   type AudioPoint,
+  type BBox,
   type Coordinates,
+  type DiscoveredPlace,
   type ScoutWaypoint,
 } from '@audioworld/shared';
 import type { DraftState } from '../draft';
@@ -48,6 +50,14 @@ interface Props {
   analyticsCells?: Record<string, number>;
   /** Read-only scout waypoints overlaid as a reference layer while authoring. */
   scoutWaypoints?: ScoutWaypoint[];
+  /** Notified with the current map bounds (on pan/zoom) for area-based place discovery. */
+  onViewport?: (bbox: BBox) => void;
+  /** Discovered candidate places drawn as selectable pins. */
+  discoverPlaces?: DiscoveredPlace[];
+  /** Indices of selected candidate places (highlighted). */
+  selectedPlaces?: number[];
+  /** Toggle a candidate place in/out of the selection. */
+  onTogglePlace?: (index: number) => void;
 }
 
 const toCoord = (ll: L.LatLng): Coordinates => ({ lat: ll.lat, lng: ll.lng });
@@ -207,6 +217,7 @@ export default function MapView(props: Props) {
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const analyticsLayerRef = useRef<L.LayerGroup | null>(null);
   const scoutLayerRef = useRef<L.LayerGroup | null>(null);
+  const discoverLayerRef = useRef<L.LayerGroup | null>(null);
   const clickTimer = useRef<number | null>(null);
   const stateRef = useRef(props);
   stateRef.current = props;
@@ -239,7 +250,21 @@ export default function MapView(props: Props) {
     zonesLayerRef.current = L.layerGroup().addTo(map); // under the point markers
     pointsLayerRef.current = L.layerGroup().addTo(map);
     scoutLayerRef.current = L.layerGroup().addTo(map); // reference pins above points
+    discoverLayerRef.current = L.layerGroup().addTo(map);
     draftLayerRef.current = L.layerGroup().addTo(map);
+
+    // Report the visible bounds for area-based place discovery (throttled by moveend).
+    const emitViewport = () => {
+      const b = map.getBounds();
+      stateRef.current.onViewport?.({
+        south: b.getSouth(),
+        west: b.getWest(),
+        north: b.getNorth(),
+        east: b.getEast(),
+      });
+    };
+    map.on('moveend', emitViewport);
+    map.whenReady(emitViewport);
 
     map.on('click', (e: L.LeafletMouseEvent) => {
       const c = toCoord(e.latlng);
@@ -276,6 +301,7 @@ export default function MapView(props: Props) {
       zonesLayerRef.current = null;
       analyticsLayerRef.current = null;
       scoutLayerRef.current = null;
+      discoverLayerRef.current = null;
     };
   }, []);
 
@@ -328,6 +354,30 @@ export default function MapView(props: Props) {
         .addTo(layer);
     });
   }, [props.scoutWaypoints]);
+
+  // Draw discovered candidate places as selectable pins (green teardrops); a tap toggles
+  // whether the place is included when converting to audio points.
+  useEffect(() => {
+    const layer = discoverLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    const places = props.discoverPlaces;
+    if (!places) return;
+    const selected = new Set(props.selectedPlaces ?? []);
+    places.forEach((p, i) => {
+      const on = selected.has(i);
+      const icon = L.divIcon({
+        className: 'discover-pin-wrap',
+        html: `<div class="discover-pin${on ? ' is-on' : ''}" title="${esc(p.name)}">${on ? '✓' : ''}</div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      });
+      L.marker([p.lat, p.lng], { icon })
+        .bindTooltip(`${esc(p.name)} · ${esc(p.kind)}`)
+        .on('click', () => stateRef.current.onTogglePlace?.(i))
+        .addTo(layer);
+    });
+  }, [props.discoverPlaces, props.selectedPlaces]);
 
   // Draw acoustic zones (filled polygons) + the in-progress zone outline.
   useEffect(() => {

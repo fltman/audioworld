@@ -1346,3 +1346,73 @@ input[type='range'] {
   color: var(--danger);
   font-size: 12.5px;
 }
+
+/* ---------- Discover places ---------- */
+.discover-pin-wrap { background: none; border: none; }
+.discover-pin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: rgba(60, 208, 130, 0.35);
+  border: 2px solid #3cd082;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+.discover-pin.is-on {
+  background: #3cd082;
+  color: #05130b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.discover { display: flex; flex-direction: column; gap: 10px; }
+.discover-cats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+.discover-cats .check { font-size: 12.5px; }
+.discover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+.discover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.discover-list li {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.discover-list li.is-on {
+  border-color: #3cd082;
+  background: rgba(60, 208, 130, 0.08);
+}
+.discover-list .check { align-items: flex-start; }
+.discover-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.discover-convert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}

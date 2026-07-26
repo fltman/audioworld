@@ -3,10 +3,13 @@ import type {
   AudioPoint,
   AudioPointInput,
   AuthResult,
+  BBox,
   Course,
   CourseAnalytics,
   CourseInput,
+  DiscoveredPlace,
   ElevenVoice,
+  PlaceCategory,
   Role,
   ScoutSet,
   UploadListItem,
@@ -147,6 +150,10 @@ export const api = {
       `/api/upload/${encodeURIComponent(filename)}`,
       jsonBody('PATCH', { description })
     ),
+
+  // Find notable places (OpenStreetMap) within a map area, to turn into audio points.
+  discover: (bbox: BBox, categories: PlaceCategory[]) =>
+    request<DiscoveredPlace[]>('/api/discover', jsonBody('POST', { bbox, categories })),
 
   // ElevenLabs generation — saved straight into the sound library. 503 if unconfigured.
   listVoices: () => request<ElevenVoice[]>('/api/generate/voices'),

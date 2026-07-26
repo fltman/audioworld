@@ -4,8 +4,10 @@ import type {
   AudioPoint,
   AudioPointInput,
   Coordinates,
+  BBox,
   Course,
   CourseAnalytics,
+  DiscoveredPlace,
   PointType,
   ScoutSet,
   ScoutWaypoint,
@@ -28,6 +30,7 @@ import SoundLibrary from './components/SoundLibrary';
 import BulkBar from './components/BulkBar';
 import Section from './components/Section';
 import CourseSettings from './components/CourseSettings';
+import DiscoverPanel from './components/DiscoverPanel';
 import ZonePanel from './components/ZonePanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
@@ -51,6 +54,10 @@ export default function App() {
   const [scoutSets, setScoutSets] = useState<ScoutSet[]>([]);
   const [scoutId, setScoutId] = useState<string | null>(null);
   const [scoutWaypoints, setScoutWaypoints] = useState<ScoutWaypoint[]>([]);
+  const [discoverBbox, setDiscoverBbox] = useState<BBox | null>(null);
+  const [discoverPlaces, setDiscoverPlaces] = useState<DiscoveredPlace[]>([]);
+  const [selectedPlaces, setSelectedPlaces] = useState<number[]>([]);
+  const [converting, setConverting] = useState<{ done: number; total: number } | null>(null);
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -157,6 +164,74 @@ export default function App() {
       setScoutWaypoints(set.waypoints);
     } catch (e) {
       setError(msg(e));
+    }
+  };
+
+  const togglePlace = (i: number) =>
+    setSelectedPlaces((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]));
+
+  // Greedy nearest-neighbour ordering from the first place — a sensible walking route.
+  const orderRoute = (places: DiscoveredPlace[]): DiscoveredPlace[] => {
+    if (places.length < 3) return places;
+    const remaining = [...places];
+    const route = [remaining.shift()!];
+    while (remaining.length) {
+      const last = route[route.length - 1]!;
+      let bi = 0;
+      let bd = Infinity;
+      remaining.forEach((p, i) => {
+        const d = (p.lat - last.lat) ** 2 + (p.lng - last.lng) ** 2;
+        if (d < bd) {
+          bd = d;
+          bi = i;
+        }
+      });
+      route.push(remaining.splice(bi, 1)[0]!);
+    }
+    return route;
+  };
+
+  // Convert selected discovered places into narrated static points (one TTS clip each,
+  // in the chosen voice). "route" just orders them for a sensible walk.
+  const runConvert = async (mode: 'individual' | 'route', voiceId: string) => {
+    if (!courseId) return;
+    let chosen = selectedPlaces
+      .map((i) => discoverPlaces[i])
+      .filter((p): p is DiscoveredPlace => !!p);
+    if (chosen.length === 0) return;
+    if (mode === 'route') chosen = orderRoute(chosen);
+    setConverting({ done: 0, total: chosen.length });
+    setError(null);
+    const created: AudioPoint[] = [];
+    const converted = new Set<DiscoveredPlace>();
+    try {
+      for (const p of chosen) {
+        const text = p.description ? `${p.name}. ${p.description}` : p.name;
+        const clip = await api.generateTts(text, voiceId, 'eleven_v3');
+        const input: AudioPointInput = {
+          courseId,
+          name: p.name,
+          type: 'static',
+          center: { lat: p.lat, lng: p.lng },
+          radius: 30,
+          audio: { kind: 'upload', url: clip.url, title: p.name },
+          playback: { loop: false, stopAfter: false, reload: true },
+          volume: 1,
+          sync: 'individual',
+        };
+        created.push(await api.createPoint(courseId, input));
+        converted.add(p); // record success BEFORE moving on
+        setConverting((c) => (c ? { ...c, done: c.done + 1 } : null));
+      }
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      if (created.length) setPoints((prev) => [...prev, ...created]);
+      // Drop the places we actually converted (even on a partial failure) so a retry
+      // only re-runs the remainder — never re-narrating/re-creating (double-spending).
+      setDiscoverPlaces((prev) => prev.filter((p) => !converted.has(p)));
+      setSelectedPlaces([]); // indices are stale after filtering; user re-selects the rest
+      setConverting(null);
     }
   };
 
@@ -775,6 +850,23 @@ export default function App() {
                 </div>
               </Section>
 
+              <Section title="Discover places" icon="🔍" defaultOpen={false}>
+                <DiscoverPanel
+                  bbox={discoverBbox}
+                  places={discoverPlaces}
+                  selected={selectedPlaces}
+                  onResults={(ps) => {
+                    setDiscoverPlaces(ps);
+                    setSelectedPlaces([]);
+                  }}
+                  onToggle={togglePlace}
+                  onSelectAll={() => setSelectedPlaces(discoverPlaces.map((_, i) => i))}
+                  onClear={() => setSelectedPlaces([])}
+                  onConvert={(mode, voiceId) => void runConvert(mode, voiceId)}
+                  converting={converting}
+                />
+              </Section>
+
               {multiSelect && (
                 <BulkBar
                   count={selectedIds.length}
@@ -826,6 +918,10 @@ export default function App() {
         drawingZone={zoneDraft != null}
         analyticsCells={showAnalytics ? analytics?.cells : undefined}
         scoutWaypoints={scoutWaypoints}
+        onViewport={setDiscoverBbox}
+        discoverPlaces={discoverPlaces}
+        selectedPlaces={selectedPlaces}
+        onTogglePlace={togglePlace}
       />
     </div>
   );
