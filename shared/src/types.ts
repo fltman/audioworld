@@ -196,6 +196,10 @@ export interface PathAudioPoint extends BaseAudioPoint {
    *  radiates into a wedge facing an absolute compass bearing. Omitted = all around. */
   facing?: number;
   spread?: number;
+  /** The guide (character) driving this path: its idle sound is this point's travelling
+   *  audio and its voice narrates the stops. Reference only; the audio is already copied
+   *  onto the point. */
+  characterId?: string;
 }
 
 /**
@@ -245,6 +249,10 @@ export interface PathTriggeredPoint extends BaseAudioPoint {
    *  radiates into a wedge facing an absolute compass bearing. Omitted = all around. */
   facing?: number;
   spread?: number;
+  /** The guide (character) driving this path: its idle sound is this point's travelling
+   *  audio and its voice narrates the stops. Reference only; the audio is already copied
+   *  onto the point. */
+  characterId?: string;
 }
 
 /** Discriminated union over `type`. */
@@ -455,6 +463,33 @@ export interface ScoutSet {
 
 /** Payload to append a waypoint to a set (server assigns id + createdAt). */
 export type ScoutWaypointInput = Omit<ScoutWaypoint, 'id' | 'createdAt'>;
+
+/**
+ * A reusable guide: a persona + an ElevenLabs voice for its narration + an "idle
+ * sound" it makes while travelling between narration stops. Assign a character to a
+ * moving path point and its idle sound becomes that point's travelling audio.
+ */
+export interface Character {
+  id: string;
+  name: string;
+  /** Personality/voice-direction notes (author reference; guides how you narrate it). */
+  persona: string;
+  /** ElevenLabs voice id used to narrate this character's stops. */
+  voiceId: string;
+  /** Cached voice display name. */
+  voiceName?: string;
+  /** The sound it makes while moving between stops (a `/uploads/...` clip). */
+  idleSoundUrl?: string;
+  ownerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Payload to create/update a character (server assigns id + timestamps + owner). */
+export type CharacterInput = Pick<
+  Character,
+  'name' | 'persona' | 'voiceId' | 'voiceName' | 'idleSoundUrl'
+>;
 
 /** Result of an audio-file upload. */
 export interface UploadResult {

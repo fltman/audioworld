@@ -3,6 +3,7 @@ import type {
   AcousticZone,
   AudioPoint,
   AudioPointInput,
+  Character,
   Coordinates,
   BBox,
   Course,
@@ -27,6 +28,7 @@ import MapView from './components/MapView';
 import Login from './components/Login';
 import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
+import CharacterManager from './components/CharacterManager';
 import BulkBar from './components/BulkBar';
 import Section from './components/Section';
 import CourseSettings from './components/CourseSettings';
@@ -54,6 +56,7 @@ export default function App() {
   const [scoutSets, setScoutSets] = useState<ScoutSet[]>([]);
   const [scoutId, setScoutId] = useState<string | null>(null);
   const [scoutWaypoints, setScoutWaypoints] = useState<ScoutWaypoint[]>([]);
+  const [characters, setCharacters] = useState<Character[]>([]);
   const [discoverBbox, setDiscoverBbox] = useState<BBox | null>(null);
   const [discoverPlaces, setDiscoverPlaces] = useState<DiscoveredPlace[]>([]);
   const [selectedPlaces, setSelectedPlaces] = useState<number[]>([]);
@@ -148,6 +151,12 @@ export default function App() {
         setScoutSets(await api.listScouts());
       } catch {
         /* ignore — reference layers just won't be offered */
+      }
+      // Characters for the guide picker (best-effort).
+      try {
+        setCharacters(await api.listCharacters());
+      } catch {
+        /* ignore — the guide dropdown just stays empty */
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -705,7 +714,10 @@ export default function App() {
         {tab === 'users' && user.role === 'admin' ? (
           <UsersPanel me={user} />
         ) : tab === 'sounds' ? (
-          <SoundLibrary />
+          <>
+            <SoundLibrary />
+            <CharacterManager characters={characters} onChange={setCharacters} />
+          </>
         ) : (
           <>
         <CourseBar
@@ -772,6 +784,7 @@ export default function App() {
                   onFinishPath={finishPath}
                   onUndoVertex={undoVertex}
                   onAddPoints={addPoints}
+                  characters={characters}
                   saving={saving}
                   uploading={uploading}
                   error={formError}

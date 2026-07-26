@@ -4,6 +4,8 @@ import type {
   AudioPointInput,
   AuthResult,
   BBox,
+  Character,
+  CharacterInput,
   Course,
   CourseAnalytics,
   CourseInput,
@@ -143,6 +145,15 @@ export const api = {
   // Scout sets — captured in the field on a phone, shown as a read-only reference layer.
   listScouts: () => request<ScoutSet[]>('/api/scouts'),
   getScout: (id: string) => request<ScoutSet>(`/api/scouts/${id}`),
+
+  // Characters — reusable guides (persona + voice + idle sound) assignable to path points.
+  listCharacters: () => request<Character[]>('/api/characters'),
+  createCharacter: (input: CharacterInput) =>
+    request<Character>('/api/characters', jsonBody('POST', input)),
+  updateCharacter: (id: string, input: CharacterInput) =>
+    request<Character>(`/api/characters/${id}`, jsonBody('PUT', input)),
+  deleteCharacter: (id: string) =>
+    request<{ id: string }>(`/api/characters/${id}`, { method: 'DELETE' }),
 
   listUploads: () => request<UploadListItem[]>('/api/upload'),
   setUploadDescription: (filename: string, description: string) =>

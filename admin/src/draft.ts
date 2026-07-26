@@ -59,6 +59,8 @@ export interface DraftState {
   directional: boolean;
   facing: number;
   spread: number;
+  /** Assigned guide — its idle sound becomes this point's travelling audio (path types). */
+  characterId: string;
   /** follow_user behavior + per-mode params. */
   mode: FollowMode;
   maxSpeed: number;
@@ -97,6 +99,7 @@ const FLAG_DEFAULTS = {
   showWayfinding: false,
   fleeOnMove: false,
   directional: false,
+  characterId: '',
   mode: 'attach' as FollowMode,
 };
 
@@ -202,6 +205,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
         waitForListener: point.waitForListener ?? false,
         waitRadius: point.waitRadius ?? NUMERIC_DEFAULTS.waitRadius,
         showWayfinding: point.showWayfinding ?? false,
+        characterId: point.characterId ?? '',
       };
     case 'follow_user':
       return {
@@ -226,6 +230,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
         waitForListener: point.waitForListener ?? false,
         waitRadius: point.waitRadius ?? NUMERIC_DEFAULTS.waitRadius,
         showWayfinding: point.showWayfinding ?? false,
+        characterId: point.characterId ?? '',
       };
   }
 }
@@ -316,6 +321,7 @@ export function draftToInput(d: DraftState): DraftResult {
           waitForListener: d.waitForListener,
           waitRadius: d.waitRadius,
           showWayfinding: d.showWayfinding,
+          ...(d.characterId ? { characterId: d.characterId } : {}),
           ...dirFields(d),
         },
       };
@@ -348,6 +354,7 @@ export function draftToInput(d: DraftState): DraftResult {
           waitForListener: d.waitForListener,
           waitRadius: d.waitRadius,
           showWayfinding: d.showWayfinding,
+          ...(d.characterId ? { characterId: d.characterId } : {}),
           ...dirFields(d),
         },
       };

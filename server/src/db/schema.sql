@@ -69,6 +69,21 @@ CREATE TABLE IF NOT EXISTS scouts (
   updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Characters: reusable guides (persona + ElevenLabs voice + idle/travelling sound),
+-- assignable to a moving path point.
+CREATE TABLE IF NOT EXISTS characters (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name           text NOT NULL,
+  persona        text NOT NULL DEFAULT '',
+  voice_id       text NOT NULL DEFAULT '',
+  voice_name     text,
+  idle_sound_url text,
+  owner_id       uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
 CREATE INDEX IF NOT EXISTS scouts_owner_id_idx ON scouts(owner_id);
+CREATE INDEX IF NOT EXISTS characters_owner_id_idx ON characters(owner_id);

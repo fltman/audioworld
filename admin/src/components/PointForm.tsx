@@ -1,5 +1,6 @@
 import type { ChangeEvent } from 'react';
 import type {
+  Character,
   FollowMode,
   LocalizedClip,
   PathEndBehavior,
@@ -47,6 +48,8 @@ interface Props {
   onFinishPath: () => void;
   onUndoVertex: () => void;
   onAddPoints: () => void;
+  /** Reusable guides available to assign to a moving point. */
+  characters: Character[];
   saving: boolean;
   uploading: boolean;
   error: string | null;
@@ -561,6 +564,61 @@ export default function PointForm(props: Props) {
           )}
         </div>
       )}
+
+      {isPathType(draft.type) &&
+        (() => {
+          const guide = props.characters.find((x) => x.id === draft.characterId);
+          // A characterId that resolves to nothing (guide deleted since assignment).
+          const orphaned = draft.characterId !== '' && !guide;
+          return (
+            <div className="form-field">
+              <span className="label">Guide (character)</span>
+              <select
+                className="select"
+                value={draft.characterId}
+                onChange={(e) => {
+                  const id = e.currentTarget.value;
+                  const c = props.characters.find((x) => x.id === id);
+                  // Adopt the guide's idle sound as this point's travelling audio (what
+                  // plays between narration stops), keeping any language variants /
+                  // metadata already set on the clip. Its voice is the author's
+                  // reference for recording the stops.
+                  if (c?.idleSoundUrl) {
+                    onChange({
+                      characterId: id,
+                      audio: { ...audio, kind: 'upload', url: c.idleSoundUrl, title: `${c.name} (idle)` },
+                    });
+                  } else {
+                    onChange({ characterId: id });
+                  }
+                }}
+              >
+                <option value="">— None —</option>
+                {/* Keep the dangling id selectable so it renders honestly and can be cleared. */}
+                {orphaned && <option value={draft.characterId}>— (removed guide) —</option>}
+                {props.characters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.voiceName ? ` · ${c.voiceName}` : ''}
+                  </option>
+                ))}
+              </select>
+              {guide && (
+                <p className="geo-status ok">
+                  Narrate stops in {guide.voiceName ?? 'its voice'}. Travelling audio:{' '}
+                  {audio.url ? audio.title ?? audio.url : 'none set'}.
+                  {!guide.idleSoundUrl &&
+                    ' This guide has no idle sound — set the travelling audio above.'}
+                </p>
+              )}
+              {orphaned && (
+                <p className="geo-status">
+                  This point references a guide that no longer exists — pick another or “— None —”.
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
       {isPathType(draft.type) && (
         <div className="checks">

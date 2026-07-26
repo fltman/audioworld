@@ -284,6 +284,7 @@ function addWaitAndWayfinding(config: Record<string, unknown>, body: Record<stri
     config.waitRadius = r;
   }
   if (body.showWayfinding != null) config.showWayfinding = Boolean(body.showWayfinding);
+  if (typeof body.characterId === 'string' && body.characterId) config.characterId = body.characterId;
   addDirectional(config, body);
 }
 

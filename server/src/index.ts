@@ -6,6 +6,7 @@ import { applySchema } from './db/pool';
 import { coursesRouter } from './routes/courses';
 import { pointsRouter } from './routes/points';
 import { scoutsRouter } from './routes/scouts';
+import { charactersRouter } from './routes/characters';
 import { generateRouter } from './routes/generate';
 import { discoverRouter } from './routes/discover';
 import { uploadRouter } from './routes/upload';
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
   app.use('/api/courses', coursesRouter);
   app.use('/api/points', pointsRouter);
   app.use('/api/scouts', scoutsRouter);
+  app.use('/api/characters', charactersRouter);
   app.use('/api/generate', generateRouter);
   app.use('/api/discover', discoverRouter);
   app.use('/api/upload', uploadRouter);
