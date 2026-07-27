@@ -115,6 +115,25 @@ export async function interpretPoi(input: {
     ...dataUrls.map((url): ChatContent => ({ type: 'image_url', image_url: { url } })),
   ];
 
+  // Budget generously: gemini-3.x spends "thinking" tokens before the answer, so a tight
+  // cap truncates the visible reply.
+  const content = await chatCompletion(
+    [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: userContent },
+    ],
+    2000
+  );
+  const fallbackTitle = note ? note.split(/[.\n]/)[0]!.slice(0, 60) : 'Point of interest';
+  const parsed = parseReply(content, fallbackTitle);
+  if (!parsed) {
+    throw new OpenRouterError('The AI did not return usable narration — try again', 502);
+  }
+  return parsed;
+}
+
+/** POST a chat/completions request and return the assistant's text content. */
+async function chatCompletion(messages: unknown[], maxTokens: number): Promise<string> {
   let res: Response;
   try {
     res = await fetch(URL, {
@@ -123,14 +142,7 @@ export async function interpretPoi(input: {
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: OPENROUTER_VISION_MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userContent },
-        ],
-        max_tokens: 700,
-      }),
+      body: JSON.stringify({ model: OPENROUTER_VISION_MODEL, messages, max_tokens: maxTokens }),
       signal: AbortSignal.timeout(60_000),
     });
   } catch (e) {
@@ -140,7 +152,6 @@ export async function interpretPoi(input: {
     }
     throw new OpenRouterError('Could not reach the AI service', 502);
   }
-
   if (!res.ok) {
     let msg = `AI error (${res.status})`;
     try {
@@ -150,21 +161,92 @@ export async function interpretPoi(input: {
     } catch {
       /* keep default */
     }
-    // 401/403 from OpenRouter usually means a bad/absent key — surface as a config problem.
-    throw new OpenRouterError(msg, res.status === 401 || res.status === 403 ? 502 : 502);
+    throw new OpenRouterError(msg, 502);
   }
-
-  const j = (await res.json()) as {
-    choices?: Array<{ message?: { content?: unknown } }>;
-  };
+  const j = (await res.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
   const content = j.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || !content.trim()) {
     throw new OpenRouterError('The AI returned an empty response', 502);
   }
-  const fallbackTitle = note ? note.split(/[.\n]/)[0]!.slice(0, 60) : 'Point of interest';
-  const parsed = parseReply(content, fallbackTitle);
-  if (!parsed) {
-    throw new OpenRouterError('The AI did not return usable narration — try again', 502);
+  return content;
+}
+
+const PERSONA_SYSTEM =
+  'You write concise, vivid character personas for guides in a location-based audio tour. ' +
+  'Given a name and/or a rough sketch, write 2–4 sentences describing the guide\'s voice, ' +
+  'manner, background and quirks — enough to guide how their narration should sound. Reply ' +
+  'with ONLY the persona prose: no preamble, no headings, no quotes.';
+
+/** Expand a rough persona sketch (and/or a name) into a vivid guide persona. */
+export async function enhancePersona(input: { name?: string; seed?: string }): Promise<string> {
+  const name = (input.name ?? '').trim().slice(0, 120);
+  const seed = (input.seed ?? '').trim().slice(0, 2000);
+  if (!name && !seed) {
+    throw new OpenRouterError('Give the guide a name or a few words to enhance', 400);
   }
-  return parsed;
+  const lines: string[] = [];
+  if (name) lines.push(`Name: ${name}`);
+  lines.push(seed ? `Rough persona: """${seed}"""` : 'No persona yet — invent a fitting one.');
+  const content = await chatCompletion(
+    [
+      { role: 'system', content: PERSONA_SYSTEM },
+      { role: 'user', content: lines.join('\n') },
+    ],
+    1500
+  );
+  return content
+    .replace(/```[a-z]*|```/gi, '')
+    .trim()
+    .slice(0, 4000);
+}
+
+const AUDIO_FORMAT: Record<string, string> = {
+  '.mp3': 'mp3',
+  '.wav': 'wav',
+  '.m4a': 'm4a',
+  '.aac': 'aac',
+  '.ogg': 'ogg',
+  '.opus': 'opus',
+  '.webm': 'webm',
+  '.flac': 'flac',
+};
+const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
+
+/** Listen to an uploaded clip (Gemini audio input) and return a short descriptive name. */
+export async function describeClip(uploadUrl: string): Promise<string> {
+  if (!uploadUrl.startsWith('/uploads/')) throw new OpenRouterError('Not an upload', 400);
+  const name = basename(uploadUrl);
+  const format = AUDIO_FORMAT[extname(name).toLowerCase()];
+  if (!format) throw new OpenRouterError('Not a supported audio clip', 400);
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(join(UPLOAD_DIR, name));
+  } catch {
+    throw new OpenRouterError('Clip not found', 404);
+  }
+  if (bytes.length > MAX_AUDIO_BYTES) throw new OpenRouterError('Clip is too large to analyse', 413);
+
+  const content = await chatCompletion(
+    [
+      {
+        role: 'system',
+        content:
+          'You label sound-library clips. Listen to the audio and reply with ONLY a short, ' +
+          'specific descriptive name (3–7 words) — e.g. "Distant church bells over wind" or ' +
+          '"Warm female voice, calm greeting". No quotes, no preamble.',
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Name this sound.' },
+          { type: 'input_audio', input_audio: { data: bytes.toString('base64'), format } },
+        ],
+      },
+    ],
+    1200
+  );
+  return content
+    .replace(/```[a-z]*|```|["']/g, '')
+    .trim()
+    .slice(0, 200);
 }

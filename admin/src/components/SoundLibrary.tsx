@@ -18,9 +18,34 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
   const [desc, setDesc] = useState(upload.description ?? '');
   const [saved, setSaved] = useState(upload.description ?? '');
   const [saving, setSaving] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [flash, setFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kind = soundKind(upload);
+
+  // Let Gemini listen to the clip and name it, then persist that as the description.
+  const enhance = async () => {
+    setEnhancing(true);
+    setError(null);
+    try {
+      const { description } = await api.enhanceClip(upload.url);
+      await api.setUploadDescription(upload.filename, description);
+      setDesc(description);
+      setSaved(description);
+      setFlash(true);
+      window.setTimeout(() => setFlash(false), 1400);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 503
+          ? 'AI naming is off — set OPENROUTER_API_KEY on the server.'
+          : e instanceof Error
+            ? e.message
+            : 'Naming failed'
+      );
+    } finally {
+      setEnhancing(false);
+    }
+  };
 
   const copy = async () => {
     setError(null);
@@ -55,9 +80,20 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
     <article className="sound-card">
       <div className="sound-card__top">
         <span className={`kind ${kind.cls}`}>{kind.label}</span>
-        <button type="button" className="icon-btn" onClick={() => void copy()}>
-          {copied ? 'Copied ✓' : '⧉ URL'}
-        </button>
+        <span className="row-actions">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => void enhance()}
+            disabled={enhancing}
+            title="Let the AI listen and name this clip"
+          >
+            {enhancing ? '✨ Naming…' : '✨ Name'}
+          </button>
+          <button type="button" className="icon-btn" onClick={() => void copy()}>
+            {copied ? 'Copied ✓' : '⧉ URL'}
+          </button>
+        </span>
       </div>
       <input
         className="sound-card__name"

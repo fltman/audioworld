@@ -171,6 +171,14 @@ export const api = {
   interpretPoi: (note: string | undefined, photos: string[]) =>
     request<PoiInterpretation>('/api/interpret', jsonBody('POST', { note, photos })),
 
+  // AI-expand a rough persona sketch (+ name) into a vivid guide persona. 503 if unconfigured.
+  enhancePersona: (name: string, persona: string) =>
+    request<{ persona: string }>('/api/enhance/persona', jsonBody('POST', { name, persona })),
+
+  // AI-listen to a sound clip and suggest a descriptive name. 503 if unconfigured.
+  enhanceClip: (url: string) =>
+    request<{ description: string }>('/api/enhance/clip', jsonBody('POST', { url })),
+
   // ElevenLabs generation — saved straight into the sound library. 503 if unconfigured.
   listVoices: () => request<ElevenVoice[]>('/api/generate/voices'),
   generateSfx: (prompt: string, durationSec?: number) =>

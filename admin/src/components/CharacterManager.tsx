@@ -20,6 +20,17 @@ interface FormState {
 
 const EMPTY: FormState = { id: null, name: '', persona: '', voiceId: '', voiceName: '', idleSoundUrl: '' };
 
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|opus|webm|flac)$/i;
+const byName = (a: Character, b: Character) => a.name.localeCompare(b.name);
+
+/** Option label for the idle-sound picker: name + size (+ SFX/Voice hint from generate). */
+function idleLabel(u: UploadListItem): string {
+  const d = (u.description ?? '').trim();
+  const tag = /^sfx:/i.test(d) ? '🔊 ' : /^tts:/i.test(d) ? '🎙 ' : '';
+  const name = d || u.filename;
+  return `${tag}${name} · ${Math.round(u.size / 1024)} KB`;
+}
+
 /**
  * Manage reusable guides — a persona + an ElevenLabs voice (its narration voice) + an
  * idle sound (what plays while it travels between narration stops). Assign one to a
@@ -30,6 +41,7 @@ export default function CharacterManager({ characters, onChange }: Props) {
   const [uploads, setUploads] = useState<UploadListItem[]>([]);
   const [form, setForm] = useState<FormState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Re-read on each form open so a sound generated/uploaded in the library meanwhile shows up.
@@ -106,6 +118,43 @@ export default function CharacterManager({ characters, onChange }: Props) {
     }
   };
 
+  const duplicate = async (c: Character) => {
+    setError(null);
+    try {
+      const created = await api.createCharacter({
+        name: `${c.name} (copy)`,
+        persona: c.persona,
+        voiceId: c.voiceId,
+        voiceName: c.voiceName,
+        idleSoundUrl: c.idleSoundUrl,
+      });
+      onChange([...characters, created].sort(byName));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  // Expand the rough persona (+ name) into a vivid one via the AI.
+  const enhance = async () => {
+    if (!form) return;
+    setEnhancing(true);
+    setError(null);
+    try {
+      const { persona } = await api.enhancePersona(form.name.trim(), form.persona);
+      patch({ persona });
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 503
+          ? 'AI enhance is off — set OPENROUTER_API_KEY on the server.'
+          : e instanceof Error
+            ? e.message
+            : 'Enhance failed'
+      );
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
   return (
     <section className="section">
       <div className="section-title">
@@ -136,15 +185,26 @@ export default function CharacterManager({ characters, onChange }: Props) {
             />
           </label>
 
-          <label className="form-field">
-            <span className="label">Persona (your reference when writing its lines)</span>
+          <div className="form-field">
+            <div className="label-row">
+              <span className="label">Persona (your reference when writing its lines)</span>
+              <button
+                type="button"
+                className="btn btn-ghost small"
+                onClick={() => void enhance()}
+                disabled={enhancing || (!form.name.trim() && !form.persona.trim())}
+                title="Let the AI expand this into a vivid persona"
+              >
+                {enhancing ? '✨ Enhancing…' : '✨ Enhance'}
+              </button>
+            </div>
             <textarea
               className="textarea"
-              placeholder="Gruff, weathered, speaks slowly. Knows every wreck on the coast."
+              placeholder="Gruff, weathered, speaks slowly. Knows every wreck on the coast. — or just type a few words and hit ✨ Enhance."
               value={form.persona}
               onChange={(e) => patch({ persona: e.currentTarget.value })}
             />
-          </label>
+          </div>
 
           <label className="form-field">
             <span className="label">Narration voice</span>
@@ -180,11 +240,13 @@ export default function CharacterManager({ characters, onChange }: Props) {
               onChange={(e) => patch({ idleSoundUrl: e.currentTarget.value })}
             >
               <option value="">— None —</option>
-              {uploads.map((u) => (
-                <option key={u.url} value={u.url}>
-                  {u.description || u.filename}
-                </option>
-              ))}
+              {uploads
+                .filter((u) => AUDIO_EXT.test(u.filename))
+                .map((u) => (
+                  <option key={u.url} value={u.url}>
+                    {idleLabel(u)}
+                  </option>
+                ))}
             </select>
             {form.idleSoundUrl && (
               <audio
@@ -221,6 +283,9 @@ export default function CharacterManager({ characters, onChange }: Props) {
                 <span className="row-actions">
                   <button type="button" className="icon-btn" onClick={() => startEdit(c)}>
                     Edit
+                  </button>
+                  <button type="button" className="icon-btn" onClick={() => void duplicate(c)}>
+                    Duplicate
                   </button>
                   <button type="button" className="icon-btn" onClick={() => void remove(c)}>
                     Delete

@@ -28,7 +28,7 @@ export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 /** Vision-capable model slug (OpenRouter). Overridable so the default can be swapped
  *  without a code change. Defaults to a cheap/fast Gemini vision model. */
 export const OPENROUTER_VISION_MODEL =
-  process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash';
+  process.env.OPENROUTER_VISION_MODEL || 'google/gemini-3.6-flash';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DEV_SECRET = 'dev-insecure-secret-change-me';
