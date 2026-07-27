@@ -287,7 +287,7 @@ export default function CharacterManager({ characters, onChange }: Props) {
                   <button type="button" className="icon-btn" onClick={() => void duplicate(c)}>
                     Duplicate
                   </button>
-                  <button type="button" className="icon-btn" onClick={() => void remove(c)}>
+                  <button type="button" className="icon-btn icon-btn--danger" onClick={() => void remove(c)}>
                     Delete
                   </button>
                 </span>

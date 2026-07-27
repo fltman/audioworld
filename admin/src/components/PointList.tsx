@@ -55,7 +55,7 @@ export default function PointList({ points, onEdit, onDelete, editingId }: Props
                     <button type="button" className="icon-btn" onClick={() => onEdit(p.id)}>
                       Edit
                     </button>
-                    <button type="button" className="icon-btn" onClick={() => setConfirmId(p.id)}>
+                    <button type="button" className="icon-btn icon-btn--danger" onClick={() => setConfirmId(p.id)}>
                       Delete
                     </button>
                   </span>

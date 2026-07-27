@@ -122,7 +122,7 @@ export default function PreviewPanel({ engine, onStop }: Props) {
         <button type="button" className="btn btn-ghost" onClick={() => engine.reset()}>
           Restart
         </button>
-        <button type="button" className={`btn btn-ghost${muted ? ' active' : ''}`} onClick={toggleMute}>
+        <button type="button" className={`btn ${muted ? 'btn-accent' : 'btn-ghost'}`} onClick={toggleMute}>
           {muted ? 'Unmute' : 'Mute'}
         </button>
         <button type="button" className="btn btn-danger" onClick={onStop}>

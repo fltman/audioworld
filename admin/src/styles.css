@@ -8,7 +8,24 @@
   --text: #e7e7f0;
   --muted: #9a9ab0;
   --danger: #ff5d6c;
-  --radius: 10px;
+
+  /* Radius scale (replaces the single unused --radius + ad-hoc 4/5/6/8/10px literals). */
+  --radius-sm: 6px; /* compact/icon buttons, mini badges */
+  --radius-md: 8px; /* buttons, inputs, list rows, inset panels */
+  --radius-lg: 10px; /* cards, panels */
+  --radius-pill: 999px;
+  --radius: var(--radius-md); /* back-compat alias */
+
+  /* Semantic colours + on-dark tints (fold the duplicated ambers/greens/blues into one each). */
+  --info: #8ad4ff;
+  --info-tint: rgba(138, 212, 255, 0.14);
+  --warn: var(--warn);
+  --warn-strong: #d9a13a;
+  --success: #4ade80; /* AA-passing on dark; replaces the too-dark #1f9d5f */
+  --success-tint: rgba(74, 222, 128, 0.14);
+  --danger-text: #ffc4ca;
+  --danger-tint: rgba(255, 93, 108, 0.12);
+  --accent-tint: rgba(124, 92, 255, 0.16);
 }
 
 * {
@@ -150,12 +167,12 @@ body {
   border-radius: 5px;
 }
 .kind--sfx {
-  color: #f9c974;
+  color: var(--warn);
   background: rgba(249, 201, 116, 0.14);
 }
 .kind--voice {
-  color: #8ad4ff;
-  background: rgba(138, 212, 255, 0.14);
+  color: var(--info);
+  background: var(--info-tint);
 }
 .kind--clip {
   color: var(--muted);
@@ -234,8 +251,8 @@ body {
   margin-left: auto;
 }
 .used-pill {
-  color: #8ad4ff;
-  background: rgba(138, 212, 255, 0.14);
+  color: var(--info);
+  background: var(--info-tint);
   padding: 1px 7px;
   border-radius: 999px;
   font-weight: 600;
@@ -337,11 +354,11 @@ body {
 }
 .role--admin {
   color: var(--accent);
-  background: rgba(124, 92, 255, 0.16);
+  background: var(--accent-tint);
 }
 .role--super {
-  color: #8ad4ff;
-  background: rgba(138, 212, 255, 0.14);
+  color: var(--info);
+  background: var(--info-tint);
 }
 .role--basic {
   color: var(--muted);
@@ -394,7 +411,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--accent);
-  background: rgba(124, 92, 255, 0.16);
+  background: var(--accent-tint);
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -415,7 +432,7 @@ body {
   color: var(--accent);
 }
 .user-card .role-select.role--super {
-  color: #8ad4ff;
+  color: var(--info);
 }
 .users__legend {
   font-size: 12px;
@@ -639,10 +656,10 @@ body {
 .banner {
   margin: 0 18px;
   padding: 10px 12px;
-  background: rgba(255, 93, 108, 0.12);
+  background: var(--danger-tint);
   border: 1px solid var(--danger);
   border-radius: 8px;
-  color: #ffc4ca;
+  color: var(--danger-text);
   font-size: 13px;
   display: flex;
   gap: 10px;
@@ -692,7 +709,7 @@ body {
 
 .type-btn--active {
   border-color: var(--accent);
-  background: rgba(124, 92, 255, 0.16);
+  background: var(--accent-tint);
 }
 
 .placing-bar {
@@ -743,6 +760,13 @@ body {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.4;
+}
+/* Inline hint text — was rendering at browser-default 16px without a global rule. */
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 6px 0 0;
 }
 
 .geo-status {
@@ -918,12 +942,12 @@ input[type='range'] {
   border-color: var(--line);
 }
 .publish__pill--dirty {
-  color: #d9a13a;
+  color: var(--warn-strong);
   background: rgba(255, 207, 107, 0.16);
   border-color: rgba(255, 207, 107, 0.45);
 }
 .publish__pill--live {
-  color: #1f9d5f;
+  color: var(--success);
   background: rgba(92, 255, 157, 0.16);
   border-color: rgba(92, 255, 157, 0.45);
 }
@@ -941,7 +965,7 @@ input[type='range'] {
   gap: 6px;
 }
 .flight__item {
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.4;
   padding: 6px 10px;
   border-radius: 6px;
@@ -953,9 +977,9 @@ input[type='range'] {
   border-color: #ff7a9c;
 }
 .flight__item--warn {
-  color: #ffcf6b;
+  color: var(--warn);
   background: rgba(255, 207, 107, 0.12);
-  border-color: #ffcf6b;
+  border-color: var(--warn);
 }
 /* A flight-check issue tied to a point is a button that jumps to it. */
 .flight__fix {
@@ -995,8 +1019,8 @@ input[type='range'] {
 
 .error {
   font-size: 12px;
-  color: #ffc4ca;
-  background: rgba(255, 93, 108, 0.12);
+  color: var(--danger-text);
+  background: var(--danger-tint);
   border: 1px solid var(--danger);
   border-radius: 8px;
   padding: 8px 10px;
@@ -1051,41 +1075,6 @@ input[type='range'] {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.sound-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-.sound-row__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sound-row__name {
-  flex: 1;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sound-row__meta {
-  font-size: 11px;
-  color: var(--muted);
-  font-family: ui-monospace, monospace;
-}
-
-.sound-row__audio {
-  width: 100%;
-  height: 32px;
 }
 
 /* ---------- Map ---------- */
@@ -1225,11 +1214,6 @@ input[type='range'] {
 }
 
 /* ---------- Playtest (in-admin simulation) ---------- */
-.playtest-btn {
-  width: 100%;
-  margin: 4px 0 4px;
-  justify-content: center;
-}
 .preview .actions {
   margin-top: 10px;
 }
@@ -1482,11 +1466,11 @@ input[type='range'] {
   text-transform: uppercase;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--accent);
-  background: rgba(124, 92, 255, 0.16);
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: var(--accent-tint);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
 }
 
 .user-list {
@@ -1542,7 +1526,7 @@ input[type='range'] {
   padding: 2px 8px;
   border-radius: 999px;
 }
-.fc-acc--good { color: #4ade80; background: rgba(74, 222, 128, 0.14); }
+.fc-acc--good { color: var(--success); background: var(--success-tint); }
 .fc-acc--ok { color: #fbbf24; background: rgba(251, 191, 36, 0.14); }
 .fc-acc--poor { color: var(--danger); background: rgba(255, 93, 108, 0.14); }
 .fc-audio {
@@ -1557,7 +1541,7 @@ input[type='range'] {
 }
 .fc-audio-ok {
   font-size: 13px;
-  color: #4ade80;
+  color: var(--success);
 }
 .fc-note {
   font-size: 13px;
@@ -1805,7 +1789,7 @@ input[type='range'] {
   gap: 10px;
   padding: 12px;
   margin-bottom: 14px;
-  border: 1px solid var(--line-2, var(--accent));
+  border: 1px solid var(--accent);
   border-radius: 10px;
   background: rgba(124, 92, 255, 0.06);
 }
@@ -1832,10 +1816,6 @@ input[type='range'] {
 .gen-off {
   font-size: 13px;
   margin: 0 0 12px;
-}
-.error {
-  color: var(--danger);
-  font-size: 12.5px;
 }
 
 /* ---------- Discover places ---------- */
@@ -1865,7 +1845,7 @@ input[type='range'] {
   grid-template-columns: 1fr 1fr;
   gap: 6px 12px;
 }
-.discover-cats .check { font-size: 12.5px; }
+.discover-cats .check { font-size: 12px; }
 .discover-head {
   display: flex;
   align-items: center;
