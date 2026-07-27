@@ -16,7 +16,7 @@ import type {
   User,
 } from '@audioworld/shared';
 import { anchorOf, flightCheck } from '@audioworld/shared';
-import { api, getToken, setToken, wikipediaExtract } from './api';
+import { absoluteAudioUrl, api, getToken, setToken, wikipediaExtract } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
 import { isPathType } from './pointTypes';
 import NewCourseForm from './components/NewCourseForm';
@@ -40,6 +40,33 @@ import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/**
+ * Best-effort clip length (seconds) from its metadata, or null. Times out so a missing/slow
+ * file (a 404 fires neither `loadedmetadata` nor `error` in some browsers) can never hang.
+ */
+function measureDuration(url: string, timeoutMs = 4000): Promise<number | null> {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    let timer = 0;
+    const done = (v: number | null) => {
+      window.clearTimeout(timer);
+      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('error', onErr);
+      resolve(v);
+    };
+    const onMeta = () => done(Number.isFinite(audio.duration) ? audio.duration : null);
+    const onErr = () => done(null);
+    timer = window.setTimeout(() => done(null), timeoutMs);
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('error', onErr);
+    audio.src = url;
+  });
+}
+
+/** Provisional dwell (s) for a folded-in clip until its real length is measured. */
+const DEFAULT_ABSORB_DWELL = 8;
 
 /** Which utility panel the right inspector shows when you're not editing a point. */
 type Tool = 'zones' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
@@ -488,8 +515,50 @@ export default function App() {
       return { ...d, path };
     });
 
+  // While drawing a path, clicking an existing point folds it into the route: its location
+  // becomes a vertex and (if it has a clip) a narrated stop. The original point is deleted
+  // when the path is saved (so cancelling the path leaves everything untouched).
+  const absorbPointIntoPath = async (id: string) => {
+    const p = points.find((x) => x.id === id);
+    if (!p || !draft?.drawingPath || draft.absorbedIds.includes(id)) return;
+    const coord = anchorOf(p);
+    const clip = p.audio.url
+      ? { kind: p.audio.kind, url: p.audio.url, title: p.audio.title ?? p.name }
+      : null;
+    const index = draft.path.length; // this fold's vertex (and stop) index
+    // Fold the point in immediately with a provisional dwell — measuring the clip length can
+    // stall (missing file, slow host), so it must never block the fold.
+    setDraft((d) => {
+      if (!d || !d.drawingPath || d.absorbedIds.includes(p.id)) return d;
+      const stops = clip
+        ? [...d.stops, { index, dwellSec: DEFAULT_ABSORB_DWELL, audio: clip }]
+        : d.stops;
+      return { ...d, path: [...d.path, coord], stops, absorbedIds: [...d.absorbedIds, p.id] };
+    });
+    // Refine the dwell to the clip's true length once known (best-effort, times out).
+    if (clip) {
+      const dur = await measureDuration(absoluteAudioUrl(clip.url));
+      if (dur) {
+        const dwellSec = Math.ceil(dur);
+        setDraft((d) =>
+          d
+            ? {
+                ...d,
+                stops: d.stops.map((s) =>
+                  s.index === index && s.audio?.url === clip.url ? { ...s, dwellSec } : s
+                ),
+              }
+            : d
+        );
+      }
+    }
+  };
+
   const selectPoint = (id: string) => {
-    if (draft?.drawingPath) return;
+    if (draft?.drawingPath) {
+      void absorbPointIntoPath(id);
+      return;
+    }
     editPoint(id);
   };
 
@@ -628,6 +697,7 @@ export default function App() {
       setFormError(result.error);
       return;
     }
+    const absorbed = draft.absorbedIds;
     setSaving(true);
     setFormError(null);
     try {
@@ -636,7 +706,9 @@ export default function App() {
         setPoints((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
         const created = await api.createPoint(draft.courseId, result.input);
-        setPoints((prev) => [...prev, created]);
+        // Points folded into this path (their audio is now its stops) are removed.
+        await Promise.all(absorbed.map((id) => api.deletePoint(id).catch(() => undefined)));
+        setPoints((prev) => [...prev.filter((p) => !absorbed.includes(p.id)), created]);
       }
       setDraft(null);
     } catch (e) {
@@ -648,6 +720,10 @@ export default function App() {
 
   const activeType = draft?.type ?? null;
   const placing = !!draft && draft.editingId === null;
+  // Points folded into the path being drawn vanish from the map/list until it's saved.
+  const visiblePoints = draft?.absorbedIds.length
+    ? points.filter((p) => !draft.absorbedIds.includes(p.id))
+    : points;
   const visibleCourses =
     user?.role === 'admin' ? courses : courses.filter((c) => c.ownerId === user?.id);
 
@@ -891,7 +967,7 @@ export default function App() {
                     </div>
                   </div>
                   <PointList
-                    points={points}
+                    points={visiblePoints}
                     onEdit={editPoint}
                     onDelete={deletePoint}
                     editingId={draft?.editingId ?? null}
@@ -901,7 +977,7 @@ export default function App() {
             </aside>
 
             <MapView
-              points={points}
+              points={visiblePoints}
               draft={draft}
               fitToken={fitToken}
               onMapClick={mapClick}

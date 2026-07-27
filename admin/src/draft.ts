@@ -39,6 +39,8 @@ export interface DraftState {
   path: Coordinates[];
   /** Guided-tour stops (dwell + optional clip) for `path`. */
   stops: PathStop[];
+  /** Existing points folded into this path while drawing — deleted when the path saves. */
+  absorbedIds: string[];
   /** True while the user is still adding path vertices. */
   drawingPath: boolean;
   radius: number;
@@ -136,6 +138,7 @@ export function freshDraft(type: PointType, courseId: string): DraftState {
     center: null,
     path: [],
     stops: [],
+    absorbedIds: [],
     drawingPath: isPathType(type),
     ...NUMERIC_DEFAULTS,
     // The static jumpscare shares the triggerRadius field but starts off (0).
@@ -164,6 +167,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     center: null,
     path: [],
     stops: [],
+    absorbedIds: [],
     drawingPath: false,
     ...NUMERIC_DEFAULTS,
     endBehavior: 'loop',

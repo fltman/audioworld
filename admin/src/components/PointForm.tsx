@@ -234,7 +234,8 @@ export default function PointForm(props: Props) {
         draft.drawingPath ? (
           <div className="geo-status">
             <span>
-              {draft.path.length} point{draft.path.length === 1 ? '' : 's'} · click the map to add
+              {draft.path.length} point{draft.path.length === 1 ? '' : 's'} · click the map, or a
+              point to fold it in
             </span>
             <span className="row-actions">
               <button
