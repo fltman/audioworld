@@ -47,7 +47,7 @@ type Tool = 'zones' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' |
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [tab, setTab] = useState<'courses' | 'sounds' | 'users'>('courses');
+  const [tab, setTab] = useState<'courses' | 'sounds' | 'guides' | 'users'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [points, setPoints] = useState<AudioPoint[]>([]);
@@ -726,6 +726,13 @@ export default function App() {
           >
             Sounds
           </button>
+          <button
+            type="button"
+            className={`tab${tab === 'guides' ? ' is-active' : ''}`}
+            onClick={() => setTab('guides')}
+          >
+            Guides
+          </button>
           {user.role === 'admin' && (
             <button
               type="button"
@@ -799,6 +806,9 @@ export default function App() {
         ) : tab === 'sounds' ? (
           <div className="workspace-panel">
             <SoundLibrary />
+          </div>
+        ) : tab === 'guides' ? (
+          <div className="workspace-panel">
             <CharacterManager characters={characters} onChange={setCharacters} />
           </div>
         ) : (

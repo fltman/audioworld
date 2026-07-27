@@ -174,6 +174,55 @@ export default function PointForm(props: Props) {
     }
   };
 
+  // The current clip's player (only when there IS a clip).
+  const clipPlayer = audio.url.trim() ? (
+    <audio className="clip-preview" controls preload="none" src={absoluteAudioUrl(audio.url.trim())} />
+  ) : null;
+
+  // The manual audio-source picker (URL / upload). Primary for path travelling audio,
+  // secondary (collapsed) for non-path points that are usually voiced via Narrate.
+  const manualSource = (
+    <>
+      <div className="seg">
+        <button
+          type="button"
+          className={audio.kind === 'url' ? 'active' : ''}
+          onClick={() => onChange({ audio: { ...audio, kind: 'url' } })}
+        >
+          URL
+        </button>
+        <button
+          type="button"
+          className={audio.kind === 'upload' ? 'active' : ''}
+          onClick={() => onChange({ audio: { ...audio, kind: 'upload' } })}
+        >
+          Upload
+        </button>
+      </div>
+      {audio.kind === 'url' ? (
+        <input
+          className="input"
+          placeholder="https://…/sound.mp3"
+          value={audio.url}
+          onChange={(e) => onChange({ audio: { ...audio, url: e.currentTarget.value } })}
+        />
+      ) : (
+        <div className="upload">
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={(e) => {
+              const f = e.currentTarget.files?.[0];
+              if (f) onUpload(f);
+            }}
+          />
+          {uploading && <span className="muted">Uploading…</span>}
+          {!uploading && audio.url && <span className="muted">{audio.title ?? audio.url}</span>}
+        </div>
+      )}
+    </>
+  );
+
   return (
     <section className="section form">
       <div className="section-title">
@@ -231,52 +280,14 @@ export default function PointForm(props: Props) {
       </label>
 
       <div className="form-field">
-        <span className="label">Audio</span>
-        <div className="seg">
-          <button
-            type="button"
-            className={audio.kind === 'url' ? 'active' : ''}
-            onClick={() => onChange({ audio: { ...audio, kind: 'url' } })}
-          >
-            URL
-          </button>
-          <button
-            type="button"
-            className={audio.kind === 'upload' ? 'active' : ''}
-            onClick={() => onChange({ audio: { ...audio, kind: 'upload' } })}
-          >
-            Upload
-          </button>
-        </div>
-        {audio.kind === 'url' ? (
-          <input
-            className="input"
-            placeholder="https://…/sound.mp3"
-            value={audio.url}
-            onChange={(e) => onChange({ audio: { ...audio, url: e.currentTarget.value } })}
-          />
-        ) : (
-          <div className="upload">
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={(e) => {
-                const f = e.currentTarget.files?.[0];
-                if (f) onUpload(f);
-              }}
-            />
-            {uploading && <span className="muted">Uploading…</span>}
-            {!uploading && audio.url && <span className="muted">{audio.title ?? audio.url}</span>}
-          </div>
-        )}
-
-        {audio.url.trim() && (
-          <audio
-            className="clip-preview"
-            controls
-            preload="none"
-            src={absoluteAudioUrl(audio.url.trim())}
-          />
+        {/* Path types carry a "travelling" clip set manually. Non-path points lead with
+            facts + AI narration below; their manual source is tucked away at the end. */}
+        {isPathType(draft.type) && (
+          <>
+            <span className="label">Travelling audio</span>
+            {manualSource}
+            {clipPlayer}
+          </>
         )}
 
         {/* The facts the narration draws on (a discovered place stores its OSM facts here).
@@ -319,6 +330,20 @@ export default function PointForm(props: Props) {
             title={draft.name}
             onGenerated={(a) => onChange({ audio: a })}
           />
+        )}
+
+        {/* The resulting clip, then the manual source as a tucked-away fallback. */}
+        {!isPathType(draft.type) && clipPlayer && (
+          <div className="form-field">
+            <span className="label">Audio clip</span>
+            {clipPlayer}
+          </div>
+        )}
+        {!isPathType(draft.type) && (
+          <details className="lang-variants">
+            <summary>Set the audio manually</summary>
+            {manualSource}
+          </details>
         )}
 
         {(() => {
