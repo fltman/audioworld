@@ -200,6 +200,40 @@ export async function enhancePersona(input: { name?: string; seed?: string }): P
     .slice(0, 4000);
 }
 
+const NARRATION_SYSTEM =
+  'You write short spoken narration for a location-based audio tour. Given FACTS about a ' +
+  'place and (optionally) a guide PERSONA, rewrite the facts into vivid, natural spoken ' +
+  'narration a visitor hears on arrival (2–5 sentences). If a persona is given, speak in ' +
+  'its voice, manner and vocabulary; otherwise use a warm, neutral guide tone. Stay faithful ' +
+  'to the facts — never invent. Reply with ONLY the narration text: no preamble, no quotes. ' +
+  'You may use sparse inline eleven_v3 tags like [warmly].';
+
+/** Rewrite a point's facts into spoken narration, optionally in a guide's persona. */
+export async function writeNarration(input: {
+  facts: string;
+  persona?: string;
+  title?: string;
+}): Promise<string> {
+  const facts = (input.facts ?? '').trim().slice(0, 4000);
+  if (!facts) throw new OpenRouterError('There are no facts to narrate — add some first', 400);
+  const persona = (input.persona ?? '').trim().slice(0, 2000);
+  const lines: string[] = [];
+  if (input.title?.trim()) lines.push(`Place: ${input.title.trim().slice(0, 120)}`);
+  if (persona) lines.push(`Guide persona: """${persona}"""`);
+  lines.push(`Facts: """${facts}"""`);
+  const content = await chatCompletion(
+    [
+      { role: 'system', content: NARRATION_SYSTEM },
+      { role: 'user', content: lines.join('\n\n') },
+    ],
+    2000
+  );
+  return content
+    .replace(/```[a-z]*|```/gi, '')
+    .trim()
+    .slice(0, 4000);
+}
+
 const AUDIO_FORMAT: Record<string, string> = {
   '.mp3': 'mp3',
   '.wav': 'wav',

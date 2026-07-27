@@ -316,6 +316,7 @@ export default function PointForm(props: Props) {
             characters={props.characters}
             audio={audio}
             initialText={audio.description || draft.name}
+            title={draft.name}
             onGenerated={(a) => onChange({ audio: a })}
           />
         )}

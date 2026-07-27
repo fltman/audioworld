@@ -4,7 +4,13 @@ import { asyncHandler } from '../lib/http';
 import { rateLimit } from '../lib/rateLimit';
 import { requireRole, type AuthedRequest } from '../lib/auth';
 import { setMeta } from '../models/upload';
-import { OpenRouterError, describeClip, enhancePersona, openrouterConfigured } from '../lib/openrouter';
+import {
+  OpenRouterError,
+  describeClip,
+  enhancePersona,
+  openrouterConfigured,
+  writeNarration,
+} from '../lib/openrouter';
 
 export const enhanceRouter = Router();
 
@@ -27,6 +33,22 @@ enhanceRouter.post(
     const seed = typeof b.persona === 'string' ? b.persona : '';
     const persona = await enhancePersona({ name, seed });
     res.json({ success: true, data: { persona } });
+  })
+);
+
+enhanceRouter.post(
+  '/narration',
+  dailyPaidLimit,
+  asyncHandler(async (req, res) => {
+    if (!openrouterConfigured()) {
+      throw new OpenRouterError('AI narration is not configured (no OpenRouter API key).', 503);
+    }
+    const b = (req.body ?? {}) as { facts?: unknown; persona?: unknown; title?: unknown };
+    const facts = typeof b.facts === 'string' ? b.facts : '';
+    const persona = typeof b.persona === 'string' ? b.persona : '';
+    const title = typeof b.title === 'string' ? b.title : '';
+    const narration = await writeNarration({ facts, persona, title });
+    res.json({ success: true, data: { narration } });
   })
 );
 

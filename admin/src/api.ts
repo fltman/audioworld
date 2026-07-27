@@ -197,6 +197,10 @@ export const api = {
   enhancePersona: (name: string, persona: string) =>
     request<{ persona: string }>('/api/enhance/persona', jsonBody('POST', { name, persona })),
 
+  // AI-write spoken narration from a point's facts, optionally in a guide's persona.
+  writeNarration: (facts: string, persona: string, title: string) =>
+    request<{ narration: string }>('/api/enhance/narration', jsonBody('POST', { facts, persona, title })),
+
   // AI-listen to a sound clip and suggest a descriptive name + sfx/voice class. 503 if unconfigured.
   enhanceClip: (url: string) =>
     request<{ description: string; kind: ClipKind }>('/api/enhance/clip', jsonBody('POST', { url })),

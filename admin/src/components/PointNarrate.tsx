@@ -9,6 +9,8 @@ interface Props {
   audio: AudioSource;
   /** Prefill for the narration text (the point's facts, or its name). */
   initialText: string;
+  /** The point's name, for narration context. */
+  title: string;
   /** Called with the new audio once TTS is generated. */
   onGenerated: (audio: AudioSource) => void;
 }
@@ -18,7 +20,13 @@ interface Props {
  * plain voice, and generate the speech — used to voice a discovered place you've decided
  * to keep. Uses ElevenLabs credits, on an explicit click only.
  */
-export default function PointNarrate({ characters, audio, initialText, onGenerated }: Props) {
+export default function PointNarrate({
+  characters,
+  audio,
+  initialText,
+  title,
+  onGenerated,
+}: Props) {
   const [voices, setVoices] = useState<ElevenVoice[]>([]);
   const [ttsOff, setTtsOff] = useState(false);
   const [voicesError, setVoicesError] = useState<string | null>(null);
@@ -26,10 +34,37 @@ export default function PointNarrate({ characters, audio, initialText, onGenerat
   const [pick, setPick] = useState('');
   const [text, setText] = useState(initialText);
   const [busy, setBusy] = useState(false);
+  const [writing, setWriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   const guides = characters.filter((c) => c.voiceId);
+  const pickedGuide = pick.startsWith('g:') ? characters.find((c) => c.id === pick.slice(2)) : undefined;
+
+  // Step 1: AI writes the spoken narration from the facts, in the picked guide's persona.
+  const write = async () => {
+    const facts = (audio.description ?? '').trim();
+    if (!facts) {
+      setError('Add some facts above first — the narration is written from them.');
+      return;
+    }
+    setWriting(true);
+    setError(null);
+    try {
+      const { narration } = await api.writeNarration(facts, pickedGuide?.persona ?? '', title);
+      setText(narration);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 503
+          ? 'AI writing is off — set OPENROUTER_API_KEY on the server.'
+          : e instanceof Error
+            ? e.message
+            : 'Writing failed'
+      );
+    } finally {
+      setWriting(false);
+    }
+  };
 
   useEffect(() => {
     api
@@ -84,48 +119,73 @@ export default function PointNarrate({ characters, audio, initialText, onGenerat
   return (
     <details className="stop-narrate">
       <summary>✨ Narrate this point{audio.url ? '' : ' — not voiced yet'}</summary>
-      <div className="label-row">
-        <span className="label">Narration (what’s spoken)</span>
+
+      <label className="form-field">
+        <span className="label">Voice / persona</span>
+        <select className="select" value={pick} onChange={(e) => setPick(e.currentTarget.value)}>
+          {guides.length > 0 && (
+            <optgroup label="Guides (persona)">
+              {guides.map((c) => (
+                <option key={c.id} value={`g:${c.id}`}>
+                  🎭 {c.name}
+                  {c.voiceName ? ` · ${c.voiceName}` : ''}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {voices.length > 0 && (
+            <optgroup label="Voices">
+              {voices.map((v) => (
+                <option key={v.id} value={`v:${v.id}`}>
+                  {v.name}
+                  {v.category ? ` · ${v.category}` : ''}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </label>
+
+      {/* Step 1 — write the spoken narration from the facts, in the chosen persona. */}
+      <div className="row-actions">
+        <button
+          type="button"
+          className="btn btn-accent small"
+          onClick={() => void write()}
+          disabled={writing || !(audio.description ?? '').trim()}
+          title="Let the AI retell the facts as spoken narration in this persona"
+        >
+          {writing
+            ? '✨ Writing…'
+            : pickedGuide
+              ? `✨ Write in ${pickedGuide.name}’s voice`
+              : '✨ Write narration'}
+        </button>
         {audio.description && audio.description.trim() !== text.trim() && (
           <button
             type="button"
             className="btn btn-ghost small"
             onClick={() => setText(audio.description ?? '')}
-            title="Replace the narration with the current Facts text"
+            title="Use the facts verbatim as the narration"
           >
-            ↻ Use facts
+            ↻ Facts verbatim
           </button>
         )}
       </div>
-      <textarea
-        className="textarea"
-        placeholder="What the listener hears here… eleven_v3 tags like [warmly] work."
-        value={text}
-        onChange={(e) => setText(e.currentTarget.value)}
-      />
+
+      <label className="form-field">
+        <span className="label">Narration (what’s spoken)</span>
+        <textarea
+          className="textarea"
+          placeholder="What the listener hears here — write it yourself or ✨ Write above. eleven_v3 tags like [warmly] work."
+          value={text}
+          onChange={(e) => setText(e.currentTarget.value)}
+        />
+      </label>
+
       {voicesError && <div className="error">Voices unavailable: {voicesError}</div>}
-      <select className="select" value={pick} onChange={(e) => setPick(e.currentTarget.value)}>
-        {guides.length > 0 && (
-          <optgroup label="Guides (persona)">
-            {guides.map((c) => (
-              <option key={c.id} value={`g:${c.id}`}>
-                🎭 {c.name}
-                {c.voiceName ? ` · ${c.voiceName}` : ''}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {voices.length > 0 && (
-          <optgroup label="Voices">
-            {voices.map((v) => (
-              <option key={v.id} value={`v:${v.id}`}>
-                {v.name}
-                {v.category ? ` · ${v.category}` : ''}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
+
+      {/* Step 2 — render the narration to audio with the chosen voice. */}
       <div className="row-actions">
         <button
           type="button"
@@ -133,10 +193,11 @@ export default function PointNarrate({ characters, audio, initialText, onGenerat
           onClick={() => void generate()}
           disabled={busy || !text.trim() || !resolveVoiceId()}
         >
-          {busy ? 'Generating…' : done ? 'Voiced ✓' : audio.url ? 'Re-generate & set' : 'Generate & set audio'}
+          {busy ? '🔊 Rendering…' : done ? 'Rendered ✓' : audio.url ? '🔊 Re-render audio' : '🔊 Render audio'}
         </button>
         <span className="muted gen-note">Uses ElevenLabs credits.</span>
       </div>
+      {error && <div className="error">{error}</div>}
     </details>
   );
 }
