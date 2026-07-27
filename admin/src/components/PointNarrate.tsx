@@ -84,6 +84,19 @@ export default function PointNarrate({ characters, audio, initialText, onGenerat
   return (
     <details className="stop-narrate">
       <summary>✨ Narrate this point{audio.url ? '' : ' — not voiced yet'}</summary>
+      <div className="label-row">
+        <span className="label">Narration (what’s spoken)</span>
+        {audio.description && audio.description.trim() !== text.trim() && (
+          <button
+            type="button"
+            className="btn btn-ghost small"
+            onClick={() => setText(audio.description ?? '')}
+            title="Replace the narration with the current Facts text"
+          >
+            ↻ Use facts
+          </button>
+        )}
+      </div>
       <textarea
         className="textarea"
         placeholder="What the listener hears here… eleven_v3 tags like [warmly] work."

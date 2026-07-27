@@ -262,6 +262,22 @@ export default function PointForm(props: Props) {
           />
         )}
 
+        {/* The facts the narration draws on (a discovered place stores its OSM facts here).
+            Editable + visible so you can refine what the AI/voice works from. */}
+        {!isPathType(draft.type) && (
+          <label className="form-field">
+            <span className="label">Facts / notes — what this point is about</span>
+            <textarea
+              className="textarea"
+              placeholder="Facts the narration draws on — e.g. “12th-century castle, seat of the county governor…”"
+              value={audio.description ?? ''}
+              onChange={(e) =>
+                onChange({ audio: { ...audio, description: e.currentTarget.value || undefined } })
+              }
+            />
+          </label>
+        )}
+
         {/* Voice a single-audio point later (e.g. a discovered place), optionally with a
             persona. Path types voice per stop / via an assigned guide instead. */}
         {!isPathType(draft.type) && (
