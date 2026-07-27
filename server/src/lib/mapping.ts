@@ -146,8 +146,11 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
   if (audio.kind !== 'url' && audio.kind !== 'upload') {
     throw new ValidationError('audio.kind must be "url" or "upload"');
   }
-  if (typeof audio.url !== 'string' || audio.url.trim() === '') {
-    throw new ValidationError('audio.url is required');
+  // The url may be empty for a not-yet-voiced point (e.g. a discovered place awaiting
+  // narration). flightCheck flags such points as errors and publish stays blocked until
+  // they're voiced, so a silent point can never ship by accident.
+  if (typeof audio.url !== 'string') {
+    throw new ValidationError('audio.url must be a string');
   }
 
   let audioTags: string[] | null = null;
@@ -192,7 +195,7 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
     name: body.name,
     type: pointType,
     audio_kind: audio.kind,
-    audio_url: audio.url,
+    audio_url: audio.url.trim(),
     audio_title: typeof audio.title === 'string' ? audio.title : null,
     audio_description: typeof audio.description === 'string' ? audio.description : null,
     audio_tags: audioTags,

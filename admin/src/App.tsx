@@ -201,9 +201,9 @@ export default function App() {
     return route;
   };
 
-  // Convert selected discovered places into narrated static points (one TTS clip each,
-  // in the chosen voice). "route" just orders them for a sensible walk.
-  const runConvert = async (mode: 'individual' | 'route', voiceId: string) => {
+  // Add selected discovered places as silent static points carrying their facts (voiced
+  // later in the editor — no TTS here). "route" just orders them for a sensible walk.
+  const runConvert = async (mode: 'individual' | 'route') => {
     if (!courseId) return;
     let chosen = selectedPlaces
       .map((i) => discoverPlaces[i])
@@ -216,15 +216,18 @@ export default function App() {
     const converted = new Set<DiscoveredPlace>();
     try {
       for (const p of chosen) {
-        const text = p.description ? `${p.name}. ${p.description}` : p.name;
-        const clip = await api.generateTts(text, voiceId, 'eleven_v3');
+        // Add each place as a silent point that carries its facts; you voice it later
+        // (optionally with a persona) in the point editor. No TTS / credits spent here.
+        const facts = [p.description, p.wikipedia ? `Wikipedia: ${p.wikipedia}` : '']
+          .filter(Boolean)
+          .join('\n');
         const input: AudioPointInput = {
           courseId,
           name: p.name,
           type: 'static',
           center: { lat: p.lat, lng: p.lng },
           radius: 30,
-          audio: { kind: 'upload', url: clip.url, title: p.name },
+          audio: { kind: 'url', url: '', title: p.name, ...(facts ? { description: facts } : {}) },
           playback: { loop: false, stopAfter: false, reload: true },
           volume: 1,
           sync: 'individual',
@@ -237,8 +240,8 @@ export default function App() {
       setError(msg(e));
     } finally {
       if (created.length) setPoints((prev) => [...prev, ...created]);
-      // Drop the places we actually converted (even on a partial failure) so a retry
-      // only re-runs the remainder — never re-narrating/re-creating (double-spending).
+      // Drop the places we actually added (even on a partial failure) so a retry only
+      // re-runs the remainder.
       setDiscoverPlaces((prev) => prev.filter((p) => !converted.has(p)));
       setSelectedPlaces([]); // indices are stale after filtering; user re-selects the rest
       setConverting(null);
@@ -885,7 +888,7 @@ export default function App() {
                   onToggle={togglePlace}
                   onSelectAll={() => setSelectedPlaces(discoverPlaces.map((_, i) => i))}
                   onClear={() => setSelectedPlaces([])}
-                  onConvert={(mode, voiceId) => void runConvert(mode, voiceId)}
+                  onConvert={(mode) => void runConvert(mode)}
                   converting={converting}
                 />
               </Section>

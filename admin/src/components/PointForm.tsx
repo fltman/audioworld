@@ -11,6 +11,7 @@ import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
 import { absoluteAudioUrl, api } from '../api';
+import PointNarrate from './PointNarrate';
 
 /** Seconds -> m:ss. */
 function fmtTime(sec: number): string {
@@ -258,6 +259,18 @@ export default function PointForm(props: Props) {
             controls
             preload="none"
             src={absoluteAudioUrl(audio.url.trim())}
+          />
+        )}
+
+        {/* Voice a single-audio point later (e.g. a discovered place), optionally with a
+            persona. Path types voice per stop / via an assigned guide instead. */}
+        {!isPathType(draft.type) && (
+          <PointNarrate
+            key={draft.editingId ?? 'new'}
+            characters={props.characters}
+            audio={audio}
+            initialText={audio.description || draft.name}
+            onGenerated={(a) => onChange({ audio: a })}
           />
         )}
 

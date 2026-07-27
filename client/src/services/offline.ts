@@ -57,7 +57,8 @@ export function packMeta(courseId: string): PackMeta | null {
 function audioUrlsOf(points: AudioPoint[], zones: AcousticZone[]): string[] {
   const urls = new Set<string>();
   const addClip = (audio: AudioSource): void => {
-    for (const u of clipUrls(audio)) urls.add(absoluteAudioUrl(u));
+    // Skip empty urls (a not-yet-voiced point) so we don't fetch '' (→ the SPA HTML).
+    for (const u of clipUrls(audio)) if (u.trim()) urls.add(absoluteAudioUrl(u));
   };
   for (const p of points) {
     addClip(p.audio);

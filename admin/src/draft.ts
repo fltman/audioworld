@@ -262,8 +262,10 @@ export type DraftResult =
 export function draftToInput(d: DraftState): DraftResult {
   const name = d.name.trim();
   if (!name) return { error: 'Name is required.' };
+  // url may be empty: a not-yet-voiced point (e.g. a discovered place awaiting narration)
+  // is a valid draft. flightCheck flags it and publish stays blocked until it's voiced, so
+  // editing/moving/cloning such a point must not be blocked here.
   const url = d.audio.url.trim();
-  if (!url) return { error: 'An audio URL or uploaded file is required.' };
 
   const common = {
     courseId: d.courseId,
