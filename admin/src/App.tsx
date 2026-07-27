@@ -776,26 +776,12 @@ export default function App() {
                 onPick={pickType}
                 onCancel={cancelDraft}
               />
-              {draft ? (
-                <PointForm
-                  draft={draft}
-                  onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
-                  onSave={save}
-                  onCancel={cancelDraft}
-                  onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
-                  onUpload={uploadAudio}
-                  onUploadFile={uploadFile}
-                  onFinishPath={finishPath}
-                  onUndoVertex={undoVertex}
-                  onAddPoints={addPoints}
-                  characters={characters}
-                  saving={saving}
-                  uploading={uploading}
-                  error={formError}
-                />
-              ) : (
-                <PointList points={points} onEdit={editPoint} onDelete={deletePoint} />
-              )}
+              <PointList
+                points={points}
+                onEdit={editPoint}
+                onDelete={deletePoint}
+                editingId={draft?.editingId ?? null}
+              />
               <ZonePanel
                 zones={zones}
                 drawing={zoneDraft != null}
@@ -949,6 +935,27 @@ export default function App() {
         selectedPlaces={selectedPlaces}
         onTogglePlace={togglePlace}
       />
+
+      {tab === 'courses' && draft && (
+        <aside className="inspector">
+          <PointForm
+            draft={draft}
+            onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+            onSave={save}
+            onCancel={cancelDraft}
+            onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
+            onUpload={uploadAudio}
+            onUploadFile={uploadFile}
+            onFinishPath={finishPath}
+            onUndoVertex={undoVertex}
+            onAddPoints={addPoints}
+            characters={characters}
+            saving={saving}
+            uploading={uploading}
+            error={formError}
+          />
+        </aside>
+      )}
     </div>
   );
 }

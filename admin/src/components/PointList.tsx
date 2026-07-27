@@ -6,9 +6,11 @@ interface Props {
   points: AudioPoint[];
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  /** The point currently open in the inspector, highlighted in the list. */
+  editingId?: string | null;
 }
 
-export default function PointList({ points, onEdit, onDelete }: Props) {
+export default function PointList({ points, onEdit, onDelete, editingId }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   return (
@@ -21,7 +23,7 @@ export default function PointList({ points, onEdit, onDelete }: Props) {
           {points.map((p) => {
             const meta = POINT_TYPE_META[p.type];
             return (
-              <li key={p.id} className="point-row">
+              <li key={p.id} className={`point-row${editingId === p.id ? ' is-editing' : ''}`}>
                 <span className="badge" style={{ background: meta.color }} title={meta.label}>
                   {meta.short}
                 </span>
