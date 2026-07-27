@@ -1,7 +1,9 @@
+import { basename } from 'node:path';
 import { Router } from 'express';
 import { asyncHandler } from '../lib/http';
 import { rateLimit } from '../lib/rateLimit';
 import { requireRole, type AuthedRequest } from '../lib/auth';
+import { setMeta } from '../models/upload';
 import { OpenRouterError, describeClip, enhancePersona, openrouterConfigured } from '../lib/openrouter';
 
 export const enhanceRouter = Router();
@@ -37,8 +39,11 @@ enhanceRouter.post(
     }
     const url = (req.body as { url?: unknown })?.url;
     if (typeof url !== 'string') throw new OpenRouterError('A clip "url" is required', 400);
-    const description = await describeClip(url);
-    res.json({ success: true, data: { description } });
+    const { description, kind } = await describeClip(url);
+    // Persist the AI's name + classification onto the clip.
+    const filename = url.replace(/^\/uploads\//, '');
+    if (basename(filename) === filename) await setMeta(filename, description, kind);
+    res.json({ success: true, data: { description, kind } });
   })
 );
 

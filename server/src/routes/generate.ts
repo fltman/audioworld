@@ -8,7 +8,8 @@ import { asyncHandler } from '../lib/http';
 import { ValidationError } from '../lib/mapping';
 import { rateLimit } from '../lib/rateLimit';
 import { requireRole, type AuthedRequest } from '../lib/auth';
-import { setDescription } from '../models/upload';
+import type { ClipKind } from '@audioworld/shared';
+import { setMeta } from '../models/upload';
 import {
   ElevenError,
   elevenConfigured,
@@ -52,13 +53,13 @@ function requireConfigured(): void {
 }
 
 /** Persist generated mp3 bytes into the sound library, exactly like an upload. */
-async function saveToLibrary(bytes: Buffer, description: string): Promise<UploadResult> {
+async function saveToLibrary(bytes: Buffer, description: string, kind: ClipKind): Promise<UploadResult> {
   if (bytes.length > MAX_GENERATED_BYTES) {
     throw new ElevenError('Generated audio was unexpectedly large', 502);
   }
   const filename = `${randomUUID()}.mp3`;
   writeFileSync(join(UPLOAD_DIR, filename), bytes);
-  await setDescription(filename, description.slice(0, 200));
+  await setMeta(filename, description.slice(0, 200), kind);
   return { url: `/uploads/${filename}`, filename, size: bytes.length, mimetype: 'audio/mpeg' };
 }
 
@@ -92,7 +93,7 @@ generateRouter.post(
       durationSec = n;
     }
     const bytes = await generateSoundEffect(prompt, durationSec);
-    res.status(201).json({ success: true, data: await saveToLibrary(bytes, `SFX: ${prompt}`) });
+    res.status(201).json({ success: true, data: await saveToLibrary(bytes, `SFX: ${prompt}`, 'sfx') });
   })
 );
 
@@ -112,7 +113,7 @@ generateRouter.post(
     const modelId = TTS_MODELS.has(str(b.modelId)) ? str(b.modelId) : 'eleven_v3';
     const bytes = await generateTts(text, voiceId, modelId);
     const label = text.length > 60 ? `${text.slice(0, 60)}…` : text;
-    res.status(201).json({ success: true, data: await saveToLibrary(bytes, `TTS: ${label}`) });
+    res.status(201).json({ success: true, data: await saveToLibrary(bytes, `TTS: ${label}`, 'voice') });
   })
 );
 

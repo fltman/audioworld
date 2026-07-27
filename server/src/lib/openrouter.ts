@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import type { PoiInterpretation } from '@audioworld/shared';
+import type { ClipKind, PoiInterpretation } from '@audioworld/shared';
 import { OPENROUTER_API_KEY, OPENROUTER_VISION_MODEL, UPLOAD_DIR } from '../env';
 
 const URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -212,8 +212,8 @@ const AUDIO_FORMAT: Record<string, string> = {
 };
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 
-/** Listen to an uploaded clip (Gemini audio input) and return a short descriptive name. */
-export async function describeClip(uploadUrl: string): Promise<string> {
+/** Listen to an uploaded clip (Gemini audio input) → a short name + sfx/voice classification. */
+export async function describeClip(uploadUrl: string): Promise<{ description: string; kind: ClipKind }> {
   if (!uploadUrl.startsWith('/uploads/')) throw new OpenRouterError('Not an upload', 400);
   const name = basename(uploadUrl);
   const format = AUDIO_FORMAT[extname(name).toLowerCase()];
@@ -231,22 +231,37 @@ export async function describeClip(uploadUrl: string): Promise<string> {
       {
         role: 'system',
         content:
-          'You label sound-library clips. Listen to the audio and reply with ONLY a short, ' +
-          'specific descriptive name (3–7 words) — e.g. "Distant church bells over wind" or ' +
-          '"Warm female voice, calm greeting". No quotes, no preamble.',
+          'You label sound-library clips. Listen to the audio and reply with ONLY JSON: ' +
+          '{"name": "<short specific name, 3–7 words>", "kind": "voice" | "sfx"}. ' +
+          '"voice" = speech/narration/singing; "sfx" = any non-speech sound effect, music or ' +
+          'ambience. E.g. {"name":"Distant church bells over wind","kind":"sfx"} or ' +
+          '{"name":"Warm female voice, calm greeting","kind":"voice"}.',
       },
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'Name this sound.' },
+          { type: 'text', text: 'Name and classify this sound.' },
           { type: 'input_audio', input_audio: { data: bytes.toString('base64'), format } },
         ],
       },
     ],
     1200
   );
-  return content
-    .replace(/```[a-z]*|```|["']/g, '')
-    .trim()
-    .slice(0, 200);
+
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      const obj = JSON.parse(content.slice(start, end + 1)) as { name?: unknown; kind?: unknown };
+      const description = typeof obj.name === 'string' ? obj.name.trim().slice(0, 200) : '';
+      const kind: ClipKind = obj.kind === 'voice' ? 'voice' : 'sfx';
+      if (description) return { description, kind };
+    } catch {
+      /* fall through */
+    }
+  }
+  // No usable JSON — treat the whole reply as the name, default kind to sfx.
+  const description = content.replace(/```[a-z]*|```|["']/g, '').trim().slice(0, 200);
+  if (!description) throw new OpenRouterError('The AI returned an empty response', 502);
+  return { description, kind: 'sfx' };
 }

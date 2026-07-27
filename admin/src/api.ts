@@ -6,6 +6,7 @@ import type {
   BBox,
   Character,
   CharacterInput,
+  ClipKind,
   Course,
   CourseAnalytics,
   CourseInput,
@@ -175,9 +176,15 @@ export const api = {
   enhancePersona: (name: string, persona: string) =>
     request<{ persona: string }>('/api/enhance/persona', jsonBody('POST', { name, persona })),
 
-  // AI-listen to a sound clip and suggest a descriptive name. 503 if unconfigured.
+  // AI-listen to a sound clip and suggest a descriptive name + sfx/voice class. 503 if unconfigured.
   enhanceClip: (url: string) =>
-    request<{ description: string }>('/api/enhance/clip', jsonBody('POST', { url })),
+    request<{ description: string; kind: ClipKind }>('/api/enhance/clip', jsonBody('POST', { url })),
+
+  deleteClip: (filename: string) =>
+    request<{ filename: string }>(`/api/upload/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  // Reassign every point/guide/zone using `from` to `to`, optionally deleting `from` after.
+  replaceClip: (from: string, to: string, deleteFrom: boolean) =>
+    request<{ changed: number }>('/api/upload/replace', jsonBody('POST', { from, to, deleteFrom })),
 
   // ElevenLabs generation — saved straight into the sound library. 503 if unconfigured.
   listVoices: () => request<ElevenVoice[]>('/api/generate/voices'),

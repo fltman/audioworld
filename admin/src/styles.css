@@ -217,10 +217,41 @@ body {
 }
 .sound-card__meta {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+.sound-card__meta .used-pill {
+  margin-left: auto;
+}
+.used-pill {
+  color: #8ad4ff;
+  background: rgba(138, 212, 255, 0.14);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.icon-btn--danger:hover {
+  color: var(--danger);
+}
+.sound-card__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.sound-card__confirm p {
+  margin: 0;
+  font-size: 12px;
+}
+.sounds__filter {
+  margin: 12px 0 0;
+  width: fit-content;
 }
 
 /* ---------- Guides ---------- */

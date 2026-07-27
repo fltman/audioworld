@@ -5,15 +5,33 @@ import { ApiError, absoluteAudioUrl, api } from '../api';
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|opus|webm|flac)$/i;
 const isAudio = (filename: string): boolean => AUDIO_EXT.test(filename);
 
-/** A short kind badge derived from how the clip was made (generate prefixes its label). */
-function soundKind(u: UploadListItem): { label: string; cls: string } {
-  const d = (u.description ?? '').trim().toLowerCase();
-  if (d.startsWith('sfx:')) return { label: 'SFX', cls: 'kind--sfx' };
-  if (d.startsWith('tts:')) return { label: 'Voice', cls: 'kind--voice' };
-  return { label: 'Clip', cls: 'kind--clip' };
-}
+type Kind = 'sfx' | 'voice' | 'other';
 
-function SoundCard({ upload }: { upload: UploadListItem }) {
+/** Effective kind: the stored classification, else inferred from a generate prefix. */
+function effectiveKind(u: UploadListItem): Kind {
+  if (u.kind === 'sfx' || u.kind === 'voice') return u.kind;
+  const d = (u.description ?? '').trim().toLowerCase();
+  if (d.startsWith('sfx:')) return 'sfx';
+  if (d.startsWith('tts:')) return 'voice';
+  return 'other';
+}
+const KIND_BADGE: Record<Kind, { label: string; cls: string }> = {
+  sfx: { label: 'SFX', cls: 'kind--sfx' },
+  voice: { label: 'Voice', cls: 'kind--voice' },
+  other: { label: 'Clip', cls: 'kind--clip' },
+};
+
+const clipName = (u: UploadListItem): string => u.description || u.filename;
+
+function SoundCard({
+  upload,
+  others,
+  onChanged,
+}: {
+  upload: UploadListItem;
+  others: UploadListItem[];
+  onChanged: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const [desc, setDesc] = useState(upload.description ?? '');
   const [saved, setSaved] = useState(upload.description ?? '');
@@ -21,7 +39,12 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
   const [enhancing, setEnhancing] = useState(false);
   const [flash, setFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const kind = soundKind(upload);
+  const [confirming, setConfirming] = useState(false);
+  const [replaceMode, setReplaceMode] = useState(false);
+  const [replaceWith, setReplaceWith] = useState('');
+  const [busy, setBusy] = useState(false);
+  const badge = KIND_BADGE[effectiveKind(upload)];
+  const usedBy = upload.usedBy ?? 0;
 
   // Let Gemini listen to the clip and name it, then persist that as the description.
   const enhance = async () => {
@@ -29,11 +52,11 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
     setError(null);
     try {
       const { description } = await api.enhanceClip(upload.url);
-      await api.setUploadDescription(upload.filename, description);
       setDesc(description);
       setSaved(description);
       setFlash(true);
       window.setTimeout(() => setFlash(false), 1400);
+      onChanged(); // refresh so the kind badge updates from the AI's classification
     } catch (e) {
       setError(
         e instanceof ApiError && e.status === 503
@@ -76,10 +99,26 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
     }
   };
 
+  const doDelete = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (replaceMode && replaceWith) {
+        await api.replaceClip(upload.filename, replaceWith, true);
+      } else {
+        await api.deleteClip(upload.filename);
+      }
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed');
+      setBusy(false);
+    }
+  };
+
   return (
     <article className="sound-card">
       <div className="sound-card__top">
-        <span className={`kind ${kind.cls}`}>{kind.label}</span>
+        <span className={`kind ${badge.cls}`}>{badge.label}</span>
         <span className="row-actions">
           <button
             type="button"
@@ -92,6 +131,14 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
           </button>
           <button type="button" className="icon-btn" onClick={() => void copy()}>
             {copied ? 'Copied ✓' : '⧉ URL'}
+          </button>
+          <button
+            type="button"
+            className="icon-btn icon-btn--danger"
+            onClick={() => setConfirming(true)}
+            title="Delete this clip"
+          >
+            🗑
           </button>
         </span>
       </div>
@@ -109,8 +156,61 @@ function SoundCard({ upload }: { upload: UploadListItem }) {
       <audio className="sound-card__audio" controls preload="none" src={absoluteAudioUrl(upload.url)} />
       <div className="sound-card__meta">
         <span>{Math.round(upload.size / 1024)} KB</span>
+        <span className={usedBy > 0 ? 'used-pill' : 'muted'}>
+          {usedBy > 0 ? `In ${usedBy} point${usedBy === 1 ? '' : 's'}` : 'Unused'}
+        </span>
         <span className="muted">{saving ? 'saving…' : flash ? 'saved ✓' : ''}</span>
       </div>
+
+      {confirming && (
+        <div className="sound-card__confirm">
+          <p className="muted">
+            {usedBy > 0
+              ? `Used in ${usedBy} point${usedBy === 1 ? '' : 's'}. Deleting leaves ${usedBy === 1 ? 'it' : 'them'} silent.`
+              : 'Delete this clip permanently?'}
+          </p>
+          {usedBy > 0 && others.length > 0 && (
+            <>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={replaceMode}
+                  onChange={(e) => setReplaceMode(e.currentTarget.checked)}
+                />
+                Replace it in those points with another clip
+              </label>
+              {replaceMode && (
+                <select
+                  className="select"
+                  value={replaceWith}
+                  onChange={(e) => setReplaceWith(e.currentTarget.value)}
+                >
+                  <option value="">— pick a replacement —</option>
+                  {others.map((o) => (
+                    <option key={o.filename} value={o.filename}>
+                      {clipName(o)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+          <div className="row-actions">
+            <button
+              type="button"
+              className="btn btn-danger small"
+              onClick={() => void doDelete()}
+              disabled={busy || (replaceMode && !replaceWith)}
+            >
+              {busy ? 'Working…' : replaceMode ? 'Replace & delete' : 'Delete'}
+            </button>
+            <button type="button" className="btn btn-ghost small" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && <span className="error">{error}</span>}
     </article>
   );
@@ -281,11 +381,18 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
   );
 }
 
+const FILTERS: { key: 'all' | Kind; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'sfx', label: '🔊 SFX' },
+  { key: 'voice', label: '🎙 Voice' },
+];
+
 export default function SoundLibrary() {
   const [uploads, setUploads] = useState<UploadListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | Kind>('all');
 
   const load = useCallback(() => {
     setError(null);
@@ -300,10 +407,23 @@ export default function SoundLibrary() {
 
   // Only audio clips belong here — the upload dir also holds POI photos etc.
   const clips = useMemo(() => uploads.filter((u) => isAudio(u.filename)), [uploads]);
+  const counts = useMemo(() => {
+    const c = { sfx: 0, voice: 0 };
+    for (const u of clips) {
+      const k = effectiveKind(u);
+      if (k === 'sfx') c.sfx++;
+      else if (k === 'voice') c.voice++;
+    }
+    return c;
+  }, [clips]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? clips.filter((u) => (u.description || u.filename).toLowerCase().includes(q)) : clips;
-  }, [clips, query]);
+    return clips.filter(
+      (u) =>
+        (filter === 'all' || effectiveKind(u) === filter) &&
+        (!q || (u.description || u.filename).toLowerCase().includes(q))
+    );
+  }, [clips, query, filter]);
 
   return (
     <section className="section sounds">
@@ -323,17 +443,40 @@ export default function SoundLibrary() {
 
       <GeneratePanel onGenerated={load} />
 
+      {clips.length > 0 && (
+        <div className="seg sounds__filter">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              className={filter === f.key ? 'active' : ''}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+              {f.key === 'sfx' ? ` (${counts.sfx})` : f.key === 'voice' ? ` (${counts.voice})` : ''}
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && <div className="error">{error}</div>}
       {loading ? (
         <p className="muted">Loading…</p>
       ) : clips.length === 0 ? (
         <p className="muted">No clips yet. Generate one above, or add audio from a point.</p>
       ) : shown.length === 0 ? (
-        <p className="muted">No clips match “{query}”.</p>
+        <p className="muted">
+          {query ? `No clips match “${query}”.` : 'No clips in this category yet.'}
+        </p>
       ) : (
         <div className="sound-grid">
           {shown.map((u) => (
-            <SoundCard key={u.url} upload={u} />
+            <SoundCard
+              key={u.url}
+              upload={u}
+              others={clips.filter((c) => c.filename !== u.filename)}
+              onChanged={load}
+            />
           ))}
         </div>
       )}

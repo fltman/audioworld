@@ -551,12 +551,19 @@ export const PLACE_CATEGORIES = [
 export type PlaceCategory = (typeof PLACE_CATEGORIES)[number]['key'];
 
 /** One clip as listed in the sound library (existence from disk, description from the DB). */
+/** How a library clip is categorised (drives the SFX/Voice filter + badge). */
+export type ClipKind = 'sfx' | 'voice';
+
 export interface UploadListItem {
   url: string;
   filename: string;
   size: number;
   /** Author-set label for the clip, if any. */
   description?: string;
+  /** 'sfx' or 'voice' when known (from generation or AI analysis); absent = other. */
+  kind?: ClipKind;
+  /** How many audio points reference this clip (0 = unused). */
+  usedBy?: number;
 }
 
 /** Uniform API envelope. */

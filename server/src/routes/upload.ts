@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
@@ -7,7 +7,7 @@ import type { UploadListItem, UploadResult } from '@audioworld/shared';
 import { UPLOAD_DIR } from '../env';
 import { requireRole } from '../lib/auth';
 import { asyncHandler } from '../lib/http';
-import { descriptionsFor, setDescription } from '../models/upload';
+import { clipUsageCounts, deleteMeta, metaFor, replaceClipUrl, setDescription } from '../models/upload';
 
 export const uploadRouter = Router();
 
@@ -90,12 +90,15 @@ uploadRouter.get(
           .map((filename) => ({ filename, stat: statSync(join(UPLOAD_DIR, filename)) }))
           .filter(({ stat }) => stat.isFile())
           .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
-    const descriptions = await descriptionsFor(files.map((f) => f.filename));
+    const meta = await metaFor(files.map((f) => f.filename));
+    const usage = await clipUsageCounts();
     const data: UploadListItem[] = files.map(({ filename, stat }) => ({
       url: `/uploads/${filename}`,
       filename,
       size: stat.size,
-      description: descriptions.get(filename),
+      description: meta.get(filename)?.description,
+      kind: meta.get(filename)?.kind,
+      usedBy: usage.get(`/uploads/${filename}`) ?? 0,
     }));
     res.json({ success: true, data });
   })
@@ -118,6 +121,56 @@ uploadRouter.patch(
     const description = typeof raw === 'string' ? raw.trim() : '';
     await setDescription(filename, description);
     res.json({ success: true, data: { filename, description } });
+  })
+);
+
+/** Bare-filename → its path in UPLOAD_DIR, or null if it isn't a real file there. */
+function resolveUpload(filename: string): string | null {
+  const full = join(UPLOAD_DIR, filename);
+  if (basename(filename) !== filename || !existsSync(full) || !statSync(full).isFile()) return null;
+  return full;
+}
+
+// Swap every reference to one clip for another across points, guides and zones — used
+// when deleting a clip that's still in use. Both are bare filenames in UPLOAD_DIR.
+uploadRouter.post(
+  '/replace',
+  asyncHandler(async (req, res) => {
+    const b = (req.body ?? {}) as { from?: unknown; to?: unknown; deleteFrom?: unknown };
+    if (typeof b.from !== 'string' || typeof b.to !== 'string') {
+      res.status(400).json({ success: false, error: 'from and to filenames are required' });
+      return;
+    }
+    if (!resolveUpload(b.to)) {
+      res.status(404).json({ success: false, error: 'Replacement clip not found' });
+      return;
+    }
+    const changed = await replaceClipUrl(`/uploads/${b.from}`, `/uploads/${b.to}`);
+    if (b.deleteFrom === true) {
+      const full = resolveUpload(b.from);
+      if (full) {
+        unlinkSync(full);
+        await deleteMeta(b.from);
+      }
+    }
+    res.json({ success: true, data: { changed } });
+  })
+);
+
+// Delete a clip (file + metadata). Points still referencing it are left with an empty
+// audio url, which the pre-publish flight check flags — use /replace to reassign first.
+uploadRouter.delete(
+  '/:filename',
+  asyncHandler(async (req, res) => {
+    const { filename } = req.params;
+    const full = resolveUpload(filename);
+    if (!full) {
+      res.status(404).json({ success: false, error: 'Unknown upload' });
+      return;
+    }
+    unlinkSync(full);
+    await deleteMeta(filename);
+    res.json({ success: true, data: { filename } });
   })
 );
 

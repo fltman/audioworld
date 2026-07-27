@@ -42,8 +42,11 @@ CREATE TABLE IF NOT EXISTS audio_points (
 CREATE TABLE IF NOT EXISTS uploads (
   filename    text PRIMARY KEY,
   description text,
+  kind        text,  -- 'sfx' | 'voice' | null (unknown/other)
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS kind text;
 
 -- Migrate existing tables (columns added after the first release).
 ALTER TABLE audio_points
