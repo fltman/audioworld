@@ -207,14 +207,17 @@ export default function CharacterManager({ characters, onChange }: Props) {
         </div>
       )}
 
-      {characters.length === 0 ? (
-        <p className="muted">No guides yet.</p>
+      {characters.length === 0 && !form ? (
+        <p className="muted">No guides yet. Create one to voice narrated stops with a persona.</p>
       ) : (
-        <ul className="sound-list">
+        <div className="guide-grid">
           {characters.map((c) => (
-            <li key={c.id} className="sound-row">
-              <div className="sound-row__head">
-                <span className="sound-row__name">{c.name}</span>
+            <article key={c.id} className="guide-card">
+              <div className="guide-card__head">
+                <span className="guide-card__mask" aria-hidden="true">
+                  🎭
+                </span>
+                <span className="guide-card__name">{c.name}</span>
                 <span className="row-actions">
                   <button type="button" className="icon-btn" onClick={() => startEdit(c)}>
                     Edit
@@ -224,14 +227,18 @@ export default function CharacterManager({ characters, onChange }: Props) {
                   </button>
                 </span>
               </div>
-              <span className="sound-row__meta">
-                {c.voiceName ? `Voice: ${c.voiceName}` : 'No voice'}
-                {c.idleSoundUrl ? ' · has idle sound' : ' · no idle sound'}
-              </span>
-              {c.persona && <span className="muted">{c.persona}</span>}
-            </li>
+              <div className="guide-card__chips">
+                <span className={`chip ${c.voiceName ? 'chip--on' : ''}`}>
+                  🎙 {c.voiceName || 'No voice'}
+                </span>
+                <span className={`chip ${c.idleSoundUrl ? 'chip--on' : ''}`}>
+                  {c.idleSoundUrl ? '🔊 Idle sound' : '🔇 No idle sound'}
+                </span>
+              </div>
+              {c.persona && <p className="guide-card__persona">{c.persona}</p>}
+            </article>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );

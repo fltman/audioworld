@@ -1,14 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ElevenVoice, UploadListItem } from '@audioworld/shared';
 import { ApiError, absoluteAudioUrl, api } from '../api';
 
-function SoundRow({ upload }: { upload: UploadListItem }) {
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|opus|webm|flac)$/i;
+const isAudio = (filename: string): boolean => AUDIO_EXT.test(filename);
+
+/** A short kind badge derived from how the clip was made (generate prefixes its label). */
+function soundKind(u: UploadListItem): { label: string; cls: string } {
+  const d = (u.description ?? '').trim().toLowerCase();
+  if (d.startsWith('sfx:')) return { label: 'SFX', cls: 'kind--sfx' };
+  if (d.startsWith('tts:')) return { label: 'Voice', cls: 'kind--voice' };
+  return { label: 'Clip', cls: 'kind--clip' };
+}
+
+function SoundCard({ upload }: { upload: UploadListItem }) {
   const [copied, setCopied] = useState(false);
   const [desc, setDesc] = useState(upload.description ?? '');
   const [saved, setSaved] = useState(upload.description ?? '');
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kind = soundKind(upload);
 
   const copy = async () => {
     setError(null);
@@ -40,37 +52,31 @@ function SoundRow({ upload }: { upload: UploadListItem }) {
   };
 
   return (
-    <li className="sound-row">
-      <div className="sound-row__head">
-        <span className="sound-row__name" title={upload.filename}>
-          {upload.description || upload.filename}
-        </span>
+    <article className="sound-card">
+      <div className="sound-card__top">
+        <span className={`kind ${kind.cls}`}>{kind.label}</span>
         <button type="button" className="icon-btn" onClick={() => void copy()}>
-          {copied ? 'Copied!' : 'Copy URL'}
+          {copied ? 'Copied ✓' : '⧉ URL'}
         </button>
       </div>
       <input
-        className="input"
-        placeholder="Add a description…"
+        className="sound-card__name"
+        placeholder="Untitled clip — add a name…"
         value={desc}
+        title={upload.filename}
         onChange={(e) => setDesc(e.currentTarget.value)}
         onBlur={() => void save()}
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
       />
-      <span className="sound-row__meta">
-        {Math.round(upload.size / 1024)} KB
-        {saving ? ' · saving…' : flash ? ' · saved ✓' : ''}
-      </span>
+      <audio className="sound-card__audio" controls preload="none" src={absoluteAudioUrl(upload.url)} />
+      <div className="sound-card__meta">
+        <span>{Math.round(upload.size / 1024)} KB</span>
+        <span className="muted">{saving ? 'saving…' : flash ? 'saved ✓' : ''}</span>
+      </div>
       {error && <span className="error">{error}</span>}
-      <audio
-        className="sound-row__audio"
-        controls
-        preload="none"
-        src={absoluteAudioUrl(upload.url)}
-      />
-    </li>
+    </article>
   );
 }
 
@@ -243,6 +249,7 @@ export default function SoundLibrary() {
   const [uploads, setUploads] = useState<UploadListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
 
   const load = useCallback(() => {
     setError(null);
@@ -255,21 +262,44 @@ export default function SoundLibrary() {
 
   useEffect(load, [load]);
 
+  // Only audio clips belong here — the upload dir also holds POI photos etc.
+  const clips = useMemo(() => uploads.filter((u) => isAudio(u.filename)), [uploads]);
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? clips.filter((u) => (u.description || u.filename).toLowerCase().includes(q)) : clips;
+  }, [clips, query]);
+
   return (
-    <section className="section">
-      <div className="section-title">Sound library ({uploads.length})</div>
+    <section className="section sounds">
+      <div className="sounds__head">
+        <div className="section-title" style={{ margin: 0 }}>
+          Sound library <span className="count-pill">{clips.length}</span>
+        </div>
+        {clips.length > 0 && (
+          <input
+            className="input sounds__search"
+            placeholder="Search clips…"
+            value={query}
+            onChange={(e) => setQuery(e.currentTarget.value)}
+          />
+        )}
+      </div>
+
       <GeneratePanel onGenerated={load} />
+
       {error && <div className="error">{error}</div>}
       {loading ? (
         <p className="muted">Loading…</p>
-      ) : uploads.length === 0 ? (
-        <p className="muted">No uploads yet. Generate one above, or add audio from a point.</p>
+      ) : clips.length === 0 ? (
+        <p className="muted">No clips yet. Generate one above, or add audio from a point.</p>
+      ) : shown.length === 0 ? (
+        <p className="muted">No clips match “{query}”.</p>
       ) : (
-        <ul className="sound-list">
-          {uploads.map((u) => (
-            <SoundRow key={u.url} upload={u} />
+        <div className="sound-grid">
+          {shown.map((u) => (
+            <SoundCard key={u.url} upload={u} />
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );

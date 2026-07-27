@@ -107,15 +107,281 @@ body {
 .workspace-panel {
   flex: 1;
   overflow-y: auto;
-  max-width: 720px;
+  max-width: 1120px;
   margin: 0 auto;
   width: 100%;
+  padding: 8px 24px 40px;
+}
+/* The panel supplies the outer padding; its sections shed their own gutters. */
+.workspace-panel > .section {
+  padding-left: 0;
+  padding-right: 0;
+}
+.workspace-panel > .section:first-child {
+  border-top: none;
 }
 .tool-row .tool-row__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   margin-top: 8px;
+}
+
+/* ---------- Shared: count pill, kind/role chips ---------- */
+.count-pill {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.kind {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+.kind--sfx {
+  color: #f9c974;
+  background: rgba(249, 201, 116, 0.14);
+}
+.kind--voice {
+  color: #8ad4ff;
+  background: rgba(138, 212, 255, 0.14);
+}
+.kind--clip {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+
+/* ---------- Sounds view ---------- */
+.sounds__head,
+.users__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.sounds__search,
+.users__search {
+  width: 240px;
+  max-width: 100%;
+}
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.sound-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.sound-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sound-card__name {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 2px 0;
+}
+.sound-card__name:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+.sound-card__audio {
+  width: 100%;
+  height: 34px;
+}
+.sound-card__meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Guides ---------- */
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.guide-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guide-card__mask {
+  font-size: 16px;
+}
+.guide-card__name {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.guide-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.chip--on {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.guide-card__persona {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------- Users / team ---------- */
+.role-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.role {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.role--admin {
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.16);
+}
+.role--super {
+  color: #8ad4ff;
+  background: rgba(138, 212, 255, 0.14);
+}
+.role--basic {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.user-card.is-me {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+.user-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.user-card__email {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-card__you {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: rgba(124, 92, 255, 0.16);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.user-card__meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+/* Two-class specificity to beat the base `.select { width: 100% }`; a fixed width keeps
+   it from crushing the email/date body in the flex row. */
+.user-card .role-select {
+  flex: 0 0 auto;
+  width: 120px;
+  min-width: 0;
+  font-weight: 600;
+}
+.user-card .role-select.role--admin {
+  color: var(--accent);
+}
+.user-card .role-select.role--super {
+  color: #8ad4ff;
+}
+.users__legend {
+  font-size: 12px;
+  margin-top: 18px;
 }
 
 /* ---------- Sidebar ---------- */
