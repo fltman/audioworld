@@ -7,7 +7,8 @@
     "dev": "vite --port 5175 --strictPort",
     "build": "vite build",
     "preview": "vite preview --port 5175 --strictPort",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint:css": "stylelint \"src/**/*.css\""
   },
   "dependencies": {
     "@audioworld/shared": "*",
@@ -22,6 +23,8 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "stylelint": "^17.14.1",
+    "stylelint-config-standard": "^40.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }
