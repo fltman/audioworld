@@ -21,6 +21,15 @@ const CATEGORY_FILTERS: Record<PlaceCategory, string[]> = {
 const MAX_RESULTS = 80;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
+// OSM/Overpass policy REQUIRES a descriptive User-Agent identifying the app; without one
+// the servers reject the request (overpass-api.de returns 406). Node's fetch sends none,
+// so we must set it explicitly.
+const REQUEST_HEADERS = {
+  'Content-Type': 'application/x-www-form-urlencoded',
+  'User-Agent': 'AudioWorld/1.0 (+https://audioworld.bjarby.com)',
+  Accept: 'application/json',
+};
+
 /** Build the Overpass QL for the selected categories within a bbox. */
 function buildQuery(bbox: BBox, categories: PlaceCategory[]): string {
   const b = `${bbox.south},${bbox.west},${bbox.north},${bbox.east}`;
@@ -70,7 +79,7 @@ export async function discoverPlaces(
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: REQUEST_HEADERS,
         body: `data=${encodeURIComponent(query)}`,
         signal: AbortSignal.timeout(30_000),
       });
