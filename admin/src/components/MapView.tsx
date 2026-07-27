@@ -241,6 +241,12 @@ export default function MapView(props: Props) {
     );
     mapRef.current = map;
 
+    // Re-measure whenever the container resizes: the initial flex layout settling, the
+    // right-hand inspector opening/closing (which changes the map width), and window
+    // resizes. Without this Leaflet keeps a stale size and tiles render offset.
+    const resizeObs = new ResizeObserver(() => map.invalidateSize());
+    resizeObs.observe(containerRef.current);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
@@ -294,6 +300,7 @@ export default function MapView(props: Props) {
     });
 
     return () => {
+      resizeObs.disconnect();
       map.remove();
       mapRef.current = null;
       pointsLayerRef.current = null;

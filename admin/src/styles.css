@@ -34,6 +34,90 @@ body {
   height: 100vh;
 }
 
+/* ---------- Shell: top bar + workspace (sidebar | map | inspector) ---------- */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  height: 52px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.topbar__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.topbar__brand span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+/* Tabs sit inline in the top bar (no divider/padding of their own here). */
+.topbar .tabs {
+  border-bottom: none;
+  padding: 0;
+}
+.topbar .tab {
+  margin-bottom: 0;
+  border-bottom: none;
+  border-radius: 6px;
+}
+.topbar .tab.is-active {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.topbar__course {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar__select {
+  min-width: 180px;
+  max-width: 260px;
+}
+.topbar__account {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.topbar__account .account__email {
+  max-width: 200px;
+}
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* Sounds/Users tabs: a centered content column instead of the map layout. */
+.workspace-panel {
+  flex: 1;
+  overflow-y: auto;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+.tool-row .tool-row__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 /* ---------- Sidebar ---------- */
 .sidebar {
   width: 344px;

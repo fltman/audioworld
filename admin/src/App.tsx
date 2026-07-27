@@ -19,7 +19,7 @@ import { anchorOf, flightCheck } from '@audioworld/shared';
 import { api, getToken, setToken } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
 import { isPathType } from './pointTypes';
-import CourseBar from './components/CourseBar';
+import NewCourseForm from './components/NewCourseForm';
 import Toolbar from './components/Toolbar';
 import PointForm from './components/PointForm';
 import PointList from './components/PointList';
@@ -30,7 +30,6 @@ import UsersPanel from './components/UsersPanel';
 import SoundLibrary from './components/SoundLibrary';
 import CharacterManager from './components/CharacterManager';
 import BulkBar from './components/BulkBar';
-import Section from './components/Section';
 import CourseSettings from './components/CourseSettings';
 import DiscoverPanel from './components/DiscoverPanel';
 import ScoutConvertPanel from './components/ScoutConvertPanel';
@@ -41,6 +40,9 @@ import { PreviewEngine } from './services/previewEngine';
 
 const LS_KEY = 'audioworld.admin.courseId';
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Which utility panel the right inspector shows when you're not editing a point. */
+type Tool = 'zones' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -68,6 +70,7 @@ export default function App() {
   const [analytics, setAnalytics] = useState<CourseAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
+  const [tool, setTool] = useState<Tool>(null);
   const [fitToken, setFitToken] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -80,6 +83,7 @@ export default function App() {
     const engine = new PreviewEngine(points, start);
     await engine.start();
     setDraft(null);
+    setTool(null);
     setPreview(engine);
   };
 
@@ -413,7 +417,20 @@ export default function App() {
   const pickType = (t: PointType) => {
     if (!courseId) return;
     setFormError(null);
+    setTool(null); // editing a point takes over the inspector
     setDraft(freshDraft(t, courseId));
+  };
+
+  // Open a utility panel in the inspector, toggling it off if already open. Editing a
+  // point and running a tool are mutually exclusive, so switching clears the other.
+  const pickTool = (t: Exclude<Tool, null>) => {
+    const next = tool === t ? null : t;
+    setDraft(null);
+    setFormError(null);
+    if (next !== 'zones') setZoneDraft(null);
+    setMultiSelectMode(next === 'bulk');
+    setShowAnalytics(next === 'analytics');
+    setTool(next);
   };
 
   const cancelDraft = () => {
@@ -478,6 +495,7 @@ export default function App() {
     const p = points.find((x) => x.id === id);
     if (!p) return;
     setFormError(null);
+    setTool(null); // editing a point takes over the inspector
     setDraft(pointToDraft(p));
   };
 
@@ -682,13 +700,15 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <header className="brand">
-          AudioWorld<span>Admin</span>
-        </header>
+  const inCourses = tab === 'courses';
+  const hasInspector = inCourses && !!courseId && (!!preview || !!draft || !!tool);
 
+  return (
+    <div className="shell">
+      <header className="topbar">
+        <div className="topbar__brand">
+          AudioWorld<span>Admin</span>
+        </div>
         <nav className="tabs">
           <button
             type="button"
@@ -715,193 +735,41 @@ export default function App() {
           )}
         </nav>
 
-        {tab === 'users' && user.role === 'admin' ? (
-          <UsersPanel me={user} />
-        ) : tab === 'sounds' ? (
-          <>
-            <SoundLibrary />
-            <CharacterManager characters={characters} onChange={setCharacters} />
-          </>
-        ) : (
-          <>
-        <CourseBar
-          courses={visibleCourses}
-          selectedId={courseId}
-          onSelect={selectCourse}
-          onCreate={createCourse}
-        />
-
-        {courseId && currentCourse && (
-          <PublishBar
-            courseId={courseId}
-            courseName={currentCourse.name}
-            publishedAt={publishedAt}
-            dirty={dirty}
-            issues={flightIssues}
-            publishing={publishing}
-            onPublish={publishCourse}
-            onFixIssue={(id) => {
-              editPoint(id);
-              setFitToken((t) => t + 1);
-            }}
-          />
-        )}
-
-        {error && (
-          <div className="banner">
-            <span>{error}</span>
-            <button type="button" className="icon-btn" onClick={() => setError(null)}>
-              Dismiss
+        {inCourses && (
+          <div className="topbar__course">
+            <select
+              className="select topbar__select"
+              value={courseId ?? ''}
+              onChange={(e) => selectCourse(e.currentTarget.value)}
+            >
+              {!courseId && <option value="">Select a course…</option>}
+              {visibleCourses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={`btn small ${tool === 'new-course' ? 'btn-accent' : 'btn-ghost'}`}
+              onClick={() => pickTool('new-course')}
+            >
+              + New
             </button>
+            {courseId && (
+              <button
+                type="button"
+                className="btn btn-accent small"
+                onClick={() => (preview ? stopPreview() : void startPreview())}
+                disabled={!preview && points.length === 0}
+              >
+                {preview ? '■ Stop' : '▶ Playtest'}
+              </button>
+            )}
           </div>
         )}
 
-        {courseId && preview ? (
-          <PreviewPanel engine={preview} onStop={stopPreview} />
-        ) : (
-          courseId && (
-            <>
-              <button
-                type="button"
-                className="btn btn-accent playtest-btn"
-                onClick={() => void startPreview()}
-                disabled={points.length === 0}
-              >
-                &#9654; Playtest this course
-              </button>
-              <Toolbar
-                activeType={activeType}
-                placing={placing}
-                disabled={false}
-                onPick={pickType}
-                onCancel={cancelDraft}
-              />
-              <PointList
-                points={points}
-                onEdit={editPoint}
-                onDelete={deletePoint}
-                editingId={draft?.editingId ?? null}
-              />
-              <ZonePanel
-                zones={zones}
-                drawing={zoneDraft != null}
-                draftLen={zoneDraft?.length ?? 0}
-                saving={savingZones}
-                dirty={zonesDirty}
-                onNew={() => {
-                  cancelDraft();
-                  setZoneDraft([]);
-                }}
-                onFinish={finishZone}
-                onCancel={() => setZoneDraft(null)}
-                onUpdate={(i, patch) =>
-                  setZones((z) => z.map((zz, idx) => (idx === i ? { ...zz, ...patch } : zz)))
-                }
-                onDelete={(i) => setZones((z) => z.filter((_, idx) => idx !== i))}
-                onSave={saveZones}
-              />
-
-              {currentCourse && (
-                <Section title="Course settings" icon="⚙️" defaultOpen={false}>
-                  <CourseSettings
-                    course={currentCourse}
-                    onUpdate={updateCourse}
-                    onExport={exportCourse}
-                    onImport={importCourse}
-                    onDelete={deleteCourse}
-                  />
-                </Section>
-              )}
-
-              <Section title="Insights & tools" icon="🛠" defaultOpen={false}>
-                <div className="tool-toggles">
-                  <button
-                    type="button"
-                    className={`btn small ${showAnalytics ? 'btn-accent' : 'btn-ghost'}`}
-                    onClick={() => setShowAnalytics((s) => !s)}
-                  >
-                    📊 Analytics
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn small ${multiSelect ? 'btn-accent' : 'btn-ghost'}`}
-                    onClick={() => setMultiSelectMode(!multiSelect)}
-                    title="Select several points to clone, delete or bulk-edit"
-                  >
-                    ☑ Select multiple
-                  </button>
-                </div>
-
-                <div className="scout-ref-picker">
-                  <label className="label">Scout reference layer</label>
-                  <select
-                    className="select"
-                    value={scoutId ?? ''}
-                    onChange={(e) => void selectScout(e.currentTarget.value)}
-                  >
-                    <option value="">None</option>
-                    {scoutSets.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        📍 {s.name} ({s.waypoints.length})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="hint">
-                    Waypoints + notes you captured in the field (on your phone at{' '}
-                    <code>/?scout</code>) appear on the map as a guide.
-                  </p>
-                </div>
-
-                {scoutId && (
-                  <ScoutConvertPanel
-                    key={scoutId}
-                    waypoints={scoutWaypoints}
-                    courseId={courseId}
-                    onPointsCreated={(pts) => setPoints((prev) => [...prev, ...pts])}
-                  />
-                )}
-              </Section>
-
-              <Section title="Discover places" icon="🔍" defaultOpen={false}>
-                <DiscoverPanel
-                  bbox={discoverBbox}
-                  places={discoverPlaces}
-                  selected={selectedPlaces}
-                  onResults={(ps) => {
-                    setDiscoverPlaces(ps);
-                    setSelectedPlaces([]);
-                  }}
-                  onToggle={togglePlace}
-                  onSelectAll={() => setSelectedPlaces(discoverPlaces.map((_, i) => i))}
-                  onClear={() => setSelectedPlaces([])}
-                  onConvert={(mode) => void runConvert(mode)}
-                  converting={converting}
-                />
-              </Section>
-
-              {multiSelect && (
-                <BulkBar
-                  count={selectedIds.length}
-                  total={points.length}
-                  busy={bulkBusy}
-                  onSelectAll={() => setSelectedIds(points.map((p) => p.id))}
-                  onClear={() => setSelectedIds([])}
-                  onClone={() => void cloneSelected()}
-                  onDelete={() => void deleteSelected()}
-                  onBulkVolume={(v) => void bulkVolume(v)}
-                  onBulkSync={(m) => void bulkSync(m)}
-                />
-              )}
-              {showAnalytics && (
-                <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
-              )}
-            </>
-          )
-        )}
-          </>
-        )}
-
-        <div className="sidebar-footer">
+        <div className="topbar__account">
           <span className="account__email" title={user.email}>
             {user.email}
           </span>
@@ -910,52 +778,256 @@ export default function App() {
             Sign out
           </button>
         </div>
-      </aside>
+      </header>
 
-      <MapView
-        points={points}
-        draft={draft}
-        fitToken={fitToken}
-        onMapClick={mapClick}
-        onMapDblClick={mapDblClick}
-        onAnchorDrag={anchorDrag}
-        onPathVertexDrag={pathVertexDrag}
-        onSelectPoint={selectPoint}
-        multiSelect={multiSelect}
-        selectedIds={selectedIds}
-        onToggleSelect={toggleSelect}
-        preview={preview}
-        zones={zones}
-        zoneDraft={zoneDraft}
-        drawingZone={zoneDraft != null}
-        analyticsCells={showAnalytics ? analytics?.cells : undefined}
-        scoutWaypoints={scoutWaypoints}
-        onViewport={setDiscoverBbox}
-        discoverPlaces={discoverPlaces}
-        selectedPlaces={selectedPlaces}
-        onTogglePlace={togglePlace}
-      />
-
-      {tab === 'courses' && draft && (
-        <aside className="inspector">
-          <PointForm
-            draft={draft}
-            onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
-            onSave={save}
-            onCancel={cancelDraft}
-            onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
-            onUpload={uploadAudio}
-            onUploadFile={uploadFile}
-            onFinishPath={finishPath}
-            onUndoVertex={undoVertex}
-            onAddPoints={addPoints}
-            characters={characters}
-            saving={saving}
-            uploading={uploading}
-            error={formError}
-          />
-        </aside>
+      {error && (
+        <div className="banner">
+          <span>{error}</span>
+          <button type="button" className="icon-btn" onClick={() => setError(null)}>
+            Dismiss
+          </button>
+        </div>
       )}
+
+      <div className="workspace">
+        {tab === 'users' && user.role === 'admin' ? (
+          <div className="workspace-panel">
+            <UsersPanel me={user} />
+          </div>
+        ) : tab === 'sounds' ? (
+          <div className="workspace-panel">
+            <SoundLibrary />
+            <CharacterManager characters={characters} onChange={setCharacters} />
+          </div>
+        ) : (
+          <>
+            <aside className="sidebar">
+              {!courseId ? (
+                <p className="section muted">Pick a course above, or create one with “+ New”.</p>
+              ) : preview ? (
+                <p className="section muted">Playtesting — use the controls on the right.</p>
+              ) : (
+                <>
+                  {courseId && currentCourse && (
+                    <PublishBar
+                      courseId={courseId}
+                      courseName={currentCourse.name}
+                      publishedAt={publishedAt}
+                      dirty={dirty}
+                      issues={flightIssues}
+                      publishing={publishing}
+                      onPublish={publishCourse}
+                      onFixIssue={(id) => {
+                        editPoint(id);
+                        setFitToken((t) => t + 1);
+                      }}
+                    />
+                  )}
+                  <Toolbar
+                    activeType={activeType}
+                    placing={placing}
+                    disabled={false}
+                    onPick={pickType}
+                    onCancel={cancelDraft}
+                  />
+                  <div className="section tool-row">
+                    <span className="label">Tools</span>
+                    <div className="tool-row__grid">
+                      <button
+                        type="button"
+                        className={`btn small ${tool === 'zones' || zoneDraft != null ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('zones')}
+                      >
+                        🔊 Zones ({zones.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn small ${tool === 'discover' ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('discover')}
+                      >
+                        🔍 Discover
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn small ${tool === 'scout' ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('scout')}
+                      >
+                        📍 Scout
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn small ${showAnalytics ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('analytics')}
+                      >
+                        📊 Analytics
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn small ${multiSelect ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('bulk')}
+                        title="Select several points to clone, delete or bulk-edit"
+                      >
+                        ☑ Multi-select
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn small ${tool === 'settings' ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('settings')}
+                      >
+                        ⚙️ Settings
+                      </button>
+                    </div>
+                  </div>
+                  <PointList
+                    points={points}
+                    onEdit={editPoint}
+                    onDelete={deletePoint}
+                    editingId={draft?.editingId ?? null}
+                  />
+                </>
+              )}
+            </aside>
+
+            <MapView
+              points={points}
+              draft={draft}
+              fitToken={fitToken}
+              onMapClick={mapClick}
+              onMapDblClick={mapDblClick}
+              onAnchorDrag={anchorDrag}
+              onPathVertexDrag={pathVertexDrag}
+              onSelectPoint={selectPoint}
+              multiSelect={multiSelect}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              preview={preview}
+              zones={zones}
+              zoneDraft={zoneDraft}
+              drawingZone={zoneDraft != null}
+              analyticsCells={showAnalytics ? analytics?.cells : undefined}
+              scoutWaypoints={scoutWaypoints}
+              onViewport={setDiscoverBbox}
+              discoverPlaces={discoverPlaces}
+              selectedPlaces={selectedPlaces}
+              onTogglePlace={togglePlace}
+            />
+
+            {hasInspector && (
+              <aside className="inspector">
+                {preview ? (
+                  <PreviewPanel engine={preview} onStop={stopPreview} />
+                ) : draft ? (
+                  <PointForm
+                    draft={draft}
+                    onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))}
+                    onSave={save}
+                    onCancel={cancelDraft}
+                    onDelete={() => draft.editingId && void deletePoint(draft.editingId)}
+                    onUpload={uploadAudio}
+                    onUploadFile={uploadFile}
+                    onFinishPath={finishPath}
+                    onUndoVertex={undoVertex}
+                    onAddPoints={addPoints}
+                    characters={characters}
+                    saving={saving}
+                    uploading={uploading}
+                    error={formError}
+                  />
+                ) : tool === 'new-course' ? (
+                  <NewCourseForm
+                    onCreate={(name, description) => {
+                      void createCourse(name, description);
+                      setTool(null);
+                    }}
+                    onCancel={() => setTool(null)}
+                  />
+                ) : tool === 'zones' ? (
+                  <ZonePanel
+                    zones={zones}
+                    drawing={zoneDraft != null}
+                    draftLen={zoneDraft?.length ?? 0}
+                    saving={savingZones}
+                    dirty={zonesDirty}
+                    onNew={() => setZoneDraft([])}
+                    onFinish={finishZone}
+                    onCancel={() => setZoneDraft(null)}
+                    onUpdate={(i, patch) =>
+                      setZones((z) => z.map((zz, idx) => (idx === i ? { ...zz, ...patch } : zz)))
+                    }
+                    onDelete={(i) => setZones((z) => z.filter((_, idx) => idx !== i))}
+                    onSave={saveZones}
+                  />
+                ) : tool === 'discover' ? (
+                  <DiscoverPanel
+                    bbox={discoverBbox}
+                    places={discoverPlaces}
+                    selected={selectedPlaces}
+                    onResults={(ps) => {
+                      setDiscoverPlaces(ps);
+                      setSelectedPlaces([]);
+                    }}
+                    onToggle={togglePlace}
+                    onSelectAll={() => setSelectedPlaces(discoverPlaces.map((_, i) => i))}
+                    onClear={() => setSelectedPlaces([])}
+                    onConvert={(mode) => void runConvert(mode)}
+                    converting={converting}
+                  />
+                ) : tool === 'scout' ? (
+                  <section className="section">
+                    <div className="section-title">Scout layer</div>
+                    <select
+                      className="select"
+                      value={scoutId ?? ''}
+                      onChange={(e) => void selectScout(e.currentTarget.value)}
+                    >
+                      <option value="">None</option>
+                      {scoutSets.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          📍 {s.name} ({s.waypoints.length})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="hint">
+                      Waypoints + notes you captured in the field (on your phone at{' '}
+                      <code>/?scout</code>) appear on the map. Turn them into narrated points below.
+                    </p>
+                    {scoutId && (
+                      <ScoutConvertPanel
+                        key={scoutId}
+                        waypoints={scoutWaypoints}
+                        courseId={courseId}
+                        onPointsCreated={(pts) => setPoints((prev) => [...prev, ...pts])}
+                      />
+                    )}
+                  </section>
+                ) : tool === 'analytics' ? (
+                  <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
+                ) : tool === 'settings' && currentCourse ? (
+                  <CourseSettings
+                    course={currentCourse}
+                    onUpdate={updateCourse}
+                    onExport={exportCourse}
+                    onImport={importCourse}
+                    onDelete={deleteCourse}
+                  />
+                ) : tool === 'bulk' ? (
+                  <BulkBar
+                    count={selectedIds.length}
+                    total={points.length}
+                    busy={bulkBusy}
+                    onSelectAll={() => setSelectedIds(points.map((p) => p.id))}
+                    onClear={() => setSelectedIds([])}
+                    onClone={() => void cloneSelected()}
+                    onDelete={() => void deleteSelected()}
+                    onBulkVolume={(v) => void bulkVolume(v)}
+                    onBulkSync={(m) => void bulkSync(m)}
+                  />
+                ) : null}
+              </aside>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
