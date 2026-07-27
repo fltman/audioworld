@@ -10,7 +10,7 @@ import type {
 import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
-import { absoluteAudioUrl, api } from '../api';
+import { absoluteAudioUrl, api, wikipediaExtract } from '../api';
 import PointNarrate from './PointNarrate';
 
 /** Seconds -> m:ss. */
@@ -117,6 +117,23 @@ export default function PointForm(props: Props) {
   const [narrateText, setNarrateText] = useState<Record<number, string>>({});
   const [narrating, setNarrating] = useState<number | null>(null);
   const [narrateError, setNarrateError] = useState<{ index: number; msg: string } | null>(null);
+  const [fetchingWiki, setFetchingWiki] = useState(false);
+
+  // A "wikipedia: lang:Title" reference left in the facts (e.g. from Discover) → offer to
+  // pull the real summary from Wikipedia.
+  const wikiRef = /wikipedia:\s*([a-z-]{2,}:[^\n)]+)/i.exec(audio.description ?? '')?.[1]?.trim() ?? null;
+  const fetchWiki = async () => {
+    if (!wikiRef) return;
+    setFetchingWiki(true);
+    try {
+      const extract = await wikipediaExtract(wikiRef);
+      if (extract) {
+        onChange({ audio: { ...audio, description: `${extract}\n\n(Wikipedia: ${wikiRef})` } });
+      }
+    } finally {
+      setFetchingWiki(false);
+    }
+  };
   // Reset the transient narration UI when switching to a different point.
   useEffect(() => {
     setNarrateText({});
@@ -265,8 +282,21 @@ export default function PointForm(props: Props) {
         {/* The facts the narration draws on (a discovered place stores its OSM facts here).
             Editable + visible so you can refine what the AI/voice works from. */}
         {!isPathType(draft.type) && (
-          <label className="form-field">
-            <span className="label">Facts / notes — what this point is about</span>
+          <div className="form-field">
+            <div className="label-row">
+              <span className="label">Facts / notes — what this point is about</span>
+              {wikiRef && (
+                <button
+                  type="button"
+                  className="btn btn-ghost small"
+                  onClick={() => void fetchWiki()}
+                  disabled={fetchingWiki}
+                  title={`Fetch the summary for ${wikiRef} from Wikipedia`}
+                >
+                  {fetchingWiki ? '↓ Fetching…' : '↓ Wikipedia'}
+                </button>
+              )}
+            </div>
             <textarea
               className="textarea"
               placeholder="Facts the narration draws on — e.g. “12th-century castle, seat of the county governor…”"
@@ -275,7 +305,7 @@ export default function PointForm(props: Props) {
                 onChange({ audio: { ...audio, description: e.currentTarget.value || undefined } })
               }
             />
-          </label>
+          </div>
         )}
 
         {/* Voice a single-audio point later (e.g. a discovered place), optionally with a

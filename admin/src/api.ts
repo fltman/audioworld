@@ -37,6 +37,27 @@ export function getToken(): string | null {
   return authToken;
 }
 
+/**
+ * Fetch a plain-text summary for an OSM `wikipedia` tag ("lang:Title", e.g. "sv:Järnpojke")
+ * straight from the Wikimedia REST API (CORS-enabled). Returns null if there's nothing usable.
+ */
+export async function wikipediaExtract(wikipediaTag: string): Promise<string | null> {
+  const m = /^([a-z-]{2,}):(.+)$/i.exec(wikipediaTag.trim());
+  if (!m) return null;
+  const [, lang, title] = m;
+  try {
+    const res = await fetch(
+      `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title!)}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as { extract?: unknown };
+    return typeof j.extract === 'string' && j.extract.trim() ? j.extract.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Server-relative audio paths (`/uploads/...`) become absolute against the API host. */
 export function absoluteAudioUrl(url: string): string {
   return url.startsWith('/') ? `${BASE}${url}` : url;

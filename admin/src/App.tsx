@@ -16,7 +16,7 @@ import type {
   User,
 } from '@audioworld/shared';
 import { anchorOf, flightCheck } from '@audioworld/shared';
-import { api, getToken, setToken } from './api';
+import { api, getToken, setToken, wikipediaExtract } from './api';
 import { freshDraft, pointToDraft, draftToInput, type DraftState } from './draft';
 import { isPathType } from './pointTypes';
 import NewCourseForm from './components/NewCourseForm';
@@ -222,9 +222,11 @@ export default function App() {
       for (const p of chosen) {
         // Add each place as a silent point that carries its facts; you voice it later
         // (optionally with a persona) in the point editor. No TTS / credits spent here.
-        const facts = [p.description, p.wikipedia ? `Wikipedia: ${p.wikipedia}` : '']
+        // OSM rarely has a description, so pull the real summary from Wikipedia when tagged.
+        const wiki = p.wikipedia ? await wikipediaExtract(p.wikipedia) : null;
+        const facts = [p.description, wiki, p.wikipedia ? `(Wikipedia: ${p.wikipedia})` : '']
           .filter(Boolean)
-          .join('\n');
+          .join('\n\n');
         const input: AudioPointInput = {
           courseId,
           name: p.name,
