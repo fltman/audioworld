@@ -142,15 +142,20 @@ function SoundCard({
           </button>
         </span>
       </div>
-      <input
+      <textarea
         className="sound-card__name"
         placeholder="Untitled clip — add a name…"
         value={desc}
+        rows={1}
         title={upload.filename}
         onChange={(e) => setDesc(e.currentTarget.value)}
         onBlur={() => void save()}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
+          // Enter saves; Shift+Enter adds a line.
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
         }}
       />
       <audio className="sound-card__audio" controls preload="none" src={absoluteAudioUrl(upload.url)} />

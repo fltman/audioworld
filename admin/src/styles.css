@@ -206,6 +206,13 @@ body {
   font: inherit;
   font-weight: 600;
   padding: 2px 0;
+  /* Wrap + auto-grow so the whole name is readable, not clipped to one line. */
+  resize: none;
+  overflow: hidden;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  word-break: break-word;
+  field-sizing: content;
 }
 .sound-card__name:focus {
   outline: none;
