@@ -617,6 +617,14 @@ body {
   align-items: center;
 }
 
+/* Inline "arm then confirm" delete (ConfirmButton) — keep the two buttons together. */
+.confirm-inline {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .inline-form {
   display: flex;
   flex-direction: column;

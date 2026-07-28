@@ -13,6 +13,7 @@ import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
 import { ApiError, absoluteAudioUrl, api, wikipediaExtract } from '../api';
 import PointNarrate from './PointNarrate';
+import ConfirmButton from './ConfirmButton';
 
 /** Seconds -> m:ss. */
 function fmtTime(sec: number): string {
@@ -888,9 +889,9 @@ export default function PointForm(props: Props) {
           Cancel
         </button>
         {draft.editingId && (
-          <button type="button" className="btn btn-danger" onClick={onDelete}>
+          <ConfirmButton className="btn btn-danger" onConfirm={onDelete} cancelLabel="Keep">
             Delete
-          </button>
+          </ConfirmButton>
         )}
       </div>
     </section>

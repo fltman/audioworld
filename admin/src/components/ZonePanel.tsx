@@ -1,4 +1,5 @@
 import type { AcousticZone, ReverbCharacter } from '@audioworld/shared';
+import ConfirmButton from './ConfirmButton';
 
 const REVERBS: ReverbCharacter[] = ['outdoor', 'room', 'hall', 'cathedral', 'tunnel'];
 
@@ -95,9 +96,9 @@ export default function ZonePanel({
             value={z.ambienceUrl ?? ''}
             onChange={(e) => onUpdate(i, { ambienceUrl: e.currentTarget.value || undefined })}
           />
-          <button type="button" className="btn btn-danger small" onClick={() => onDelete(i)}>
+          <ConfirmButton className="btn btn-danger small" onConfirm={() => onDelete(i)}>
             Delete zone
-          </button>
+          </ConfirmButton>
         </div>
       ))}
 

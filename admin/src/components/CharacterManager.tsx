@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Character, CharacterInput, ElevenVoice, UploadListItem } from '@audioworld/shared';
 import { ApiError, absoluteAudioUrl, api } from '../api';
+import ConfirmButton from './ConfirmButton';
 
 interface Props {
   characters: Character[];
@@ -287,9 +288,12 @@ export default function CharacterManager({ characters, onChange }: Props) {
                   <button type="button" className="icon-btn" onClick={() => void duplicate(c)}>
                     Duplicate
                   </button>
-                  <button type="button" className="icon-btn icon-btn--danger" onClick={() => void remove(c)}>
+                  <ConfirmButton
+                    className="icon-btn icon-btn--danger"
+                    onConfirm={() => void remove(c)}
+                  >
                     Delete
-                  </button>
+                  </ConfirmButton>
                 </span>
               </div>
               <div className="guide-card__chips">
