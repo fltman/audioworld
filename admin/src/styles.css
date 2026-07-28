@@ -1308,34 +1308,84 @@ input[type='range'] {
 .stops {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
+/* Each stop is its own card: header (number + status), the narration editor as the
+   primary action, then a tucked-away manual pause/clip fold. */
 .stop-entry {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.stop-entry__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stop-badge {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.stop-badge.ok {
+  color: var(--success-strong);
+  border-color: var(--success-tint);
+  background: var(--success-tint);
 }
 .stop-row {
   display: grid;
-  grid-template-columns: auto 52px 1fr 28px;
+  grid-template-columns: 52px 1fr 28px;
   gap: 6px;
   align-items: center;
 }
 .stop-narrate {
   font-size: 12px;
 }
+/* The narration fold is the star of each stop — make it read as a clear action. */
 .stop-narrate > summary {
+  cursor: pointer;
+  color: var(--accent-light);
+  font-weight: 600;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  list-style-position: inside;
+}
+.stop-narrate > summary:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.stop-narrate[open] > summary {
+  margin-bottom: 4px;
+}
+.stop-narrate .textarea {
+  margin-top: 6px;
+  min-height: 56px;
+}
+/* The manual pause/clip fold is secondary — keep it quiet. */
+.stop-manual {
+  font-size: 12px;
+}
+.stop-manual > summary {
   cursor: pointer;
   color: var(--muted);
   padding: 2px 0 2px 4px;
   list-style-position: inside;
 }
-.stop-narrate > summary:hover {
+.stop-manual > summary:hover {
   color: var(--text);
 }
-.stop-narrate .textarea {
+.stop-row--manual {
   margin-top: 6px;
-  min-height: 56px;
 }
 
 /* ---------- POI → audio (scout AI convert) ---------- */

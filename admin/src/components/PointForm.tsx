@@ -615,98 +615,113 @@ export default function PointForm(props: Props) {
               const stop = draft.stops.find((s) => s.index === i);
               return (
                 <div key={i} className="stop-entry">
-                <div className="stop-row">
-                  <span className="stop-row__t">
-                    #{i + 1}
-                    <em>{fmtTime(vertexTimes[i] ?? 0)}</em>
-                  </span>
-                  <input
-                    className="input stop-row__dwell"
-                    type="number"
-                    min={0}
-                    step={1}
-                    placeholder="0s"
-                    value={stop?.dwellSec ?? ''}
-                    onChange={(e) =>
+                  <div className="stop-entry__head">
+                    <span className="stop-row__t">
+                      #{i + 1}
+                      <em>{fmtTime(vertexTimes[i] ?? 0)}</em>
+                    </span>
+                    {stop?.audio?.url ? (
+                      <span className="stop-badge ok">
+                        ✓ voiced{stop.dwellSec ? ` · ${stop.dwellSec}s` : ''}
+                      </span>
+                    ) : (
+                      <span className="stop-badge">not voiced</span>
+                    )}
+                  </div>
+                  {/* Primary action — the same knowledge-base → write-in-persona → render flow
+                      as a single point, per stop. The persona defaults to the path's guide and
+                      can be overridden here for just this stop. First stop opens by default. */}
+                  <PointNarrate
+                    key={`${draft.editingId ?? 'new'}-stop${i}-${stop?.characterId || draft.characterId || 'none'}`}
+                    characters={props.characters}
+                    audio={stop?.audio ?? { kind: 'url', url: '' }}
+                    voices={voices}
+                    ttsOff={ttsOff}
+                    facts={stop?.facts ?? ''}
+                    onFactsChange={(v) => upsertStop(i, { facts: v || undefined })}
+                    defaultCharacterId={stop?.characterId || draft.characterId || undefined}
+                    onCharacterChange={(id) => upsertStop(i, { characterId: id || undefined })}
+                    initialText={stop?.facts ?? ''}
+                    title={`${draft.name} — stop ${i + 1}`}
+                    summaryLabel={`✨ Narrate this stop${stop?.audio?.url ? '' : ' — not voiced yet'}`}
+                    defaultOpen={i === 0}
+                    onGenerated={async (a) => {
+                      const dur = await measureAudioDuration(absoluteAudioUrl(a.url));
                       upsertStop(i, {
-                        dwellSec: Number.isFinite(e.currentTarget.valueAsNumber)
-                          ? e.currentTarget.valueAsNumber
-                          : 0,
-                      })
-                    }
-                  />
-                  <input
-                    className="input stop-row__url"
-                    type="text"
-                    placeholder="clip URL"
-                    value={stop?.audio?.url ?? ''}
-                    onChange={(e) =>
-                      upsertStop(i, {
-                        audio: e.currentTarget.value
-                          ? { kind: 'url', url: e.currentTarget.value }
-                          : undefined,
-                      })
-                    }
-                    onBlur={async (e) => {
-                      const raw = e.currentTarget.value.trim();
-                      // Auto-fill the dwell from the clip length only when it hasn't
-                      // been set yet, so a re-blur never clobbers a manual value.
-                      if (!raw || (stop?.dwellSec ?? 0) > 0) return;
-                      const dur = await measureAudioDuration(absoluteAudioUrl(raw));
-                      if (dur) upsertStop(i, { dwellSec: Math.ceil(dur) });
+                        audio: { ...a, title: a.title ?? `${draft.name} — stop ${i + 1}` },
+                        ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
+                      });
                     }}
                   />
-                  <label className="stop-row__up" title="Upload clip">
-                    &#8593;
-                    <input
-                      type="file"
-                      accept="audio/*"
-                      hidden
-                      onChange={async (e) => {
-                        const f = e.currentTarget.files?.[0];
-                        if (!f) return;
-                        // Measure the clip locally while it uploads, then set the dwell
-                        // to its length so the guide pauses long enough to finish it.
-                        const obj = URL.createObjectURL(f);
-                        const [url, dur] = await Promise.all([
-                          props.onUploadFile(f),
-                          measureAudioDuration(obj),
-                        ]);
-                        URL.revokeObjectURL(obj);
-                        if (url) {
+                  {/* Secondary — set the pause length or attach an existing clip by hand. */}
+                  <details className="stop-manual">
+                    <summary>⏱ Pause &amp; manual clip</summary>
+                    <div className="stop-row stop-row--manual">
+                      <input
+                        className="input stop-row__dwell"
+                        type="number"
+                        min={0}
+                        step={1}
+                        placeholder="0s"
+                        title="Seconds the guide pauses here"
+                        value={stop?.dwellSec ?? ''}
+                        onChange={(e) =>
                           upsertStop(i, {
-                            audio: { kind: 'upload', url, title: f.name },
-                            ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
-                          });
+                            dwellSec: Number.isFinite(e.currentTarget.valueAsNumber)
+                              ? e.currentTarget.valueAsNumber
+                              : 0,
+                          })
                         }
-                      }}
-                    />
-                  </label>
-                </div>
-                {/* Same knowledge-base → write-in-persona → render flow as a single point,
-                    but per stop. The persona defaults to the path's guide and can be
-                    overridden here for just this stop. */}
-                <PointNarrate
-                  key={`${draft.editingId ?? 'new'}-stop${i}-${stop?.characterId || draft.characterId || 'none'}`}
-                  characters={props.characters}
-                  audio={stop?.audio ?? { kind: 'url', url: '' }}
-                  voices={voices}
-                  ttsOff={ttsOff}
-                  facts={stop?.facts ?? ''}
-                  onFactsChange={(v) => upsertStop(i, { facts: v || undefined })}
-                  defaultCharacterId={stop?.characterId || draft.characterId || undefined}
-                  onCharacterChange={(id) => upsertStop(i, { characterId: id || undefined })}
-                  initialText={stop?.facts ?? ''}
-                  title={`${draft.name} — stop ${i + 1}`}
-                  summaryLabel={`✨ Narrate stop ${i + 1}${stop?.audio?.url ? '' : ' — not voiced yet'}`}
-                  onGenerated={async (a) => {
-                    const dur = await measureAudioDuration(absoluteAudioUrl(a.url));
-                    upsertStop(i, {
-                      audio: { ...a, title: a.title ?? `${draft.name} — stop ${i + 1}` },
-                      ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
-                    });
-                  }}
-                />
+                      />
+                      <input
+                        className="input stop-row__url"
+                        type="text"
+                        placeholder="clip URL"
+                        value={stop?.audio?.url ?? ''}
+                        onChange={(e) =>
+                          upsertStop(i, {
+                            audio: e.currentTarget.value
+                              ? { kind: 'url', url: e.currentTarget.value }
+                              : undefined,
+                          })
+                        }
+                        onBlur={async (e) => {
+                          const raw = e.currentTarget.value.trim();
+                          // Auto-fill the dwell from the clip length only when it hasn't
+                          // been set yet, so a re-blur never clobbers a manual value.
+                          if (!raw || (stop?.dwellSec ?? 0) > 0) return;
+                          const dur = await measureAudioDuration(absoluteAudioUrl(raw));
+                          if (dur) upsertStop(i, { dwellSec: Math.ceil(dur) });
+                        }}
+                      />
+                      <label className="stop-row__up" title="Upload clip">
+                        &#8593;
+                        <input
+                          type="file"
+                          accept="audio/*"
+                          hidden
+                          onChange={async (e) => {
+                            const f = e.currentTarget.files?.[0];
+                            if (!f) return;
+                            // Measure the clip locally while it uploads, then set the dwell
+                            // to its length so the guide pauses long enough to finish it.
+                            const obj = URL.createObjectURL(f);
+                            const [url, dur] = await Promise.all([
+                              props.onUploadFile(f),
+                              measureAudioDuration(obj),
+                            ]);
+                            URL.revokeObjectURL(obj);
+                            if (url) {
+                              upsertStop(i, {
+                                audio: { kind: 'upload', url, title: f.name },
+                                ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
+                              });
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </details>
                 </div>
               );
             })}

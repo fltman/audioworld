@@ -28,6 +28,8 @@ interface Props {
   onCharacterChange?: (characterId: string) => void;
   /** Override the collapsible summary label. */
   summaryLabel?: string;
+  /** Start expanded (e.g. the first path stop, so the editor is obvious). */
+  defaultOpen?: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ export default function PointNarrate({
   defaultCharacterId,
   onCharacterChange,
   summaryLabel,
+  defaultOpen,
 }: Props) {
   // When a voice list is passed in we adopt it; otherwise we fetch our own.
   const shared = voicesProp !== undefined;
@@ -60,6 +63,7 @@ export default function PointNarrate({
   const [writing, setWriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [open, setOpen] = useState(defaultOpen ?? false);
 
   // Facts come from an editable prop (stops) or the clip's own description (single points).
   const editableFacts = onFactsChange !== undefined;
@@ -157,7 +161,7 @@ export default function PointNarrate({
   // even when TTS is unconfigured — only the final render is gated on ElevenLabs.
 
   return (
-    <details className="stop-narrate">
+    <details className="stop-narrate" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>{summary}</summary>
 
       {editableFacts && (
