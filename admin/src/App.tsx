@@ -516,12 +516,14 @@ export default function App() {
     });
 
   // While drawing a path, clicking an existing point folds it into the route: its location
-  // becomes a vertex and (if it has a clip) a narrated stop. The original point is deleted
-  // when the path is saved (so cancelling the path leaves everything untouched).
+  // becomes a vertex and its clip + knowledge base (facts) become a narrated stop. The
+  // original point is deleted when the path is saved (cancelling leaves everything untouched).
   const absorbPointIntoPath = async (id: string) => {
     const p = points.find((x) => x.id === id);
     if (!p || !draft?.drawingPath || draft.absorbedIds.includes(id)) return;
     const coord = anchorOf(p);
+    // Carry the point's facts (its knowledge base lives in audio.description) and its clip.
+    const facts = p.audio.description?.trim() || undefined;
     const clip = p.audio.url
       ? { kind: p.audio.kind, url: p.audio.url, title: p.audio.title ?? p.name }
       : null;
@@ -530,9 +532,20 @@ export default function App() {
     // stall (missing file, slow host), so it must never block the fold.
     setDraft((d) => {
       if (!d || !d.drawingPath || d.absorbedIds.includes(p.id)) return d;
-      const stops = clip
-        ? [...d.stops, { index, dwellSec: DEFAULT_ABSORB_DWELL, audio: clip }]
-        : d.stops;
+      // A stop is created when the point brings a clip or facts (an unvoiced but researched
+      // place keeps its knowledge base so you can narrate it as part of the path).
+      const stops =
+        clip || facts
+          ? [
+              ...d.stops,
+              {
+                index,
+                dwellSec: clip ? DEFAULT_ABSORB_DWELL : 0,
+                ...(clip ? { audio: clip } : {}),
+                ...(facts ? { facts } : {}),
+              },
+            ]
+          : d.stops;
       return { ...d, path: [...d.path, coord], stops, absorbedIds: [...d.absorbedIds, p.id] };
     });
     // Refine the dwell to the clip's true length once known (best-effort, times out).
