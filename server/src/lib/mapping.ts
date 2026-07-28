@@ -392,6 +392,8 @@ function pathStops(value: unknown, pathLen: number): PathStop[] {
         title: typeof a.title === 'string' ? a.title : undefined,
       };
     }
+    if (typeof o.facts === 'string' && o.facts.trim()) stop.facts = o.facts;
+    if (typeof o.characterId === 'string' && o.characterId) stop.characterId = o.characterId;
     return stop;
   });
 }

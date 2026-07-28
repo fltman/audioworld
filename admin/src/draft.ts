@@ -320,7 +320,9 @@ export function draftToInput(d: DraftState): DraftResult {
           ...common,
           type: 'path',
           path: d.path,
-          stops: d.stops.filter((s) => s.dwellSec > 0 && s.index < d.path.length),
+          stops: d.stops.filter(
+            (s) => s.index < d.path.length && (s.dwellSec > 0 || !!s.audio?.url || !!s.facts?.trim())
+          ),
           radius: d.radius,
           speed: d.speed,
           endBehavior: d.endBehavior,
@@ -353,7 +355,9 @@ export function draftToInput(d: DraftState): DraftResult {
           ...common,
           type: 'path_triggered',
           path: d.path,
-          stops: d.stops.filter((s) => s.dwellSec > 0 && s.index < d.path.length),
+          stops: d.stops.filter(
+            (s) => s.index < d.path.length && (s.dwellSec > 0 || !!s.audio?.url || !!s.facts?.trim())
+          ),
           triggerRadius: d.triggerRadius,
           speed: d.speed,
           endBehavior: d.endBehavior,

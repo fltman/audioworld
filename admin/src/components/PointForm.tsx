@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import type {
   Character,
+  ElevenVoice,
   FollowMode,
   LocalizedClip,
   PathEndBehavior,
@@ -10,7 +11,7 @@ import type {
 import { pathVertexTimes } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { POINT_TYPE_META, isPathType } from '../pointTypes';
-import { absoluteAudioUrl, api, wikipediaExtract } from '../api';
+import { ApiError, absoluteAudioUrl, api, wikipediaExtract } from '../api';
 import PointNarrate from './PointNarrate';
 
 /** Seconds -> m:ss. */
@@ -19,18 +20,25 @@ function fmtTime(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Load only an audio clip's metadata and resolve its duration in seconds (null on failure). */
-function measureAudioDuration(url: string): Promise<number | null> {
+/**
+ * Load only an audio clip's metadata and resolve its duration in seconds (null on failure).
+ * Times out so a missing/slow file (a 404 fires neither `loadedmetadata` nor `error` in some
+ * browsers) can never hang the caller.
+ */
+function measureAudioDuration(url: string, timeoutMs = 4000): Promise<number | null> {
   return new Promise((resolve) => {
     const audio = new Audio();
     audio.preload = 'metadata';
+    let timer = 0;
     const finish = (v: number | null) => {
+      window.clearTimeout(timer);
       audio.removeEventListener('loadedmetadata', onMeta);
       audio.removeEventListener('error', onErr);
       resolve(v);
     };
     const onMeta = () => finish(Number.isFinite(audio.duration) ? audio.duration : null);
     const onErr = () => finish(null);
+    timer = window.setTimeout(() => finish(null), timeoutMs);
     audio.addEventListener('loadedmetadata', onMeta);
     audio.addEventListener('error', onErr);
     audio.src = url;
@@ -106,18 +114,24 @@ export default function PointForm(props: Props) {
   const { draft, onChange, onSave, onCancel, onDelete, onUpload, saving, uploading, error } = props;
   const meta = POINT_TYPE_META[draft.type];
   const { audio, playback } = draft;
-  // The guide assigned to this point (if any) — drives per-stop narration in its voice.
-  const assignedGuide = props.characters.find((c) => c.id === draft.characterId);
   // Global (shared) timing only makes sense for the continuously-moving types, and a
   // wait-for-listener path is inherently individual (each device has its own leash).
   const canSync =
     (draft.type === 'path' && !draft.waitForListener) || draft.type === 'static_circling';
 
-  // Per-stop narration draft text + in-flight/error state (transient; not persisted).
-  const [narrateText, setNarrateText] = useState<Record<number, string>>({});
-  const [narrating, setNarrating] = useState<number | null>(null);
-  const [narrateError, setNarrateError] = useState<{ index: number; msg: string } | null>(null);
   const [fetchingWiki, setFetchingWiki] = useState(false);
+  // One shared voice list for every narration widget (the single point + each path stop), so
+  // a path with many stops issues one voices request instead of one per stop.
+  const [voices, setVoices] = useState<ElevenVoice[]>([]);
+  const [ttsOff, setTtsOff] = useState(false);
+  useEffect(() => {
+    api
+      .listVoices()
+      .then(setVoices)
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 503) setTtsOff(true);
+      });
+  }, []);
 
   // A "wikipedia: lang:Title" reference left in the facts (e.g. from Discover) → offer to
   // pull the real summary from Wikipedia.
@@ -134,13 +148,6 @@ export default function PointForm(props: Props) {
       setFetchingWiki(false);
     }
   };
-  // Reset the transient narration UI when switching to a different point.
-  useEffect(() => {
-    setNarrateText({});
-    setNarrating(null);
-    setNarrateError(null);
-  }, [draft.editingId]);
-
   const vertexTimes = isPathType(draft.type)
     ? pathVertexTimes(draft.path, draft.speed, draft.stops)
     : [];
@@ -151,27 +158,6 @@ export default function PointForm(props: Props) {
       ? draft.stops.map((s) => (s.index === index ? { ...s, ...patch } : s))
       : [...draft.stops, { index, dwellSec: 0, ...patch }];
     onChange({ stops });
-  };
-
-  // Synthesize this stop's line in the assigned guide's voice → saved to the library
-  // once, attached as the stop's clip, with dwell set to the clip length.
-  const narrateStop = async (index: number) => {
-    const text = (narrateText[index] ?? '').trim();
-    if (!text || !assignedGuide?.voiceId) return;
-    setNarrating(index);
-    setNarrateError(null);
-    try {
-      const res = await api.generateTts(text, assignedGuide.voiceId, 'eleven_v3');
-      const dur = await measureAudioDuration(absoluteAudioUrl(res.url));
-      upsertStop(index, {
-        audio: { kind: 'upload', url: res.url, title: `${assignedGuide.name} — stop ${index + 1}` },
-        ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
-      });
-    } catch (e) {
-      setNarrateError({ index, msg: e instanceof Error ? e.message : 'Narration failed' });
-    } finally {
-      setNarrating(null);
-    }
   };
 
   // The current clip's player (only when there IS a clip).
@@ -327,6 +313,8 @@ export default function PointForm(props: Props) {
             key={draft.editingId ?? 'new'}
             characters={props.characters}
             audio={audio}
+            voices={voices}
+            ttsOff={ttsOff}
             initialText={audio.description || draft.name}
             title={draft.name}
             onGenerated={(a) => onChange({ audio: a })}
@@ -563,6 +551,62 @@ export default function PointForm(props: Props) {
         </label>
       )}
 
+      {isPathType(draft.type) &&
+        (() => {
+          const guide = props.characters.find((x) => x.id === draft.characterId);
+          // A characterId that resolves to nothing (guide deleted since assignment).
+          const orphaned = draft.characterId !== '' && !guide;
+          return (
+            <div className="form-field">
+              <span className="label">Guide for the whole path</span>
+              <select
+                className="select"
+                value={draft.characterId}
+                onChange={(e) => {
+                  const id = e.currentTarget.value;
+                  const c = props.characters.find((x) => x.id === id);
+                  // Adopt the guide's idle sound as this point's travelling audio (what
+                  // plays between narration stops), keeping any language variants /
+                  // metadata already set on the clip. Its voice is the default persona
+                  // that narrates every stop.
+                  if (c?.idleSoundUrl) {
+                    onChange({
+                      characterId: id,
+                      audio: { ...audio, kind: 'upload', url: c.idleSoundUrl, title: `${c.name} (idle)` },
+                    });
+                  } else {
+                    onChange({ characterId: id });
+                  }
+                }}
+              >
+                <option value="">— None —</option>
+                {/* Keep the dangling id selectable so it renders honestly and can be cleared. */}
+                {orphaned && <option value={draft.characterId}>— (removed guide) —</option>}
+                {props.characters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.voiceName ? ` · ${c.voiceName}` : ''}
+                  </option>
+                ))}
+              </select>
+              {guide && (
+                <p className="geo-status ok">
+                  Default persona for every stop (override per stop below), voiced by{' '}
+                  {guide.voiceName ?? 'its voice'}. Travelling audio:{' '}
+                  {audio.url ? audio.title ?? audio.url : 'none set'}.
+                  {!guide.idleSoundUrl &&
+                    ' This guide has no idle sound — set the travelling audio above.'}
+                </p>
+              )}
+              {orphaned && (
+                <p className="geo-status">
+                  This point references a guide that no longer exists — pick another or “— None —”.
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
       {isPathType(draft.type) && draft.path.length >= 2 && (
         <div className="form-field">
           <span className="label">Stops · pause &amp; narrate (arrival time shown)</span>
@@ -639,31 +683,30 @@ export default function PointForm(props: Props) {
                     />
                   </label>
                 </div>
-                {assignedGuide?.voiceId && (
-                  <details className="stop-narrate">
-                    <summary>✨ Narrate in {assignedGuide.voiceName ?? 'the guide’s voice'}</summary>
-                    <textarea
-                      className="textarea"
-                      placeholder="What the guide says at this stop… eleven_v3 tags like [warmly], [pauses] work."
-                      value={narrateText[i] ?? ''}
-                      onChange={(e) =>
-                        setNarrateText((t) => ({ ...t, [i]: e.currentTarget.value }))
-                      }
-                    />
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn btn-accent small"
-                        disabled={narrating !== null || !(narrateText[i]?.trim())}
-                        onClick={() => void narrateStop(i)}
-                      >
-                        {narrating === i ? 'Generating…' : 'Generate & attach'}
-                      </button>
-                      <span className="muted gen-note">Uses ElevenLabs credits.</span>
-                    </div>
-                    {narrateError?.index === i && <div className="error">{narrateError.msg}</div>}
-                  </details>
-                )}
+                {/* Same knowledge-base → write-in-persona → render flow as a single point,
+                    but per stop. The persona defaults to the path's guide and can be
+                    overridden here for just this stop. */}
+                <PointNarrate
+                  key={`${draft.editingId ?? 'new'}-stop${i}-${stop?.characterId || draft.characterId || 'none'}`}
+                  characters={props.characters}
+                  audio={stop?.audio ?? { kind: 'url', url: '' }}
+                  voices={voices}
+                  ttsOff={ttsOff}
+                  facts={stop?.facts ?? ''}
+                  onFactsChange={(v) => upsertStop(i, { facts: v || undefined })}
+                  defaultCharacterId={stop?.characterId || draft.characterId || undefined}
+                  onCharacterChange={(id) => upsertStop(i, { characterId: id || undefined })}
+                  initialText={stop?.facts ?? ''}
+                  title={`${draft.name} — stop ${i + 1}`}
+                  summaryLabel={`✨ Narrate stop ${i + 1}${stop?.audio?.url ? '' : ' — not voiced yet'}`}
+                  onGenerated={async (a) => {
+                    const dur = await measureAudioDuration(absoluteAudioUrl(a.url));
+                    upsertStop(i, {
+                      audio: { ...a, title: a.title ?? `${draft.name} — stop ${i + 1}` },
+                      ...(dur ? { dwellSec: Math.ceil(dur) } : {}),
+                    });
+                  }}
+                />
                 </div>
               );
             })}
@@ -720,60 +763,6 @@ export default function PointForm(props: Props) {
         </div>
       )}
 
-      {isPathType(draft.type) &&
-        (() => {
-          const guide = props.characters.find((x) => x.id === draft.characterId);
-          // A characterId that resolves to nothing (guide deleted since assignment).
-          const orphaned = draft.characterId !== '' && !guide;
-          return (
-            <div className="form-field">
-              <span className="label">Guide (character)</span>
-              <select
-                className="select"
-                value={draft.characterId}
-                onChange={(e) => {
-                  const id = e.currentTarget.value;
-                  const c = props.characters.find((x) => x.id === id);
-                  // Adopt the guide's idle sound as this point's travelling audio (what
-                  // plays between narration stops), keeping any language variants /
-                  // metadata already set on the clip. Its voice is the author's
-                  // reference for recording the stops.
-                  if (c?.idleSoundUrl) {
-                    onChange({
-                      characterId: id,
-                      audio: { ...audio, kind: 'upload', url: c.idleSoundUrl, title: `${c.name} (idle)` },
-                    });
-                  } else {
-                    onChange({ characterId: id });
-                  }
-                }}
-              >
-                <option value="">— None —</option>
-                {/* Keep the dangling id selectable so it renders honestly and can be cleared. */}
-                {orphaned && <option value={draft.characterId}>— (removed guide) —</option>}
-                {props.characters.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.voiceName ? ` · ${c.voiceName}` : ''}
-                  </option>
-                ))}
-              </select>
-              {guide && (
-                <p className="geo-status ok">
-                  Narrate stops in {guide.voiceName ?? 'its voice'}. Travelling audio:{' '}
-                  {audio.url ? audio.title ?? audio.url : 'none set'}.
-                  {!guide.idleSoundUrl &&
-                    ' This guide has no idle sound — set the travelling audio above.'}
-                </p>
-              )}
-              {orphaned && (
-                <p className="geo-status">
-                  This point references a guide that no longer exists — pick another or “— None —”.
-                </p>
-              )}
-            </div>
-          );
-        })()}
 
       {isPathType(draft.type) && (
         <div className="checks">

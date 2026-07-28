@@ -170,6 +170,11 @@ export interface PathStop {
   dwellSec: number;
   /** Clip played once during the dwell; if omitted, the traveling audio continues. */
   audio?: AudioSource;
+  /** Source facts/knowledge this stop's narration is written from (authoring aid; the
+   *  spoken monologue is generated from it, not played directly). */
+  facts?: string;
+  /** Guide whose persona + voice narrates this stop; absent = the path's own guide. */
+  characterId?: string;
 }
 
 /** Source that travels a polyline at `speed` m/s, optionally pausing at stops. */
