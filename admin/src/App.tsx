@@ -520,7 +520,8 @@ export default function App() {
   // original point is deleted when the path is saved (cancelling leaves everything untouched).
   const absorbPointIntoPath = async (id: string) => {
     const p = points.find((x) => x.id === id);
-    if (!p || !draft?.drawingPath || draft.absorbedIds.includes(id)) return;
+    // Never fold the path into itself — saving deletes every absorbed point.
+    if (!p || !draft?.drawingPath || id === draft.editingId || draft.absorbedIds.includes(id)) return;
     const coord = anchorOf(p);
     // Carry the point's facts (its knowledge base lives in audio.description) and its clip.
     const facts = p.audio.description?.trim() || undefined;
@@ -714,15 +715,17 @@ export default function App() {
     setSaving(true);
     setFormError(null);
     try {
-      if (draft.editingId) {
-        const updated = await api.updatePoint(draft.editingId, result.input);
-        setPoints((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      } else {
-        const created = await api.createPoint(draft.courseId, result.input);
-        // Points folded into this path (their audio is now its stops) are removed.
-        await Promise.all(absorbed.map((id) => api.deletePoint(id).catch(() => undefined)));
-        setPoints((prev) => [...prev.filter((p) => !absorbed.includes(p.id)), created]);
-      }
+      const editingId = draft.editingId;
+      const saved = editingId
+        ? await api.updatePoint(editingId, result.input)
+        : await api.createPoint(draft.courseId, result.input);
+      // Points folded into this path (their audio is now its stops) are removed — for a new
+      // path and for an existing one extended via "Add points" alike.
+      await Promise.all(absorbed.map((id) => api.deletePoint(id).catch(() => undefined)));
+      setPoints((prev) => {
+        const kept = prev.filter((p) => !absorbed.includes(p.id));
+        return editingId ? kept.map((p) => (p.id === saved.id ? saved : p)) : [...kept, saved];
+      });
       setDraft(null);
     } catch (e) {
       setFormError(msg(e));
