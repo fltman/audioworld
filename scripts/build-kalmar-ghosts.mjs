@@ -55,10 +55,9 @@ const SECTION_OF = {
   vekesnoddaren: 24, riddaren: 25, lektorn: 26, konstapeln: 27,
 };
 
-// Ghosts wake at 7 m and fall silent past 28 m in the 3D version; GPS jitters by
-// 5–15 m in town, so the trigger is widened to 12 m and the audible field to 30 m.
-const TRIGGER_RADIUS = 12;
-const RADIUS = 30;
+// A ghost speaks within this radius. The closest pair (Pestänkan – Stadsvakten) stands
+// ~28 m apart, so anything above ~14 m makes neighbouring stories overlap.
+const RADIUS = 13;
 
 if (ghosts.length !== 27) throw new Error(`expected 27 ghosts, parsed ${ghosts.length}`);
 const now = new Date().toISOString();
@@ -84,7 +83,6 @@ for (const g of ghosts) {
     type: 'static',
     center: toLatLng(g.x, g.z),
     radius: RADIUS,
-    triggerRadius: TRIGGER_RADIUS,
     audio: { kind: 'upload', url, title: sec.heading, description: sec.body },
     playback: { loop: false, stopAfter: true, reload: false },
     volume: 1,
