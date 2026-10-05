@@ -306,9 +306,11 @@ export class AudioEngine {
         node.wasAudible = true;
       } else {
         node.gain.gain.setTargetAtTime(0, t, GAIN_TC);
-        // A native-looping source keeps running (silently) to preserve its phase; one-shot,
-        // reload and gapped-loop sources are stopped so the next entry starts fresh / re-armed.
-        if (!node.loop) {
+        // Out of range a source keeps running silently: a native loop keeps its phase, and a
+        // one-shot story survives a brief GPS wobble instead of starting over. Only
+        // "restart on re-entry" and gapped-loop sources are stopped, so the next entry
+        // starts fresh. (A one-shot that finishes while you're away replays on re-entry.)
+        if (!node.loop && (node.reload || node.loopGapMs > 0)) {
           this.clearGap(node);
           this.stopSource(node);
         }
