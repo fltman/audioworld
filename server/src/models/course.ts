@@ -6,6 +6,7 @@ import type {
   CourseInput,
   PublishedSnapshot,
 } from '@audioworld/shared';
+import { MAX_SLUG_LENGTH, slugify } from '@audioworld/shared';
 import { pool } from '../db/pool';
 
 const emptyAnalytics = (): CourseAnalytics => ({ cells: {}, reached: {}, sessions: 0 });
@@ -71,6 +72,7 @@ interface CourseRow {
   eyes_up: boolean;
   zones: AcousticZone[] | null;
   published: PublishedSnapshot | null;
+  slug: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -81,6 +83,7 @@ function rowToCourse(row: CourseRow): Course {
     name: row.name,
     description: row.description ?? undefined,
     ownerId: row.owner_id ?? null,
+    slug: row.slug ?? undefined,
     showStartWayfinding: row.show_start_wayfinding,
     eyesUp: row.eyes_up,
     zones: row.zones ?? [],
@@ -109,12 +112,61 @@ export async function getWithSnapshot(
   return rows[0] ? { course: rowToCourse(rows[0]), snapshot: rows[0].published ?? null } : null;
 }
 
-export async function listCourses(): Promise<Course[]> {
+export async function listCourses({ publishedOnly = false } = {}): Promise<Course[]> {
   // Bounded so the public list endpoint can't return an unbounded payload.
   const { rows } = await pool.query<CourseRow>(
-    'SELECT * FROM courses ORDER BY created_at ASC LIMIT 1000'
+    `SELECT * FROM courses ${publishedOnly ? 'WHERE published IS NOT NULL' : ''}
+     ORDER BY created_at ASC LIMIT 1000`
   );
   return rows.map(rowToCourse);
+}
+
+/** The course shared under a short address, or null. */
+export async function getBySlug(slug: string): Promise<Course | null> {
+  const { rows } = await pool.query<CourseRow>('SELECT * FROM courses WHERE slug = $1', [slug]);
+  return rows[0] ? rowToCourse(rows[0]) : null;
+}
+
+/** A short-address clash, surfaced to the client as 409 by the error middleware. */
+const slugTaken = (slug: string) =>
+  Object.assign(new Error(`The short address "${slug}" is already used by another course`), { status: 409 });
+
+const isSlugClash = (e: unknown): boolean =>
+  (e as { code?: string; constraint?: string })?.code === '23505' &&
+  (e as { constraint?: string }).constraint === 'courses_slug_idx';
+
+/** A free short address: `base`, else `base-2`, `base-3`, … (`exceptId`'s own slug doesn't count). */
+async function freeSlug(base: string, exceptId: string | null = null): Promise<string> {
+  const { rows } = await pool.query<{ slug: string }>(
+    `SELECT slug FROM courses WHERE (slug = $1 OR slug LIKE $1 || '-%') AND id IS DISTINCT FROM $2`,
+    [base, exceptId]
+  );
+  const taken = new Set(rows.map((r) => r.slug));
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const s = `${base.slice(0, MAX_SLUG_LENGTH - 1 - String(n).length).replace(/-+$/, '')}-${n}`;
+    if (!taken.has(s)) return s;
+  }
+}
+
+/** Whether another course already uses `slug`. */
+async function slugInUse(slug: string, exceptId: string | null): Promise<boolean> {
+  const { rows } = await pool.query('SELECT 1 FROM courses WHERE slug = $1 AND id IS DISTINCT FROM $2', [
+    slug,
+    exceptId,
+  ]);
+  return rows.length > 0;
+}
+
+/** Give every course that has no short address one, derived from its name (run at boot). */
+export async function ensureSlugs(): Promise<number> {
+  const { rows } = await pool.query<{ id: string; name: string }>(
+    'SELECT id, name FROM courses WHERE slug IS NULL ORDER BY created_at ASC'
+  );
+  for (const r of rows) {
+    await pool.query('UPDATE courses SET slug = $1 WHERE id = $2', [await freeSlug(slugify(r.name), r.id), r.id]);
+  }
+  return rows.length;
 }
 
 export async function getCourse(id: string): Promise<Course | null> {
@@ -129,19 +181,30 @@ export async function createCourse(
   input: CourseInput,
   ownerId: string | null = null
 ): Promise<Course> {
-  const { rows } = await pool.query<CourseRow>(
-    `INSERT INTO courses (name, description, owner_id, show_start_wayfinding, eyes_up, zones)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [
-      input.name,
-      input.description ?? null,
-      ownerId,
-      input.showStartWayfinding ?? false,
-      input.eyesUp ?? false,
-      JSON.stringify(input.zones ?? []),
-    ]
-  );
-  return rowToCourse(rows[0]!);
+  if (input.slug && (await slugInUse(input.slug, null))) throw slugTaken(input.slug);
+  // An auto-derived address can still race another insert; retry with the next free one.
+  for (let attempt = 0; ; attempt++) {
+    const slug = input.slug ?? (await freeSlug(slugify(input.name)));
+    try {
+      const { rows } = await pool.query<CourseRow>(
+        `INSERT INTO courses (name, description, owner_id, show_start_wayfinding, eyes_up, zones, slug)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [
+          input.name,
+          input.description ?? null,
+          ownerId,
+          input.showStartWayfinding ?? false,
+          input.eyesUp ?? false,
+          JSON.stringify(input.zones ?? []),
+          slug,
+        ]
+      );
+      return rowToCourse(rows[0]!);
+    } catch (e) {
+      if (!isSlugClash(e)) throw e;
+      if (input.slug || attempt >= 2) throw slugTaken(slug);
+    }
+  }
 }
 
 export async function updateCourse(
@@ -150,25 +213,34 @@ export async function updateCourse(
 ): Promise<Course | null> {
   // COALESCE: a null param (field omitted in the input) keeps the stored value, so a
   // partial update never wipes description/flag. An explicit "" / false still applies.
-  const { rows } = await pool.query<CourseRow>(
-    `UPDATE courses SET
-       name = $1,
-       description = COALESCE($2, description),
-       show_start_wayfinding = COALESCE($3, show_start_wayfinding),
-       eyes_up = COALESCE($4, eyes_up),
-       zones = COALESCE($5, zones),
-       updated_at = now()
-     WHERE id = $6 RETURNING *`,
-    [
-      input.name,
-      input.description ?? null,
-      input.showStartWayfinding ?? null,
-      input.eyesUp ?? null,
-      input.zones != null ? JSON.stringify(input.zones) : null,
-      id,
-    ]
-  );
-  return rows[0] ? rowToCourse(rows[0]) : null;
+  // The short address only changes when one is given — renaming a course keeps its link.
+  if (input.slug && (await slugInUse(input.slug, id))) throw slugTaken(input.slug);
+  try {
+    const { rows } = await pool.query<CourseRow>(
+      `UPDATE courses SET
+         name = $1,
+         description = COALESCE($2, description),
+         show_start_wayfinding = COALESCE($3, show_start_wayfinding),
+         eyes_up = COALESCE($4, eyes_up),
+         zones = COALESCE($5, zones),
+         slug = COALESCE($6, slug),
+         updated_at = now()
+       WHERE id = $7 RETURNING *`,
+      [
+        input.name,
+        input.description ?? null,
+        input.showStartWayfinding ?? null,
+        input.eyesUp ?? null,
+        input.zones != null ? JSON.stringify(input.zones) : null,
+        input.slug ?? null,
+        id,
+      ]
+    );
+    return rows[0] ? rowToCourse(rows[0]) : null;
+  } catch (e) {
+    if (input.slug && isSlugClash(e)) throw slugTaken(input.slug);
+    throw e;
+  }
 }
 
 export async function removeCourse(id: string): Promise<boolean> {

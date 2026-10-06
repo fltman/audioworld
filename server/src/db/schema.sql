@@ -86,6 +86,11 @@ CREATE TABLE IF NOT EXISTS characters (
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
 
+-- Readable short address a course is shared under (`<site>/<slug>`). Backfilled for existing
+-- courses at boot (see Courses.ensureSlugs); unique, but NULL is allowed until then.
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS slug text;
+CREATE UNIQUE INDEX IF NOT EXISTS courses_slug_idx ON courses(slug);
+
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
 CREATE INDEX IF NOT EXISTS scouts_owner_id_idx ON scouts(owner_id);

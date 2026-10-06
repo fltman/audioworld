@@ -298,6 +298,8 @@ export interface Course {
   description?: string;
   /** The superuser who owns/authored this course (null for legacy/admin-created). */
   ownerId?: string | null;
+  /** Unique, readable short address: the course is shared as `<site>/<slug>`. */
+  slug?: string;
   /** Acoustic zones (reverb + ambient beds) painted over the course area. */
   zones?: AcousticZone[];
   /**
@@ -410,7 +412,7 @@ export type AudioPointInput = DistributiveOmit<
 /** Payload accepted when creating/updating a course. */
 export type CourseInput = Pick<
   Course,
-  'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones'
+  'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones' | 'slug'
 >;
 
 /** One audio clip travelling inside a course bundle, base64-inlined. */

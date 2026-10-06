@@ -332,6 +332,19 @@ export default function App() {
     }
   };
 
+  // Change a course's short address; returns an error message (shown by the field), or null.
+  const saveSlug = async (id: string, slug: string): Promise<string | null> => {
+    const current = courses.find((c) => c.id === id);
+    if (!current) return 'Course not found';
+    try {
+      const updated = await api.updateCourse(id, { name: current.name, slug });
+      setCourses((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      return null;
+    } catch (e) {
+      return msg(e);
+    }
+  };
+
   const importCourse = async (file: File) => {
     try {
       const c = await api.importCourse(file);
@@ -916,6 +929,7 @@ export default function App() {
                     <PublishBar
                       courseId={courseId}
                       courseName={currentCourse.name}
+                      courseSlug={currentCourse.slug}
                       publishedAt={publishedAt}
                       dirty={dirty}
                       issues={flightIssues}
@@ -1110,6 +1124,7 @@ export default function App() {
                   <CourseSettings
                     course={currentCourse}
                     onUpdate={updateCourse}
+                    onSaveSlug={saveSlug}
                     onExport={exportCourse}
                     onImport={importCourse}
                     onDelete={deleteCourse}

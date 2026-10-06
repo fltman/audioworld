@@ -1,10 +1,13 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Course } from '@audioworld/shared';
-import ShareCourse from './ShareCourse';
+import { isValidSlug, MAX_SLUG_LENGTH } from '@audioworld/shared';
+import ShareCourse, { clientBase } from './ShareCourse';
 
 interface Props {
   course: Course;
   onUpdate: (id: string, patch: Partial<Course>) => void;
+  /** Change the short address; resolves to an error message, or null when saved. */
+  onSaveSlug: (id: string, slug: string) => Promise<string | null>;
   onExport: (id: string) => void;
   onImport: (file: File) => void;
   onDelete: (id: string) => void;
@@ -15,13 +18,59 @@ interface Props {
  * delete). These are set occasionally, so they live in a collapsed section rather than
  * competing with the everyday authoring flow.
  */
-export default function CourseSettings({ course, onUpdate, onExport, onImport, onDelete }: Props) {
+export default function CourseSettings({ course, onUpdate, onSaveSlug, onExport, onImport, onDelete }: Props) {
   const importInput = useRef<HTMLInputElement | null>(null);
   const [sharing, setSharing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [slug, setSlug] = useState(course.slug ?? '');
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [slugSaving, setSlugSaving] = useState(false);
+  useEffect(() => {
+    setSlug(course.slug ?? '');
+    setSlugError(null);
+  }, [course.id, course.slug]);
+
+  const slugChanged = slug !== (course.slug ?? '');
+  const slugOk = isValidSlug(slug);
+  const saveSlug = async () => {
+    setSlugSaving(true);
+    setSlugError(await onSaveSlug(course.id, slug));
+    setSlugSaving(false);
+  };
 
   return (
     <div className="course-settings">
+      <label className="form-field">
+        <span className="label">Short address</span>
+        <div className="field-row">
+          <span className="muted">{clientBase().replace(/^https?:\/\//, '')}/</span>
+          <input
+            className="input"
+            value={slug}
+            maxLength={MAX_SLUG_LENGTH}
+            spellCheck={false}
+            onChange={(e) => {
+              setSlug(e.currentTarget.value.toLowerCase().replace(/\s+/g, '-'));
+              setSlugError(null);
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-ghost small"
+            onClick={() => void saveSlug()}
+            disabled={!slugChanged || !slugOk || slugSaving}
+          >
+            {slugSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        {slugChanged && !slugOk ? (
+          <span className="field-hint">Lowercase a–z, digits and single hyphens, 2–{MAX_SLUG_LENGTH} characters.</span>
+        ) : (
+          <span className="field-hint">The link listeners use. Changing it breaks links and QR codes already shared.</span>
+        )}
+        {slugError && <div className="error">{slugError}</div>}
+      </label>
+
       <div className="course-check">
         <label className="check">
           <input
@@ -75,7 +124,12 @@ export default function CourseSettings({ course, onUpdate, onExport, onImport, o
       </div>
 
       {sharing && (
-        <ShareCourse courseId={course.id} courseName={course.name} onClose={() => setSharing(false)} />
+        <ShareCourse
+          courseId={course.id}
+          courseName={course.name}
+          courseSlug={course.slug}
+          onClose={() => setSharing(false)}
+        />
       )}
 
       {confirmDelete ? (

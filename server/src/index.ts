@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { CORS_ORIGIN, PORT, UPLOAD_DIR } from './env';
 import { applySchema } from './db/pool';
+import * as Courses from './models/course';
 import { coursesRouter } from './routes/courses';
 import { pointsRouter } from './routes/points';
 import { scoutsRouter } from './routes/scouts';
@@ -20,6 +21,9 @@ import { errorHandler } from './lib/http';
 async function main(): Promise<void> {
   if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true });
   await applySchema();
+  // Courses created before short addresses existed get one derived from their name.
+  const slugged = await Courses.ensureSlugs();
+  if (slugged) console.log(`Gave ${slugged} course(s) a short address`);
 
   const app = express();
   // Behind Caddy (one hop): trust it so req.ip is the real client IP, which the

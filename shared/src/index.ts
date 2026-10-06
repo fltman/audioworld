@@ -4,3 +4,4 @@ export * from './movement';
 export * from './localize';
 export * from './lint';
 export * from './audioEngine';
+export * from './slug';

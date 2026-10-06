@@ -6,7 +6,7 @@ import QRCode from 'qrcode';
  * host as the admin (`/admin`), so the current origin is correct; `VITE_CLIENT_URL`
  * overrides it for local dev where the client runs on a different port.
  */
-function clientBase(): string {
+export function clientBase(): string {
   const env = import.meta.env.VITE_CLIENT_URL as string | undefined;
   return (env || window.location.origin).replace(/\/$/, '');
 }
@@ -17,12 +17,14 @@ const slugify = (s: string): string =>
 interface Props {
   courseId: string;
   courseName: string;
+  /** The course's short address; the link falls back to `?course=<id>` without one. */
+  courseSlug?: string;
   onClose: () => void;
 }
 
 /** A shareable deep-link + scannable QR code for one course. */
-export default function ShareCourse({ courseId, courseName, onClose }: Props) {
-  const link = `${clientBase()}/?course=${courseId}`;
+export default function ShareCourse({ courseId, courseName, courseSlug, onClose }: Props) {
+  const link = courseSlug ? `${clientBase()}/${courseSlug}` : `${clientBase()}/?course=${courseId}`;
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export default function ShareCourse({ courseId, courseName, onClose }: Props) {
       {qr && (
         <div className="share__qr">
           <img src={qr} alt={`QR code for ${courseName}`} width={200} height={200} />
-          <a className="btn btn-ghost small" href={qr} download={`audioworld-${slugify(courseName)}.png`}>
+          <a className="btn btn-ghost small" href={qr} download={`audioworld-${courseSlug ?? slugify(courseName)}.png`}>
             Download QR
           </a>
         </div>

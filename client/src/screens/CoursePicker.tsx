@@ -4,9 +4,11 @@ import { getCourses } from '../api';
 
 interface CoursePickerProps {
   onPick: (course: Course) => void;
+  /** Shown above the list, e.g. when a short address didn't match any walk. */
+  notice?: string;
 }
 
-export function CoursePicker({ onPick }: CoursePickerProps) {
+export function CoursePicker({ onPick, notice }: CoursePickerProps) {
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -29,6 +31,8 @@ export function CoursePicker({ onPick }: CoursePickerProps) {
         <h1>AudioWorld</h1>
         <p>Walk into a soundscape and hear where every source is.</p>
       </div>
+
+      {notice && <div className="notice notice--error">{notice}</div>}
 
       {failed && (
         <div className="notice notice--error">

@@ -5,6 +5,7 @@ import ShareCourse from './ShareCourse';
 interface Props {
   courseId: string;
   courseName: string;
+  courseSlug?: string;
   publishedAt: string | null;
   dirty: boolean;
   issues: FlightIssue[];
@@ -18,6 +19,7 @@ interface Props {
 export default function PublishBar({
   courseId,
   courseName,
+  courseSlug,
   publishedAt,
   dirty,
   issues,
@@ -89,7 +91,12 @@ export default function PublishBar({
       )}
 
       {publishedAt && sharing && (
-        <ShareCourse courseId={courseId} courseName={courseName} onClose={() => setSharing(false)} />
+        <ShareCourse
+          courseId={courseId}
+          courseName={courseName}
+          courseSlug={courseSlug}
+          onClose={() => setSharing(false)}
+        />
       )}
     </section>
   );

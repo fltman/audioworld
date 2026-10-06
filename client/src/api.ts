@@ -103,7 +103,11 @@ export function uploadScoutImage(file: File): Promise<UploadResult> {
   return authed<UploadResult>('/api/upload/image', { method: 'POST', body: form });
 }
 
-export const getCourses = () => get<Course[]>('/api/courses');
+/** The listener's catalogue: published courses only. */
+export const getCourses = () => get<Course[]>('/api/courses?published=1');
+/** Resolve a short address (`<site>/<slug>`) to its course. */
+export const getCourseBySlug = (slug: string) =>
+  get<Course>(`/api/courses/by-slug/${encodeURIComponent(slug)}`);
 export const getCourse = (id: string) => get<Course>(`/api/courses/${id}`);
 export const getPoints = (courseId: string) =>
   get<AudioPoint[]>(`/api/courses/${courseId}/points`);

@@ -12,7 +12,7 @@ import type {
   PublishedSnapshot,
   ReverbCharacter,
 } from '@audioworld/shared';
-import { flightCheck } from '@audioworld/shared';
+import { flightCheck, isValidSlug, MAX_SLUG_LENGTH } from '@audioworld/shared';
 import * as Courses from '../models/course';
 import * as Points from '../models/point';
 import { ValidationError } from '../lib/mapping';
@@ -54,7 +54,20 @@ function validateCourseInput(body: unknown): CourseInput {
       typeof b.showStartWayfinding === 'boolean' ? b.showStartWayfinding : undefined,
     eyesUp: typeof b.eyesUp === 'boolean' ? b.eyesUp : undefined,
     zones: parseZones(b.zones),
+    slug: parseSlug(b.slug),
   };
+}
+
+/** A course's short address. Undefined (omitted) leaves it unchanged / auto-derives it. */
+function parseSlug(value: unknown): string | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value !== 'string' || !isValidSlug(value)) {
+    throw new ValidationError(
+      `The short address must be 2–${MAX_SLUG_LENGTH} lowercase letters a–z, digits and single hyphens, ` +
+        'and not a reserved word like "admin" or "api"'
+    );
+  }
+  return value;
 }
 
 /** A cell key must be a real "lat,lng" grid coordinate — not an arbitrary string, so
@@ -222,8 +235,23 @@ function parseZones(value: unknown): AcousticZone[] | undefined {
 
 coursesRouter.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const data = await Courses.listCourses();
+  asyncHandler(async (req, res) => {
+    // ?published=1 is the listener's catalogue: only courses that have been published.
+    const data = await Courses.listCourses({ publishedOnly: req.query.published === '1' });
+    res.json({ success: true, data });
+  })
+);
+
+// Public: resolve a short address (`<site>/<slug>`) to its course.
+coursesRouter.get(
+  '/by-slug/:slug',
+  asyncHandler(async (req, res) => {
+    const slug = req.params.slug.toLowerCase();
+    const data = isValidSlug(slug) ? await Courses.getBySlug(slug) : null;
+    if (!data) {
+      res.status(404).json({ success: false, error: 'Course not found' });
+      return;
+    }
     res.json({ success: true, data });
   })
 );
