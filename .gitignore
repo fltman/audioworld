@@ -17,3 +17,6 @@ shared/dist/
 server/uploads/
 client/dev-dist/
 _old_scaffold/
+
+# Generated audio for the Svinö Halloween course (rebuilt by scripts/svino-halloween)
+scripts/svino-halloween/audio/
