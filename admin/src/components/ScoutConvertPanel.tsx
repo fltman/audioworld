@@ -106,7 +106,7 @@ export default function ScoutConvertPanel({ waypoints, courseId, onPointsCreated
     setPlacing(wp.id);
     setError(null);
     try {
-      const clip = await api.generateTts(draft.narration, voiceId, 'eleven_v3');
+      const clip = await api.generateTts(draft.narration, voiceId, 'eleven_v4');
       const pt = await api.createPoint(courseId, pointFrom(courseId, wp, draft, clip.url));
       onPointsCreated([pt]);
       setPlaced((p) => new Set(p).add(wp.id));
@@ -139,7 +139,7 @@ export default function ScoutConvertPanel({ waypoints, courseId, onPointsCreated
           const persisted = draft;
           setDrafts((d) => ({ ...d, [wp.id]: persisted }));
         }
-        const clip = await api.generateTts(draft.narration, voiceId, 'eleven_v3');
+        const clip = await api.generateTts(draft.narration, voiceId, 'eleven_v4');
         created.push(await api.createPoint(courseId, pointFrom(courseId, wp, draft, clip.url)));
         done.add(wp.id); // record success BEFORE the next iteration
       }

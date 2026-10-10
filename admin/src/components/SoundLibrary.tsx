@@ -271,7 +271,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
         await api.generateSfx(prompt.trim(), dur);
         setPrompt('');
       } else {
-        await api.generateTts(text.trim(), voiceId, 'eleven_v3');
+        await api.generateTts(text.trim(), voiceId, 'eleven_v4');
         setText('');
       }
       onGenerated();
@@ -346,7 +346,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
         <>
           <textarea
             className="textarea"
-            placeholder="What should the voice say? eleven_v3 understands inline tags like [whispers], [excited], [laughs]."
+            placeholder="What should the voice say? eleven_v4 understands inline audio tags like [whispers], [excited], [laughs]."
             value={text}
             onChange={(e) => setText(e.currentTarget.value)}
           />
@@ -366,7 +366,7 @@ function GeneratePanel({ onGenerated }: { onGenerated: () => void }) {
           ) : (
             <p className="muted">{voicesError ?? 'No voices available on this account.'}</p>
           )}
-          <p className="muted gen-hint">Model: eleven_v3</p>
+          <p className="muted gen-hint">Model: eleven_v4</p>
         </>
       )}
 

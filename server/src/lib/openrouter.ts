@@ -206,7 +206,7 @@ const NARRATION_SYSTEM =
   'narration a visitor hears on arrival (2–5 sentences). If a persona is given, speak in ' +
   'its voice, manner and vocabulary; otherwise use a warm, neutral guide tone. Stay faithful ' +
   'to the facts — never invent. Reply with ONLY the narration text: no preamble, no quotes. ' +
-  'You may use sparse inline eleven_v3 tags like [warmly].';
+  'You may use sparse inline eleven_v4 audio tags like [warmly].';
 
 /** Rewrite a point's facts into spoken narration, optionally in a guide's persona. */
 export async function writeNarration(input: {

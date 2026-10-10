@@ -143,7 +143,7 @@ export default function PointNarrate({
     setBusy(true);
     setError(null);
     try {
-      const clip = await api.generateTts(text.trim(), voiceId, 'eleven_v3');
+      const clip = await api.generateTts(text.trim(), voiceId, 'eleven_v4');
       // Keep title/description(facts)/variants; swap in the generated clip.
       onGenerated({ ...audio, kind: 'upload', url: clip.url });
       setDone(true);
@@ -233,7 +233,7 @@ export default function PointNarrate({
         <span className="label">Narration (what’s spoken)</span>
         <textarea
           className="textarea"
-          placeholder="What the listener hears here — write it yourself or ✨ Write above. eleven_v3 tags like [warmly] work."
+          placeholder="What the listener hears here — write it yourself or ✨ Write above. eleven_v4 audio tags like [warmly] work."
           value={text}
           onChange={(e) => setText(e.currentTarget.value)}
         />

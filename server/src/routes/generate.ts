@@ -34,9 +34,11 @@ const dailyPaidLimit = rateLimit({ windowMs: 24 * 60 * 60 * 1000, max: 300, key:
 /** Hard cap on a single generated file (defence-in-depth; real mp3s are far smaller). */
 const MAX_GENERATED_BYTES = 30 * 1024 * 1024;
 
-// eleven_v3 is the expressive default the author asked for; keep a small allowlist so a
-// client can't inject an arbitrary model id into the upstream call.
+// eleven_v4 is the expressive default (ElevenLabs' current flagship); keep a small allowlist
+// so a client can't inject an arbitrary model id into the upstream call.
 const TTS_MODELS = new Set([
+  'eleven_v4',
+  'eleven_v4_turbo',
   'eleven_v3',
   'eleven_multilingual_v2',
   'eleven_turbo_v2_5',
@@ -110,7 +112,7 @@ generateRouter.post(
       throw new ValidationError(`Text must be at most ${MAX_TTS_TEXT} characters`);
     }
     if (!voiceId) throw new ValidationError('A "voiceId" is required');
-    const modelId = TTS_MODELS.has(str(b.modelId)) ? str(b.modelId) : 'eleven_v3';
+    const modelId = TTS_MODELS.has(str(b.modelId)) ? str(b.modelId) : 'eleven_v4';
     const bytes = await generateTts(text, voiceId, modelId);
     const label = text.length > 60 ? `${text.slice(0, 60)}…` : text;
     res.status(201).json({ success: true, data: await saveToLibrary(bytes, `TTS: ${label}`, 'voice') });
