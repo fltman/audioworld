@@ -53,6 +53,9 @@ interface SourceNode {
   gapTimer: number | null;
 }
 
+/** Loudness of a zone's ambient bed when the zone doesn't set `ambienceVolume`. */
+export const DEFAULT_AMBIENCE_VOLUME = 0.6;
+
 const POS_TC = 0.05; // panner glide
 const GAIN_TC = 0.08; // loudness glide
 const RATE_TC = 0.06; // Doppler pitch glide
@@ -99,7 +102,7 @@ export class AudioEngine {
   /** Desired ambient URL — guards the async decode against a zone change mid-load. */
   private ambientTarget: string | null = null;
   /** Latest desired ambient volume, applied even if set while the bed is still loading. */
-  private ambientVolume = 0.6;
+  private ambientVolume = DEFAULT_AMBIENCE_VOLUME;
   /** Pending ambient fade-out stop timers, cancelled on dispose. */
   private readonly ambientTimers = new Set<number>();
 
@@ -188,14 +191,20 @@ export class AudioEngine {
     }
 
     const url = zone?.ambienceUrl || null;
-    this.ambientVolume = Math.max(0, Math.min(1, zone?.ambienceVolume ?? 0.6));
     if (url === this.ambientTarget) {
-      if (this.ambient) this.ambient.gain.gain.setTargetAtTime(this.ambientVolume, t, 0.3);
+      this.setAmbienceVolume(zone?.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME);
       return;
     }
+    this.ambientVolume = Math.max(0, Math.min(1, zone?.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME));
     this.ambientTarget = url;
     this.fadeOutAmbient();
     if (url) void this.startAmbient(url);
+  }
+
+  /** Re-level the current zone's ambient bed (e.g. while an author mixes it by ear). */
+  setAmbienceVolume(volume: number): void {
+    this.ambientVolume = Math.max(0, Math.min(1, volume));
+    this.ambient?.gain.gain.setTargetAtTime(this.ambientVolume, this.ctx.currentTime, 0.3);
   }
 
   private impulse(char: ReverbCharacter): AudioBuffer {

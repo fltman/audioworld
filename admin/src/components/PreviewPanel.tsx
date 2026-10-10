@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { DEFAULT_AMBIENCE_VOLUME, type AcousticZone } from '@audioworld/shared';
 import {
   WALK_SPEEDS,
   type PreviewBlip,
@@ -10,6 +11,12 @@ import {
 interface Props {
   engine: PreviewEngine;
   onStop: () => void;
+  /** The course's zones (with unsaved edits), so the one you stand in can be mixed live. */
+  zones: AcousticZone[];
+  zonesDirty: boolean;
+  savingZones: boolean;
+  onZoneUpdate: (id: string, patch: Partial<AcousticZone>) => void;
+  onSaveZones: () => void;
 }
 
 /** Compass arrow for a relative azimuth (0 = ahead / up). */
@@ -43,11 +50,22 @@ function isTextEntry(t: EventTarget | null): boolean {
   return !['range', 'checkbox', 'radio', 'button'].includes((t as HTMLInputElement).type);
 }
 
-export default function PreviewPanel({ engine, onStop }: Props) {
+export default function PreviewPanel({
+  engine,
+  onStop,
+  zones,
+  zonesDirty,
+  savingZones,
+  onZoneUpdate,
+  onSaveZones,
+}: Props) {
   const [audible, setAudible] = useState<PreviewBlip[]>([]);
   const [heading, setHeading] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speed, setSpeed] = useState<WalkSpeed>('walk');
+  const [zoneId, setZoneId] = useState<string | null>(null);
+  const zone = zones.find((z) => z.id === zoneId);
+  const ambience = zone?.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME;
 
   // Drive the audio + HUD.
   useEffect(() => {
@@ -60,6 +78,7 @@ export default function PreviewPanel({ engine, onStop }: Props) {
         last = now;
         setAudible(f.audible);
         setHeading(Math.round(f.heading));
+        setZoneId(f.zoneId);
       }
       raf = requestAnimationFrame(loop);
     };
@@ -158,6 +177,27 @@ export default function PreviewPanel({ engine, onStop }: Props) {
           }}
         />
       </label>
+
+      {zone?.ambienceUrl && (
+        <label className="form-field">
+          <span className="label">
+            Background in “{zone.name}” {Math.round(ambience * 100)}%
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={ambience}
+            onChange={(e) => onZoneUpdate(zone.id, { ambienceVolume: e.currentTarget.valueAsNumber })}
+          />
+        </label>
+      )}
+      {zonesDirty && (
+        <button type="button" className="btn btn-accent small" onClick={onSaveZones} disabled={savingZones}>
+          {savingZones ? 'Saving…' : 'Save zone changes'}
+        </button>
+      )}
 
       <ul className="preview-list">
         {audible.length === 0 ? (

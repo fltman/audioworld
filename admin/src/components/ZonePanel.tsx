@@ -1,4 +1,4 @@
-import type { AcousticZone, ReverbCharacter } from '@audioworld/shared';
+import { DEFAULT_AMBIENCE_VOLUME, type AcousticZone, type ReverbCharacter } from '@audioworld/shared';
 import ConfirmButton from './ConfirmButton';
 
 const REVERBS: ReverbCharacter[] = ['outdoor', 'room', 'hall', 'cathedral', 'tunnel'];
@@ -18,7 +18,7 @@ interface Props {
   onSave: () => void;
 }
 
-/** Author acoustic zones: draw a polygon on the map, then pick reverb + ambient bed. */
+/** Author acoustic zones: draw a polygon on the map, then pick reverb + ambient bed (and its level). */
 export default function ZonePanel({
   zones,
   drawing,
@@ -96,6 +96,19 @@ export default function ZonePanel({
             value={z.ambienceUrl ?? ''}
             onChange={(e) => onUpdate(i, { ambienceUrl: e.currentTarget.value || undefined })}
           />
+          {z.ambienceUrl && (
+            <label className="zone-row__wet">
+              ambience volume {Math.round((z.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME) * 100)}%
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={z.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME}
+                onChange={(e) => onUpdate(i, { ambienceVolume: e.currentTarget.valueAsNumber })}
+              />
+            </label>
+          )}
           <ConfirmButton className="btn btn-danger small" onConfirm={() => onDelete(i)}>
             Delete zone
           </ConfirmButton>

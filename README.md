@@ -82,7 +82,8 @@ drag the listener to jump, or hold **W/↑** to walk, **←/→** (or Q/E) to tu
 hurry. Pick Walk / Jog / Bike pace in the panel. The map scrolls along as you walk. Every moving sound (path,
 triggered path, circling, follow) travels its route live with its name and audible range, so you can see whether its
 pace and timing work against yours; its label lights up while it pauses at a stop, and each sound you can hear
-pulses and gets a line to the listener.
+pulses and gets a line to the listener. Standing in an acoustic zone with a background loop, you can set that
+loop's volume by ear right in the panel (also under **🔊 Zones**), so it doesn't drown out the course.
 
 ### Try it on a real phone
 

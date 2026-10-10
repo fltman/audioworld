@@ -1033,7 +1033,17 @@ export default function App() {
             {hasInspector && (
               <aside className="inspector">
                 {preview ? (
-                  <PreviewPanel engine={preview} onStop={stopPreview} />
+                  <PreviewPanel
+                    engine={preview}
+                    onStop={stopPreview}
+                    zones={zones}
+                    zonesDirty={zonesDirty}
+                    savingZones={savingZones}
+                    onZoneUpdate={(id, patch) =>
+                      setZones((z) => z.map((zz) => (zz.id === id ? { ...zz, ...patch } : zz)))
+                    }
+                    onSaveZones={() => void saveZones()}
+                  />
                 ) : draft ? (
                   <PointForm
                     draft={draft}

@@ -14,7 +14,7 @@ import {
   resolveSource,
   zoneAt,
 } from '@audioworld/shared';
-import { AudioEngine, type FrameSource } from '@audioworld/shared';
+import { AudioEngine, DEFAULT_AMBIENCE_VOLUME, type FrameSource } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
 
 export interface PreviewBlip {
@@ -44,6 +44,8 @@ export interface PreviewFrame {
   heading: number;
   audible: PreviewBlip[];
   sources: PreviewSource[];
+  /** The acoustic zone the listener is standing in, if any. */
+  zoneId: string | null;
 }
 
 /** A movement key the author is holding down. */
@@ -128,6 +130,9 @@ export class PreviewEngine {
   }
   setZones(zones: AcousticZone[]): void {
     this.zones = zones;
+    // Mixing the zone you're standing in: re-level its ambient bed live.
+    const here = this.lastZoneId ? zones.find((z) => z.id === this.lastZoneId) : undefined;
+    if (here) this.audio?.setAmbienceVolume(here.ambienceVolume ?? DEFAULT_AMBIENCE_VOLUME);
   }
   /** Jump straight to a spot (cancels any walk in progress). */
   setListener(c: Coordinates): void {
@@ -362,7 +367,7 @@ export class PreviewEngine {
     for (const f of raised) if (!this.locked.has(f)) this.flags.add(f);
 
     this.audio?.update(frame);
-    this.lastFrame = { listener: user, heading, audible, sources };
+    this.lastFrame = { listener: user, heading, audible, sources, zoneId: this.lastZoneId };
     return this.lastFrame;
   }
 
