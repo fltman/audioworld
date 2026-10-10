@@ -1172,54 +1172,6 @@ input[type='range'] {
   color: var(--muted);
 }
 
-/* Motion-preview playback bar (bottom-left of the map). */
-.map-motion {
-  position: absolute;
-  left: 12px;
-  bottom: 14px;
-  z-index: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(23, 23, 34, 0.92);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: 6px 8px;
-  font-size: 12px;
-  color: var(--muted);
-  backdrop-filter: blur(4px);
-}
-.map-motion__title {
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 11px;
-}
-.map-motion__btn {
-  min-width: 28px;
-  line-height: 16px;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 4px 6px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-}
-.map-motion__btn:hover {
-  border-color: var(--accent);
-}
-.map-motion__clock {
-  min-width: 38px;
-  color: var(--text);
-  font-family: ui-monospace, monospace;
-  text-align: center;
-}
-.map-motion .seg button {
-  padding: 4px 8px;
-}
-
 .legend {
   position: absolute;
   bottom: 14px;
@@ -1397,7 +1349,7 @@ input[type='range'] {
   background: rgba(124, 92, 255, 0.4);
 }
 
-/* ---------- Moving sources (motion preview + playtest) ---------- */
+/* ---------- Moving sources (playtest) ---------- */
 .aw-ghost {
   position: relative;
   width: 20px;
@@ -1450,9 +1402,8 @@ input[type='range'] {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0 5px;
-  font-size: 10px;
-  font-family: ui-monospace, monospace;
-  line-height: 15px;
+  font-size: 11px;
+  line-height: 16px;
   white-space: nowrap;
 }
 .aw-ghost__label:empty {

@@ -9,7 +9,7 @@ export interface GhostFrame {
   position: Coordinates;
   /** Audible range in metres — a ring that travels with the source. */
   radius: number;
-  /** Text beside the pin (time into the route), or null for none. */
+  /** Text beside the pin (the source's name), or null for none. */
   label: string | null;
   /** Dwelling at a guided-tour stop. */
   dwelling: boolean;
@@ -40,10 +40,10 @@ function ghostIcon(type: PointType): L.DivIcon {
 }
 
 /**
- * Moving sources drawn where they are right now: the type's pin travelling the map with
- * its audible range around it, so an author can see a route's pace and timing (and,
- * while playtesting, which of them the listener can hear). Non-interactive, so clicks
- * fall through to the map. Call `update` every frame with the current positions.
+ * Moving sources drawn where they are right now while playtesting: the type's pin
+ * travelling the map with its name and audible range, so an author can see a route's
+ * pace and timing against the listener, and which of them can be heard. Non-interactive,
+ * so clicks fall through to the map. Call `update` every frame with the current positions.
  */
 export class GhostLayer {
   private readonly layer: L.LayerGroup;

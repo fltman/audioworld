@@ -19,7 +19,6 @@ import { draftAudibleRadius } from '../draft';
 import { POINT_TYPE_META, POINT_TYPE_ORDER, isPathType } from '../pointTypes';
 import { absoluteAudioUrl } from '../api';
 import type { PreviewEngine, PreviewFrame } from '../services/previewEngine';
-import { moverAt, moversOf } from '../motion';
 import { GhostLayer } from './ghostLayer';
 
 const ACCENT = '#7c5cff';
@@ -32,8 +31,6 @@ const FOLLOW_MARGIN = 0.3;
 const FOLLOW_MIN_MS = 50;
 /** Source types that travel — drawn as moving pins while playtesting. */
 const MOVING_TYPES = new Set<PointType>(['path', 'path_triggered', 'static_circling', 'follow_user']);
-/** Motion-preview playback rates (fast-forward long routes). */
-const MOTION_RATES = [1, 4, 10] as const;
 
 interface Props {
   points: AudioPoint[];
@@ -233,13 +230,6 @@ export default function MapView(props: Props) {
   const clickTimer = useRef<number | null>(null);
   const stateRef = useRef(props);
   stateRef.current = props;
-
-  // Motion-preview clock, advanced by the animation loop (refs: no re-render per frame).
-  const motion = useRef({ clockSec: 0, playing: true, rate: 1, restartWallMs: Date.now() });
-  const motionClockRef = useRef<HTMLSpanElement>(null);
-  const [hasMovers, setHasMovers] = useState(false);
-  const [motionPlaying, setMotionPlaying] = useState(true);
-  const [motionRate, setMotionRate] = useState(1);
 
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -455,7 +445,17 @@ export default function MapView(props: Props) {
       ghosts.update(
         f.sources.flatMap((s) =>
           s.position && MOVING_TYPES.has(s.type)
-            ? [{ id: s.id, type: s.type, position: s.position, radius: s.radius, label: null, dwelling: false, audible: s.audible }]
+            ? [
+                {
+                  id: s.id,
+                  type: s.type,
+                  position: s.position,
+                  radius: s.radius,
+                  label: s.name,
+                  dwelling: s.dwelling,
+                  audible: s.audible,
+                },
+              ]
             : []
         )
       );
@@ -560,52 +560,6 @@ export default function MapView(props: Props) {
       marker.remove();
       ghosts.remove();
       lineLayer.remove();
-    };
-  }, [props.preview]);
-
-  // Motion preview (while editing): every moving source — and the point being edited,
-  // with its unsaved settings — travels its route on the map, with the time into the
-  // route beside it, so pace and timing can be checked against the vertex labels.
-  // Playtest draws live positions from its engine instead.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || props.preview) return;
-    const ghosts = new GhostLayer(map);
-    let raf = 0;
-    let last = performance.now();
-    let any = false;
-    const loop = (now: number) => {
-      const m = motion.current;
-      if (m.playing) m.clockSec += ((now - last) / 1000) * m.rate;
-      last = now;
-      const s = stateRef.current;
-      const movers = moversOf(s.points, s.draft, m.restartWallMs);
-      ghosts.update(
-        movers.map((mv) => {
-          const st = moverAt(mv, m.clockSec);
-          return {
-            id: mv.id,
-            type: mv.type,
-            position: st.position,
-            radius: mv.radius,
-            label: st.tripSec != null ? fmtTime(st.tripSec) : null,
-            dwelling: st.dwelling,
-            audible: false,
-          };
-        })
-      );
-      if (movers.length > 0 !== any) {
-        any = movers.length > 0;
-        setHasMovers(any);
-      }
-      if (motionClockRef.current) motionClockRef.current.textContent = fmtTime(m.clockSec);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(raf);
-      ghosts.remove();
-      setHasMovers(false);
     };
   }, [props.preview]);
 
@@ -788,58 +742,6 @@ export default function MapView(props: Props) {
         </button>
         {notFound && <span className="map-search__hint">Not found</span>}
       </form>
-
-      {hasMovers && !props.preview && (
-        <div
-          className="map-motion"
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-        >
-          <span className="map-motion__title">Motion</span>
-          <button
-            type="button"
-            className="map-motion__btn"
-            title={motionPlaying ? 'Pause' : 'Play'}
-            onClick={() => {
-              motion.current.playing = !motion.current.playing;
-              setMotionPlaying(motion.current.playing);
-            }}
-          >
-            {motionPlaying ? '❚❚' : '▶'}
-          </button>
-          <button
-            type="button"
-            className="map-motion__btn"
-            title="Restart every route from 0:00"
-            onClick={() => {
-              motion.current.clockSec = 0;
-              motion.current.restartWallMs = Date.now();
-            }}
-          >
-            ↺
-          </button>
-          <span ref={motionClockRef} className="map-motion__clock">
-            0:00
-          </span>
-          <div className="seg">
-            {MOTION_RATES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                className={motionRate === r ? 'active' : ''}
-                onClick={() => {
-                  motion.current.rate = r;
-                  setMotionRate(r);
-                }}
-              >
-                {r}×
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="legend">
         {POINT_TYPE_ORDER.map((t) => (

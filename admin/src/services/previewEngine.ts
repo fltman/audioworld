@@ -35,6 +35,8 @@ export interface PreviewSource {
   /** Audible range in metres. */
   radius: number;
   audible: boolean;
+  /** Paused at a guided-tour stop. */
+  dwelling: boolean;
 }
 
 export interface PreviewFrame {
@@ -305,6 +307,7 @@ export class PreviewEngine {
         position: r.position,
         radius,
         audible: r.audible,
+        dwelling: r.atStop != null,
       });
       const startOffsetSec = startAt != null ? clockSec : undefined;
       if (
