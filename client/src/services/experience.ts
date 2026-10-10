@@ -428,7 +428,9 @@ export class ExperienceEngine {
     const zone = zoneAt(this.zones, user);
     if ((zone?.id ?? null) !== this.lastZoneId) {
       this.lastZoneId = zone?.id ?? null;
-      this.audio?.setZone(zone);
+      this.audio?.setZone(
+        zone?.ambienceUrl ? { ...zone, ambienceUrl: absoluteAudioUrl(zone.ambienceUrl) } : zone
+      );
     }
 
     const heading = headingDeg ?? 0;

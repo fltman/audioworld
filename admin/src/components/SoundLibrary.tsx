@@ -3,12 +3,12 @@ import type { ElevenVoice, UploadListItem } from '@audioworld/shared';
 import { ApiError, absoluteAudioUrl, api } from '../api';
 
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|opus|webm|flac)$/i;
-const isAudio = (filename: string): boolean => AUDIO_EXT.test(filename);
+export const isAudio = (filename: string): boolean => AUDIO_EXT.test(filename);
 
-type Kind = 'sfx' | 'voice' | 'other';
+export type Kind = 'sfx' | 'voice' | 'other';
 
 /** Effective kind: the stored classification, else inferred from a generate prefix. */
-function effectiveKind(u: UploadListItem): Kind {
+export function effectiveKind(u: UploadListItem): Kind {
   if (u.kind === 'sfx' || u.kind === 'voice') return u.kind;
   const d = (u.description ?? '').trim().toLowerCase();
   if (d.startsWith('sfx:')) return 'sfx';
@@ -21,7 +21,7 @@ const KIND_BADGE: Record<Kind, { label: string; cls: string }> = {
   other: { label: 'Clip', cls: 'kind--clip' },
 };
 
-const clipName = (u: UploadListItem): string => u.description || u.filename;
+export const clipName = (u: UploadListItem): string => u.description || u.filename;
 
 function SoundCard({
   upload,
@@ -162,7 +162,7 @@ function SoundCard({
       <div className="sound-card__meta">
         <span>{Math.round(upload.size / 1024)} KB</span>
         <span className={usedBy > 0 ? 'used-pill' : 'muted'}>
-          {usedBy > 0 ? `In ${usedBy} point${usedBy === 1 ? '' : 's'}` : 'Unused'}
+          {usedBy > 0 ? `Used ${usedBy}×` : 'Unused'}
         </span>
         <span className="muted">{saving ? 'saving…' : flash ? 'saved ✓' : ''}</span>
       </div>
@@ -171,7 +171,7 @@ function SoundCard({
         <div className="sound-card__confirm">
           <p className="muted">
             {usedBy > 0
-              ? `Used in ${usedBy} point${usedBy === 1 ? '' : 's'}. Deleting leaves ${usedBy === 1 ? 'it' : 'them'} silent.`
+              ? `Used ${usedBy}× (points + zone backgrounds). Deleting leaves ${usedBy === 1 ? 'it' : 'them'} silent.`
               : 'Delete this clip permanently?'}
           </p>
           {usedBy > 0 && others.length > 0 && (

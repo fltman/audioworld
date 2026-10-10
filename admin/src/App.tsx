@@ -1072,6 +1072,7 @@ export default function App() {
                 ) : tool === 'zones' ? (
                   <ZonePanel
                     zones={zones}
+                    points={points}
                     drawing={zoneDraft != null}
                     draftLen={zoneDraft?.length ?? 0}
                     saving={savingZones}

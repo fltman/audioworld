@@ -201,6 +201,13 @@ export class AudioEngine {
     if (url) void this.startAmbient(url);
   }
 
+  /** Re-set the current zone's reverb amount in place (an author dragging its slider),
+   *  without the impulse cross-fade a zone change does. */
+  setReverbWet(wet: number): void {
+    const send = this.reverbSends[this.activeReverb]!;
+    send.gain.setTargetAtTime(Math.max(0, Math.min(1, wet)), this.ctx.currentTime, 0.1);
+  }
+
   /** Re-level the current zone's ambient bed (e.g. while an author mixes it by ear). */
   setAmbienceVolume(volume: number): void {
     this.ambientVolume = Math.max(0, Math.min(1, volume));

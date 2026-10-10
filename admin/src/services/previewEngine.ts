@@ -251,7 +251,9 @@ export class PreviewEngine {
     const zone = zoneAt(this.zones, user);
     if ((zone?.id ?? null) !== this.lastZoneId) {
       this.lastZoneId = zone?.id ?? null;
-      this.audio?.setZone(zone);
+      this.audio?.setZone(
+        zone?.ambienceUrl ? { ...zone, ambienceUrl: absoluteAudioUrl(zone.ambienceUrl) } : zone
+      );
     }
 
     for (const point of this.points) {

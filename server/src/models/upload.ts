@@ -72,7 +72,7 @@ function pointClipUrls(audioUrl: string | null, config: Record<string, unknown>)
   return urls;
 }
 
-/** How many points reference each clip url (each point counted once per distinct clip). */
+/** How many points (each counted once per distinct clip) and zone backgrounds reference each clip url. */
 export async function clipUsageCounts(): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   const { rows } = await pool.query<{ audio_url: string | null; config: Record<string, unknown> }>(
@@ -81,6 +81,15 @@ export async function clipUsageCounts(): Promise<Map<string, number>> {
   for (const r of rows) {
     for (const u of pointClipUrls(r.audio_url, r.config ?? {})) {
       counts.set(u, (counts.get(u) ?? 0) + 1);
+    }
+  }
+  // Zone background loops too, so the library never offers one up as unused.
+  const { rows: courses } = await pool.query<{ zones: unknown }>('SELECT zones FROM courses');
+  for (const c of courses) {
+    if (!Array.isArray(c.zones)) continue;
+    for (const zone of c.zones) {
+      const u = (zone as { ambienceUrl?: unknown })?.ambienceUrl;
+      if (typeof u === 'string' && u) counts.set(u, (counts.get(u) ?? 0) + 1);
     }
   }
   return counts;

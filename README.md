@@ -83,7 +83,14 @@ hurry. Pick Walk / Jog / Bike pace in the panel. The map scrolls along as you wa
 triggered path, circling, follow) travels its route live with its name and audible range, so you can see whether its
 pace and timing work against yours; its label lights up while it pauses at a stop, and each sound you can hear
 pulses and gets a line to the listener. Standing in an acoustic zone with a background loop, you can set that
-loop's volume by ear right in the panel (also under **🔊 Zones**), so it doesn't drown out the course.
+loop's volume by ear right in the panel, so it doesn't drown out the course.
+
+### Acoustic zones (admin)
+
+Under **🔊 Zones**, draw a polygon, then pick its reverb character and amount and an optional background loop,
+taken from the sound library, a new upload, or a link, with its own volume. **▶ Preview** plays the zone on its own:
+the background at its volume plus a test sound (a hand clap, or one of the course's sounds) through the zone's
+reverb. Changes to the reverb, amount, loop or volume play live while you listen.
 
 ### Try it on a real phone
 
