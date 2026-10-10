@@ -74,6 +74,21 @@ Move with **WASD / arrow keys**, turn your heading with **Q / E** (or the slider
 You start on the first point of the course. Put on headphones — the tones pan and attenuate as you walk and turn.
 `?course=<id>` deep-links straight into a course.
 
+### See how sounds move (admin)
+
+While you edit a course, every moving sound (path, triggered path, circling) travels its route on the map
+with the time into the route beside it, so you can check pace and timing against the vertex time labels.
+The point you're editing moves with its unsaved settings. The **Motion** bar (bottom-left) pauses,
+restarts from 0:00, and fast-forwards (1× / 4× / 10×).
+
+### Playtest while authoring (admin)
+
+Open a course in the admin and press **▶ Playtest**, then put on headphones. A virtual listener walks the map
+at a real walking pace through the same audio engine as the app: **click the map (or a point) to walk there**,
+drag the listener to jump, or hold **W/↑** to walk, **←/→** (or Q/E) to turn, **A/D** to sidestep and **Shift** to
+hurry. Pick Walk / Jog / Bike pace in the panel. The map scrolls along as you walk, moving sources are plotted live,
+and each sound you can hear gets a line to the listener.
+
 ### Try it on a real phone
 
 GPS + compass require a **secure context**. Expose the client over HTTPS (e.g. an ngrok/Cloudflare tunnel to

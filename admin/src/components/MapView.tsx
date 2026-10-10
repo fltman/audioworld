@@ -11,17 +11,29 @@ import {
   type BBox,
   type Coordinates,
   type DiscoveredPlace,
+  type PointType,
   type ScoutWaypoint,
 } from '@audioworld/shared';
 import type { DraftState } from '../draft';
 import { draftAudibleRadius } from '../draft';
 import { POINT_TYPE_META, POINT_TYPE_ORDER, isPathType } from '../pointTypes';
 import { absoluteAudioUrl } from '../api';
-import type { PreviewEngine } from '../services/previewEngine';
+import type { PreviewEngine, PreviewFrame } from '../services/previewEngine';
+import { moverAt, moversOf } from '../motion';
+import { GhostLayer } from './ghostLayer';
 
 const ACCENT = '#7c5cff';
 const DEFAULT_CENTER: [number, number] = [59.3293, 18.0686];
 const DEFAULT_ZOOM = 15;
+/** Playtest camera: once the walking listener comes within this fraction of the map's
+ *  size from an edge, the map scrolls along with it (a game-camera deadzone). */
+const FOLLOW_MARGIN = 0.3;
+/** Cap camera pans at ~20/s — every pan fires moveend, which re-renders the app. */
+const FOLLOW_MIN_MS = 50;
+/** Source types that travel — drawn as moving pins while playtesting. */
+const MOVING_TYPES = new Set<PointType>(['path', 'path_triggered', 'static_circling', 'follow_user']);
+/** Motion-preview playback rates (fast-forward long routes). */
+const MOTION_RATES = [1, 4, 10] as const;
 
 interface Props {
   points: AudioPoint[];
@@ -222,6 +234,13 @@ export default function MapView(props: Props) {
   const stateRef = useRef(props);
   stateRef.current = props;
 
+  // Motion-preview clock, advanced by the animation loop (refs: no re-render per frame).
+  const motion = useRef({ clockSec: 0, playing: true, rate: 1, restartWallMs: Date.now() });
+  const motionClockRef = useRef<HTMLSpanElement>(null);
+  const [hasMovers, setHasMovers] = useState(false);
+  const [motionPlaying, setMotionPlaying] = useState(true);
+  const [motionRate, setMotionRate] = useState(1);
+
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -274,9 +293,9 @@ export default function MapView(props: Props) {
 
     map.on('click', (e: L.LeafletMouseEvent) => {
       const c = toCoord(e.latlng);
-      // In playtest mode a map click moves the virtual listener instead of placing points.
+      // In playtest mode a map click walks the virtual listener there instead of placing points.
       if (stateRef.current.preview) {
-        stateRef.current.preview.setListener(c);
+        stateRef.current.preview.walkTo(c);
         return;
       }
       const d = stateRef.current.draft;
@@ -420,11 +439,53 @@ export default function MapView(props: Props) {
   }, [props.zones, props.zoneDraft]);
 
   // Playtest: a draggable virtual listener. A loop keeps the marker synced to the
-  // engine (which the keyboard also drives) and rotates its cone to the heading.
+  // engine (which the keyboard + click-to-walk also drive), rotates its cone to the
+  // heading, scrolls the map along as it walks, and plots where every sound is right
+  // now — moving ones travel their routes, and each one you can hear gets a line to
+  // the listener.
   useEffect(() => {
     const map = mapRef.current;
     const preview = props.preview;
     if (!map || !preview) return;
+
+    const ghosts = new GhostLayer(map);
+    const lineLayer = L.layerGroup().addTo(map);
+    const lines = new Map<string, L.Polyline>();
+    const drawLive = (f: PreviewFrame) => {
+      ghosts.update(
+        f.sources.flatMap((s) =>
+          s.position && MOVING_TYPES.has(s.type)
+            ? [{ id: s.id, type: s.type, position: s.position, radius: s.radius, label: null, dwelling: false, audible: s.audible }]
+            : []
+        )
+      );
+      // A line from the listener to every source it can hear.
+      const here: [number, number] = [f.listener.lat, f.listener.lng];
+      const heard = new Set<string>();
+      for (const s of f.sources) {
+        if (!s.position || !s.audible) continue;
+        heard.add(s.id);
+        const at: [number, number] = [s.position.lat, s.position.lng];
+        const line = lines.get(s.id);
+        if (line) line.setLatLngs([here, at]);
+        else
+          lines.set(
+            s.id,
+            L.polyline([here, at], {
+              color: POINT_TYPE_META[s.type].color,
+              weight: 2,
+              opacity: 0.8,
+              dashArray: '4 6',
+              interactive: false,
+            }).addTo(lineLayer)
+          );
+      }
+      for (const [id, line] of lines) {
+        if (heard.has(id)) continue;
+        lineLayer.removeLayer(line);
+        lines.delete(id);
+      }
+    };
 
     const marker = L.marker([preview.listener.lat, preview.listener.lng], {
       icon: listenerIcon(),
@@ -433,27 +494,118 @@ export default function MapView(props: Props) {
     }).addTo(map);
     map.setView([preview.listener.lat, preview.listener.lng], map.getZoom());
 
+    // Dragging the listener moves it live (you hear the sweep), facing the drag.
     let dragging = false;
     marker.on('dragstart', () => {
       dragging = true;
     });
+    marker.on('drag', () => preview.dragTo(toCoord(marker.getLatLng())));
     marker.on('dragend', () => {
       dragging = false;
-      preview.setListener(toCoord(marker.getLatLng()));
+      preview.dragTo(toCoord(marker.getLatLng()));
+      preview.endDrag();
     });
+    // Don't steer the camera while the author is panning or zooming by hand.
+    let mapBusy = false;
+    const busy = () => {
+      mapBusy = true;
+    };
+    const idle = () => {
+      mapBusy = false;
+    };
+    map.on('dragstart zoomstart', busy);
+    map.on('dragend zoomend', idle);
+
+    // Scroll the map just enough to keep the listener out of the edge margin. Only
+    // while it moves, so panning away to look around while standing still sticks.
+    const keepInView = (here: Coordinates) => {
+      const size = map.getSize();
+      const p = map.latLngToContainerPoint([here.lat, here.lng]);
+      if (p.x < 0 || p.y < 0 || p.x > size.x || p.y > size.y) {
+        // Walking again after the author panned away: bring the listener back to centre.
+        map.setView([here.lat, here.lng], map.getZoom(), { animate: false });
+        return;
+      }
+      const edge = (v: number, len: number) => {
+        const m = len * FOLLOW_MARGIN;
+        return v < m ? v - m : v > len - m ? v - (len - m) : 0;
+      };
+      const dx = Math.round(edge(p.x, size.x));
+      const dy = Math.round(edge(p.y, size.y));
+      if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { animate: false });
+    };
 
     let raf = 0;
-    const loop = () => {
-      if (!dragging) marker.setLatLng([preview.listener.lat, preview.listener.lng]);
+    let lastFollow = 0;
+    let lastListener = preview.listener;
+    const loop = (now: number) => {
+      const here = preview.listener;
+      if (!dragging) marker.setLatLng([here.lat, here.lng]);
       const cone = marker.getElement()?.querySelector<HTMLElement>('.aw-listener__cone');
       if (cone) cone.style.transform = `rotate(${preview.heading}deg)`;
+      if (preview.lastFrame) drawLive(preview.lastFrame);
+      if (here !== lastListener && !dragging && !mapBusy && now - lastFollow >= FOLLOW_MIN_MS) {
+        lastListener = here;
+        lastFollow = now;
+        keepInView(here);
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
 
     return () => {
       cancelAnimationFrame(raf);
+      map.off('dragstart zoomstart', busy);
+      map.off('dragend zoomend', idle);
       marker.remove();
+      ghosts.remove();
+      lineLayer.remove();
+    };
+  }, [props.preview]);
+
+  // Motion preview (while editing): every moving source — and the point being edited,
+  // with its unsaved settings — travels its route on the map, with the time into the
+  // route beside it, so pace and timing can be checked against the vertex labels.
+  // Playtest draws live positions from its engine instead.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || props.preview) return;
+    const ghosts = new GhostLayer(map);
+    let raf = 0;
+    let last = performance.now();
+    let any = false;
+    const loop = (now: number) => {
+      const m = motion.current;
+      if (m.playing) m.clockSec += ((now - last) / 1000) * m.rate;
+      last = now;
+      const s = stateRef.current;
+      const movers = moversOf(s.points, s.draft, m.restartWallMs);
+      ghosts.update(
+        movers.map((mv) => {
+          const st = moverAt(mv, m.clockSec);
+          return {
+            id: mv.id,
+            type: mv.type,
+            position: st.position,
+            radius: mv.radius,
+            label: st.tripSec != null ? fmtTime(st.tripSec) : null,
+            dwelling: st.dwelling,
+            audible: false,
+          };
+        })
+      );
+      if (movers.length > 0 !== any) {
+        any = movers.length > 0;
+        setHasMovers(any);
+      }
+      if (motionClockRef.current) motionClockRef.current.textContent = fmtTime(m.clockSec);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      ghosts.remove();
+      setHasMovers(false);
     };
   }, [props.preview]);
 
@@ -472,7 +624,9 @@ export default function MapView(props: Props) {
         p,
         () => {
           const s = stateRef.current;
-          if (s.multiSelect) s.onToggleSelect?.(id);
+          // Playtesting: clicking a point walks the listener over to it.
+          if (s.preview) s.preview.walkTo(anchorOf(p));
+          else if (s.multiSelect) s.onToggleSelect?.(id);
           else s.onSelectPoint(id);
         },
         selected.has(id)
@@ -634,6 +788,58 @@ export default function MapView(props: Props) {
         </button>
         {notFound && <span className="map-search__hint">Not found</span>}
       </form>
+
+      {hasMovers && !props.preview && (
+        <div
+          className="map-motion"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          <span className="map-motion__title">Motion</span>
+          <button
+            type="button"
+            className="map-motion__btn"
+            title={motionPlaying ? 'Pause' : 'Play'}
+            onClick={() => {
+              motion.current.playing = !motion.current.playing;
+              setMotionPlaying(motion.current.playing);
+            }}
+          >
+            {motionPlaying ? '❚❚' : '▶'}
+          </button>
+          <button
+            type="button"
+            className="map-motion__btn"
+            title="Restart every route from 0:00"
+            onClick={() => {
+              motion.current.clockSec = 0;
+              motion.current.restartWallMs = Date.now();
+            }}
+          >
+            ↺
+          </button>
+          <span ref={motionClockRef} className="map-motion__clock">
+            0:00
+          </span>
+          <div className="seg">
+            {MOTION_RATES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={motionRate === r ? 'active' : ''}
+                onClick={() => {
+                  motion.current.rate = r;
+                  setMotionRate(r);
+                }}
+              >
+                {r}×
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="legend">
         {POINT_TYPE_ORDER.map((t) => (

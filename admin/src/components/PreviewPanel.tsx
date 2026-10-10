@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { PreviewBlip, PreviewEngine } from '../services/previewEngine';
+import {
+  WALK_SPEEDS,
+  type PreviewBlip,
+  type PreviewEngine,
+  type WalkControl,
+  type WalkSpeed,
+} from '../services/previewEngine';
 
 interface Props {
   engine: PreviewEngine;
@@ -13,10 +19,35 @@ function arrow(az: number): string {
   return glyphs[Math.round(a / 45) % 8]!;
 }
 
+/** Arrows turn (like turning your head toward a sound); A / D sidestep. */
+const KEYMAP: Record<string, WalkControl> = {
+  w: 'forward',
+  arrowup: 'forward',
+  s: 'back',
+  arrowdown: 'back',
+  a: 'left',
+  d: 'right',
+  q: 'turnLeft',
+  arrowleft: 'turnLeft',
+  e: 'turnRight',
+  arrowright: 'turnRight',
+};
+
+const SPEED_LABEL: Record<WalkSpeed, string> = { walk: 'Walk', jog: 'Jog', bike: 'Bike' };
+
+/** Typing in a field must not walk the listener (sliders + checkboxes are fine). */
+function isTextEntry(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false;
+  if (t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+  if (t.tagName !== 'INPUT') return false;
+  return !['range', 'checkbox', 'radio', 'button'].includes((t as HTMLInputElement).type);
+}
+
 export default function PreviewPanel({ engine, onStop }: Props) {
   const [audible, setAudible] = useState<PreviewBlip[]>([]);
   const [heading, setHeading] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [speed, setSpeed] = useState<WalkSpeed>('walk');
 
   // Drive the audio + HUD.
   useEffect(() => {
@@ -36,41 +67,36 @@ export default function PreviewPanel({ engine, onStop }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [engine]);
 
-  // WASD / arrows walk, Q / E turn.
+  // Hold to walk / turn. Capture phase + stopPropagation so Leaflet's own arrow-key
+  // panning (when the map has focus) doesn't fight the listener.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      switch (e.key.toLowerCase()) {
-        case 'w':
-        case 'arrowup':
-          engine.walk(engine.heading);
-          break;
-        case 's':
-        case 'arrowdown':
-          engine.walk(engine.heading + 180);
-          break;
-        case 'a':
-        case 'arrowleft':
-          engine.walk(engine.heading - 90);
-          break;
-        case 'd':
-        case 'arrowright':
-          engine.walk(engine.heading + 90);
-          break;
-        case 'q':
-          engine.turn(-15);
-          break;
-        case 'e':
-          engine.turn(15);
-          break;
-        default:
-          return;
-      }
+    const onDown = (e: KeyboardEvent) => {
+      engine.sprint = e.shiftKey;
+      // macOS swallows the keyup of a key released while ⌘ is down — drop everything
+      // rather than leave the listener walking off on its own.
+      if (e.key === 'Meta') engine.releaseAll();
+      if (e.metaKey || e.ctrlKey || e.altKey || isTextEntry(e.target)) return;
+      const c = KEYMAP[e.key.toLowerCase()];
+      if (!c) return;
+      engine.press(c);
       e.preventDefault();
+      e.stopPropagation();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onUp = (e: KeyboardEvent) => {
+      engine.sprint = e.shiftKey;
+      const c = KEYMAP[e.key.toLowerCase()];
+      if (c) engine.release(c);
+    };
+    const onBlur = () => engine.releaseAll();
+    window.addEventListener('keydown', onDown, true);
+    window.addEventListener('keyup', onUp, true);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onDown, true);
+      window.removeEventListener('keyup', onUp, true);
+      window.removeEventListener('blur', onBlur);
+      engine.releaseAll();
+    };
   }, [engine]);
 
   const toggleMute = useCallback(() => {
@@ -80,6 +106,11 @@ export default function PreviewPanel({ engine, onStop }: Props) {
     });
   }, [engine]);
 
+  const pickSpeed = (k: WalkSpeed) => {
+    engine.speedMps = WALK_SPEEDS[k];
+    setSpeed(k);
+  };
+
   return (
     <section className="section preview">
       <div className="section-title">
@@ -87,7 +118,31 @@ export default function PreviewPanel({ engine, onStop }: Props) {
         Playtest · {audible.length} audible
       </div>
 
-      <p className="geo-status">Click / drag the listener on the map · WASD move · Q/E turn</p>
+      <p className="geo-status">
+        🎧 Headphones on — sound is 3D. Click the map (or a point) to walk there; drag the
+        listener to jump. The map scrolls along as you walk.
+      </p>
+      <p className="preview-keys">
+        <kbd>W</kbd>/<kbd>↑</kbd> walk · <kbd>S</kbd>/<kbd>↓</kbd> back · <kbd>←</kbd>
+        <kbd>→</kbd> or <kbd>Q</kbd>/<kbd>E</kbd> turn · <kbd>A</kbd>/<kbd>D</kbd> sidestep ·
+        hold <kbd>Shift</kbd> to hurry
+      </p>
+
+      <div className="form-field">
+        <span className="label">Pace</span>
+        <div className="seg">
+          {(Object.keys(WALK_SPEEDS) as WalkSpeed[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={speed === k ? 'active' : ''}
+              onClick={() => pickSpeed(k)}
+            >
+              {SPEED_LABEL[k]} {WALK_SPEEDS[k]} m/s
+            </button>
+          ))}
+        </div>
+      </div>
 
       <label className="form-field">
         <span className="label">Heading {heading}°</span>
@@ -112,6 +167,9 @@ export default function PreviewPanel({ engine, onStop }: Props) {
             <li key={b.id}>
               <span className="preview-list__arrow">{arrow(b.az)}</span>
               <span className="preview-list__name">{b.name}</span>
+              <span className="preview-list__level" title="Loudness">
+                <i style={{ width: `${Math.round(Math.min(1, b.gain) * 100)}%` }} />
+              </span>
               <span className="preview-list__meta">{Math.round(b.distance)} m</span>
             </li>
           ))
