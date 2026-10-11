@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DEFAULT_AMBIENCE_VOLUME, type AcousticZone } from '@audioworld/shared';
 import {
+  DEFAULT_AMBIENCE_VOLUME,
+  isTextEntryTarget,
+  WALK_KEYMAP,
   WALK_SPEEDS,
-  type PreviewBlip,
-  type PreviewEngine,
-  type WalkControl,
+  type AcousticZone,
   type WalkSpeed,
-} from '../services/previewEngine';
+} from '@audioworld/shared';
+import type { PreviewBlip, PreviewEngine } from '../services/previewEngine';
 
 interface Props {
   engine: PreviewEngine;
@@ -26,29 +27,7 @@ function arrow(az: number): string {
   return glyphs[Math.round(a / 45) % 8]!;
 }
 
-/** Arrows turn (like turning your head toward a sound); A / D sidestep. */
-const KEYMAP: Record<string, WalkControl> = {
-  w: 'forward',
-  arrowup: 'forward',
-  s: 'back',
-  arrowdown: 'back',
-  a: 'left',
-  d: 'right',
-  q: 'turnLeft',
-  arrowleft: 'turnLeft',
-  e: 'turnRight',
-  arrowright: 'turnRight',
-};
-
 const SPEED_LABEL: Record<WalkSpeed, string> = { walk: 'Walk', jog: 'Jog', bike: 'Bike' };
-
-/** Typing in a field must not walk the listener (sliders + checkboxes are fine). */
-function isTextEntry(t: EventTarget | null): boolean {
-  if (!(t instanceof HTMLElement)) return false;
-  if (t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
-  if (t.tagName !== 'INPUT') return false;
-  return !['range', 'checkbox', 'radio', 'button'].includes((t as HTMLInputElement).type);
-}
 
 export default function PreviewPanel({
   engine,
@@ -94,8 +73,8 @@ export default function PreviewPanel({
       // macOS swallows the keyup of a key released while ⌘ is down — drop everything
       // rather than leave the listener walking off on its own.
       if (e.key === 'Meta') engine.releaseAll();
-      if (e.metaKey || e.ctrlKey || e.altKey || isTextEntry(e.target)) return;
-      const c = KEYMAP[e.key.toLowerCase()];
+      if (e.metaKey || e.ctrlKey || e.altKey || isTextEntryTarget(e.target)) return;
+      const c = WALK_KEYMAP[e.key.toLowerCase()];
       if (!c) return;
       engine.press(c);
       e.preventDefault();
@@ -103,7 +82,7 @@ export default function PreviewPanel({
     };
     const onUp = (e: KeyboardEvent) => {
       engine.sprint = e.shiftKey;
-      const c = KEYMAP[e.key.toLowerCase()];
+      const c = WALK_KEYMAP[e.key.toLowerCase()];
       if (c) engine.release(c);
     };
     const onBlur = () => engine.releaseAll();

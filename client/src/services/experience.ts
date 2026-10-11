@@ -26,7 +26,13 @@ import {
   zoneAt,
 } from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
-import { AudioEngine, type FrameSource } from '@audioworld/shared';
+import {
+  AudioEngine,
+  isTextEntryTarget,
+  SimWalker,
+  WALK_KEYMAP,
+  type FrameSource,
+} from '@audioworld/shared';
 import { geoErrorMessage, isSecureEnough, watchUserPosition, type GeoWatch } from './geolocation';
 import { requestOrientationPermission, watchHeading, type HeadingWatch } from './orientation';
 
@@ -106,7 +112,6 @@ export interface Snapshot extends EngineStatus {
 }
 
 const FALLBACK_ORIGIN: Coordinates = { lat: 59.3293, lng: 18.0686 };
-const SIM_STEP_M = 4;
 
 // --- Power governor tuning ---
 /** active: full rAF. saver: throttled (low battery). pocket: audio-only while hidden. */
@@ -125,7 +130,6 @@ interface BatteryLike {
 interface NavigatorBattery {
   getBattery?: () => Promise<BatteryLike>;
 }
-const SIM_TURN_DEG = 15;
 const SIM_DRAG_M_PER_PX = 0.6;
 const HEADING_SMOOTH = 0.25;
 
@@ -176,6 +180,8 @@ const RUN_SNAPSHOT_VERSION = 1;
 export interface EngineOptions {
   points: AudioPoint[];
   sim: boolean;
+  /** Where a simulation begins (the planned route's start); default the first point. */
+  simStart?: Coordinates;
   /** Show a compass cue + distance (+ return ETA) to the course start point. */
   showStartWayfinding?: boolean;
   /** Acoustic zones (reverb + ambient beds) for the course. */
@@ -244,22 +250,24 @@ export class ExperienceEngine {
   private geoWatch: GeoWatch | null = null;
   private headingWatch: HeadingWatch | null = null;
   private orientationDenied = false;
-  private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  /** Simulation key listeners (window), removed on dispose. */
+  private simListeners: Array<[string, EventListener]> = [];
 
   // Live inputs.
   private userLive: Coordinates | null = null;
   private headingLive: number | null = null;
   private accuracy: number | null = null;
 
-  // Simulated inputs.
-  private userSim: Coordinates = FALLBACK_ORIGIN;
-  private headingSim = 0;
+  // Simulated inputs: a virtual listener walked by keys, map clicks and radar drags.
+  private readonly walker = new SimWalker(FALLBACK_ORIGIN);
+  private readonly simStart: Coordinates | undefined;
 
   private status: EngineStatus;
 
   constructor(opts: EngineOptions) {
     this.points = opts.points;
     this.sim = opts.sim;
+    this.simStart = opts.simStart;
     this.showStartWayfinding = opts.showStartWayfinding ?? false;
     this.zones = opts.zones ?? [];
     this.eyesUp = opts.eyesUp ?? false;
@@ -383,6 +391,7 @@ export class ExperienceEngine {
     // backgrounded tab doesn't teleport them on the first frame back.
     const dtSec = this.lastTickPerf ? Math.min(0.5, (nowPerf - this.lastTickPerf) / 1000) : 0;
     this.lastTickPerf = nowPerf;
+    if (this.sim) this.walker.step(dtSec);
 
     // Live heading: poll the fused compass/GPS-course provider, smooth it, and reflect
     // the source in the status chip (ok = magnetic compass, gps = course-over-ground).
@@ -412,8 +421,8 @@ export class ExperienceEngine {
       this.status.geoError = 'Weak GPS — your position may be stale';
     }
 
-    const user = this.sim ? this.userSim : this.userLive;
-    const headingDeg = this.sim ? this.headingSim : this.headingLive;
+    const user = this.sim ? this.walker.position : this.userLive;
+    const headingDeg = this.sim ? this.walker.heading : this.headingLive;
     const accuracy = this.sim ? null : this.accuracy;
 
     if (!user) {
@@ -761,7 +770,8 @@ export class ExperienceEngine {
   dispose(): void {
     this.geoWatch?.stop();
     this.headingWatch?.stop();
-    if (this.keyHandler) window.removeEventListener('keydown', this.keyHandler);
+    for (const [type, fn] of this.simListeners) window.removeEventListener(type, fn, true);
+    this.simListeners = [];
     this.audio?.dispose();
     this.ctx?.close().catch(() => {});
     this.ctx = null;
@@ -775,11 +785,21 @@ export class ExperienceEngine {
   }
 
   getHeadingSim(): number {
-    return this.headingSim;
+    return this.walker.heading;
   }
 
   setHeadingSim(deg: number): void {
-    this.headingSim = ((deg % 360) + 360) % 360;
+    this.walker.setHeading(deg);
+  }
+
+  /** Walk the simulated listener to a spot (e.g. a map click), turning to face it. */
+  simWalkTo(c: Coordinates): void {
+    if (this.sim) this.walker.walkTo(c);
+  }
+
+  /** Where the simulated listener is walking to, or null. */
+  simDestination(): Coordinates | null {
+    return this.sim ? this.walker.destination : null;
   }
 
   /** Translate the simulated user by a screen-space drag on the radar (heading-up). */
@@ -788,49 +808,41 @@ export class ExperienceEngine {
     const meters = Math.hypot(dxPx, dyPx) * SIM_DRAG_M_PER_PX;
     if (meters === 0) return;
     const screenAngle = (Math.atan2(dxPx, -dyPx) * 180) / Math.PI; // clockwise from up
-    const bearing = (this.headingSim + screenAngle + 360) % 360;
-    this.userSim = destinationPoint(this.userSim, bearing, meters);
+    const bearing = (this.walker.heading + screenAngle + 360) % 360;
+    this.walker.setPosition(destinationPoint(this.walker.position, bearing, meters));
   }
 
   private initSim(): void {
     const anchor = this.points.length > 0 ? anchorOf(this.points[0]) : FALLBACK_ORIGIN;
-    this.userSim = anchor;
-    this.headingSim = 0;
+    this.walker.setPosition(this.simStart ?? anchor);
+    this.walker.setHeading(0);
 
-    this.keyHandler = (e: KeyboardEvent) => {
-      let bearing: number | null = null;
-      switch (e.key.toLowerCase()) {
-        case 'w':
-        case 'arrowup':
-          bearing = this.headingSim;
-          break;
-        case 's':
-        case 'arrowdown':
-          bearing = this.headingSim + 180;
-          break;
-        case 'a':
-        case 'arrowleft':
-          bearing = this.headingSim - 90;
-          break;
-        case 'd':
-        case 'arrowright':
-          bearing = this.headingSim + 90;
-          break;
-        case 'q':
-          this.setHeadingSim(this.headingSim - SIM_TURN_DEG);
-          e.preventDefault();
-          return;
-        case 'e':
-          this.setHeadingSim(this.headingSim + SIM_TURN_DEG);
-          e.preventDefault();
-          return;
-        default:
-          return;
-      }
-      this.userSim = destinationPoint(this.userSim, ((bearing % 360) + 360) % 360, SIM_STEP_M);
+    // Hold to walk / turn (same keys as the admin's playtest). Capture + stopPropagation
+    // so the map's own arrow-key panning doesn't fight the listener.
+    const onDown = (e: KeyboardEvent) => {
+      this.walker.sprint = e.shiftKey;
+      // macOS swallows the keyup of a key released while ⌘ is down — drop everything
+      // rather than leave the listener walking off on its own.
+      if (e.key === 'Meta') this.walker.releaseAll();
+      if (e.metaKey || e.ctrlKey || e.altKey || isTextEntryTarget(e.target)) return;
+      const c = WALK_KEYMAP[e.key.toLowerCase()];
+      if (!c) return;
+      this.walker.press(c);
       e.preventDefault();
+      e.stopPropagation();
     };
-    window.addEventListener('keydown', this.keyHandler);
+    const onUp = (e: KeyboardEvent) => {
+      this.walker.sprint = e.shiftKey;
+      const c = WALK_KEYMAP[e.key.toLowerCase()];
+      if (c) this.walker.release(c);
+    };
+    const onBlur = () => this.walker.releaseAll();
+    this.simListeners = [
+      ['keydown', onDown as EventListener],
+      ['keyup', onUp as EventListener],
+      ['blur', onBlur],
+    ];
+    for (const [type, fn] of this.simListeners) window.addEventListener(type, fn, true);
   }
 }
 

@@ -138,7 +138,17 @@ export function Radar({ engine, frameRef }: RadarProps) {
         if (wp.kind === 'start') {
           const eta =
             wp.etaSec == null ? '' : wp.etaSec <= 0 ? ' · at start' : ` · back ${fmtClock(wp.etaSec)}`;
-          drawWaypoint(ctx, cx, cy, R, wp.az, START_WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m${eta}`);
+          if (wp.distance < AT_START_M) {
+            // Standing at the start: an arrow would just point at north — say it instead.
+            ctx.save();
+            ctx.fillStyle = START_WAYFIND;
+            ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`You’re at the start${eta.replace(' · at start', '')}`, cx, cy + 26);
+            ctx.restore();
+          } else {
+            drawWaypoint(ctx, cx, cy, R, wp.az, START_WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m${eta}`);
+          }
         } else if (!wp.audible) {
           drawWaypoint(ctx, cx, cy, R, wp.az, WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m`);
         }
@@ -225,6 +235,8 @@ function drawNorth(
 
 const WAYFIND = '#ffcf6b';
 const START_WAYFIND = '#5cff9d';
+/** Within this many metres of the start, the start cue reads "you're at the start". */
+const AT_START_M = 15;
 
 /** Seconds -> m:ss. */
 function fmtClock(sec: number): string {

@@ -641,28 +641,80 @@ body {
 }
 
 /* --- Sim controls -------------------------------------------------------- */
-.sim-controls {
+/* Simulation: what it is and how to move, in one compact card above the readout. */
+.sim-panel {
+  align-self: center;
+  width: min(100%, 640px);
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.sim-panel__title {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
 }
-.sim-controls__hint {
-  font-size: 12px;
+.sim-panel__badge {
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.sim-panel__keys {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.9;
   color: var(--muted);
 }
-.sim-controls__dial {
+.sim-panel__keys kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  font: 600 11px/18px ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+.sim-panel__dial {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: min(92vw, 420px);
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   color: var(--accent);
 }
-.sim-controls__dial input {
+.sim-panel__dial span {
+  min-width: 96px;
+}
+.sim-panel__dial input {
   flex: 1;
   accent-color: var(--accent);
+}
+/* Where a simulated click-to-walk is headed. */
+.exp-goal span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border: 2px dashed var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 /* --- Readout ------------------------------------------------------------- */

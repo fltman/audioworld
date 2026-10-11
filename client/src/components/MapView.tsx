@@ -31,6 +31,10 @@ function userIcon(): L.DivIcon {
   });
 }
 
+function goalIcon(): L.DivIcon {
+  return L.divIcon({ className: 'exp-goal', html: '<span></span>', iconSize: [22, 22], iconAnchor: [11, 11] });
+}
+
 function sourceIcon(color: string): L.DivIcon {
   return L.divIcon({
     className: 'exp-src',
@@ -80,6 +84,15 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
       following.current = false;
     });
 
+    // Simulating: click the map to walk there (a ring marks where you're headed).
+    const goal = L.marker(DEFAULT_CENTER, { icon: goalIcon(), interactive: false, keyboard: false });
+    if (engine.isSim()) {
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        engine.simWalkTo({ lat: e.latlng.lat, lng: e.latlng.lng });
+        following.current = true;
+      });
+    }
+
     map.invalidateSize();
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
@@ -90,6 +103,14 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
     const loop = () => {
       const f = frameRef.current;
 
+      const dest = engine.simDestination();
+      if (dest) {
+        goal.setLatLng([dest.lat, dest.lng]);
+        if (!map.hasLayer(goal)) goal.addTo(map);
+      } else if (map.hasLayer(goal)) {
+        goal.remove();
+      }
+
       if (f.user) {
         const ll: L.LatLngExpression = [f.user.lat, f.user.lng];
         userMarker.current!.setLatLng(ll);
@@ -97,7 +118,7 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
         const cone = el?.querySelector<HTMLElement>('.exp-user__cone');
         if (cone) cone.style.transform = `rotate(${f.headingDeg ?? 0}deg)`;
         if (!centered) {
-          map.setView(ll, 16, { animate: false });
+          map.setView(ll, engine.isSim() ? 17 : 16, { animate: false }); // closer in on a desktop sim
           centered = true;
         } else if (following.current) {
           map.panTo(ll, { animate: false });

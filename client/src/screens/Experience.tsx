@@ -15,7 +15,8 @@ interface ExperienceProps {
 
 export function Experience({ engine, course, onExit }: ExperienceProps) {
   const { frameRef, snapshot, muted, toggleMute, powerMode } = useExperience(engine);
-  const [view, setView] = useState<ExperienceView>('radar');
+  // Simulating on a desktop, the map shows best where you are and what's around you.
+  const [view, setView] = useState<ExperienceView>(engine.isSim() ? 'map' : 'radar');
   // Eyes-up hides the visual HUD on a real device; the sim keeps the radar so a
   // desktop author can still see where they are while testing the sonar.
   const eyesUp = (course.eyesUp ?? false) && !engine.isSim();
@@ -89,7 +90,7 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
         <MapView engine={engine} frameRef={frameRef} route={course.route} />
       )}
 
-      {engine.isSim() && <SimControls engine={engine} heading={snapshot.headingDeg ?? 0} />}
+      {engine.isSim() && <SimControls engine={engine} heading={snapshot.headingDeg ?? 0} view={view} />}
 
       <Readout snap={snapshot} />
     </div>
@@ -99,22 +100,37 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
 interface SimControlsProps {
   engine: ExperienceEngine;
   heading: number;
+  view: ExperienceView;
 }
 
-function SimControls({ engine, heading }: SimControlsProps) {
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+/** What simulating means and how to move — the virtual listener is you. */
+function SimControls({ engine, heading, view }: SimControlsProps) {
+  const deg = Math.round(heading);
   return (
-    <div className="sim-controls">
-      <div className="sim-controls__hint">WASD / arrows move · Q/E turn</div>
-      <label className="sim-controls__dial">
-        <span>{Math.round(heading)}°</span>
+    <section className="sim-panel" aria-label="Simulation controls">
+      <p className="sim-panel__title">
+        <span className="sim-panel__badge">Simulation</span>A virtual you walks the course —
+        put on headphones.
+      </p>
+      <p className="sim-panel__keys">
+        {view === 'map' ? 'Click the map to walk there' : 'Drag the radar to move'} ·{' '}
+        <kbd>W</kbd>/<kbd>↑</kbd> walk · <kbd>S</kbd>/<kbd>↓</kbd> back · <kbd>←</kbd>
+        <kbd>→</kbd> turn · <kbd>A</kbd>/<kbd>D</kbd> step aside · hold <kbd>Shift</kbd> to hurry
+      </p>
+      <label className="sim-panel__dial">
+        <span>
+          Facing {COMPASS[Math.round(deg / 45) % 8]} {deg}°
+        </span>
         <input
           type="range"
           min={0}
           max={359}
-          value={Math.round(heading)}
+          value={deg}
           onChange={(e) => engine.setHeadingSim(Number(e.target.value))}
         />
       </label>
-    </div>
+    </section>
   );
 }

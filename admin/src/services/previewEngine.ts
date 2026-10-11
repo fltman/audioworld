@@ -3,9 +3,7 @@ import {
   airCutoffHz,
   attenuation,
   audibleRadiusOf,
-  calculateBearing,
   calculateDistance,
-  destinationPoint,
   dopplerRate,
   elevationRad,
   isGloballyTimed,
@@ -14,7 +12,13 @@ import {
   resolveSource,
   zoneAt,
 } from '@audioworld/shared';
-import { AudioEngine, DEFAULT_AMBIENCE_VOLUME, type FrameSource } from '@audioworld/shared';
+import {
+  AudioEngine,
+  DEFAULT_AMBIENCE_VOLUME,
+  SimWalker,
+  type FrameSource,
+  type WalkControl,
+} from '@audioworld/shared';
 import { absoluteAudioUrl, syncServerTime } from '../api';
 
 export interface PreviewBlip {
@@ -48,28 +52,6 @@ export interface PreviewFrame {
   zoneId: string | null;
 }
 
-/** A movement key the author is holding down. */
-export type WalkControl = 'forward' | 'back' | 'left' | 'right' | 'turnLeft' | 'turnRight';
-
-/** Pace presets, m/s. Walking pace matters: hold-still triggers + Doppler read the speed. */
-export const WALK_SPEEDS = { walk: 1.4, jog: 3, bike: 6 } as const;
-export type WalkSpeed = keyof typeof WALK_SPEEDS;
-
-const SPRINT_FACTOR = 3; // Shift held
-const KEY_TURN_DEG_PER_SEC = 120;
-/** How fast the listener turns to face where they're walking (a natural head turn). */
-const FACE_TURN_DEG_PER_SEC = 270;
-const ARRIVED_M = 0.3;
-/** A drag only re-aims the heading once it has moved this far (hand jitter otherwise). */
-const DRAG_AIM_M = 1.5;
-
-/** Step `from` toward `to` by at most `maxDeg`, the short way round. */
-function approachAngle(from: number, to: number, maxDeg: number): number {
-  const delta = ((to - from + 540) % 360) - 180;
-  const step = Math.abs(delta) <= maxDeg ? delta : Math.sign(delta) * maxDeg;
-  return (from + step + 360) % 360;
-}
-
 /**
  * In-admin playtest: a virtual listener walking the map. Runs the exact same
  * spatial resolution (resolveSource) and audio engine as the client, so authors
@@ -93,22 +75,35 @@ export class PreviewEngine {
   private zones: AcousticZone[] = [];
   private lastZoneId: string | null = null;
 
-  private readonly held = new Set<WalkControl>();
-  private target: Coordinates | null = null;
-  private dragAim: Coordinates | null = null;
-
-  listener: Coordinates;
-  heading = 0;
-  /** Base pace in m/s (see WALK_SPEEDS). */
-  speedMps: number = WALK_SPEEDS.walk;
-  /** Shift held: temporarily move SPRINT_FACTOR× faster. */
-  sprint = false;
+  /** The virtual listener: walks with held keys, to a clicked spot, or along a drag. */
+  private readonly walker: SimWalker;
   /** The most recent tick's result, read by the map's render loop. */
   lastFrame: PreviewFrame | null = null;
 
   constructor(points: AudioPoint[], listener: Coordinates) {
     this.points = points;
-    this.listener = listener;
+    this.walker = new SimWalker(listener);
+  }
+
+  get listener(): Coordinates {
+    return this.walker.position;
+  }
+  get heading(): number {
+    return this.walker.heading;
+  }
+  /** Base pace in m/s (see WALK_SPEEDS). */
+  get speedMps(): number {
+    return this.walker.speedMps;
+  }
+  set speedMps(v: number) {
+    this.walker.speedMps = v;
+  }
+  /** Shift held: temporarily move faster. */
+  get sprint(): boolean {
+    return this.walker.sprint;
+  }
+  set sprint(v: boolean) {
+    this.walker.sprint = v;
   }
 
   /** MUST be called from a user gesture (creates + resumes the AudioContext). */
@@ -136,74 +131,33 @@ export class PreviewEngine {
   }
   /** Jump straight to a spot (cancels any walk in progress). */
   setListener(c: Coordinates): void {
-    this.listener = c;
-    this.target = null;
+    this.walker.setPosition(c);
   }
   /** Follow a drag of the listener marker, facing the way it's being dragged. */
   dragTo(c: Coordinates): void {
-    const from = this.dragAim ?? this.listener;
-    if (calculateDistance(from, c) >= DRAG_AIM_M) {
-      this.setHeading(calculateBearing(from, c));
-      this.dragAim = c;
-    } else if (!this.dragAim) {
-      this.dragAim = from;
-    }
-    this.setListener(c);
+    this.walker.dragTo(c);
   }
   endDrag(): void {
-    this.dragAim = null;
+    this.walker.endDrag();
   }
   /** Walk to a spot at the current pace, turning to face it. */
   walkTo(c: Coordinates): void {
-    this.target = c;
+    this.walker.walkTo(c);
   }
   press(c: WalkControl): void {
-    this.held.add(c);
+    this.walker.press(c);
   }
   release(c: WalkControl): void {
-    this.held.delete(c);
+    this.walker.release(c);
   }
   /** Drop every held key (window blur would otherwise leave the listener walking). */
   releaseAll(): void {
-    this.held.clear();
-    this.sprint = false;
+    this.walker.releaseAll();
   }
   setHeading(deg: number): void {
-    this.heading = ((deg % 360) + 360) % 360;
-  }
-  turn(delta: number): void {
-    this.setHeading(this.heading + delta);
+    this.walker.setHeading(deg);
   }
 
-  /** Advance the listener by one frame of held keys / walk-to-target movement. */
-  private move(dtSec: number): void {
-    if (dtSec <= 0) return;
-    const h = this.held;
-    const pace = this.speedMps * (this.sprint ? SPRINT_FACTOR : 1);
-    const turn = (h.has('turnRight') ? 1 : 0) - (h.has('turnLeft') ? 1 : 0);
-    if (turn !== 0) this.setHeading(this.heading + turn * KEY_TURN_DEG_PER_SEC * dtSec);
-
-    const ahead = (h.has('forward') ? 1 : 0) - (h.has('back') ? 1 : 0);
-    const side = (h.has('right') ? 1 : 0) - (h.has('left') ? 1 : 0);
-    if (ahead !== 0 || side !== 0) {
-      // Keys take over from a click-to-walk; the heading stays where the author looks.
-      this.target = null;
-      const offset = (Math.atan2(side, ahead) * 180) / Math.PI;
-      this.listener = destinationPoint(this.listener, (this.heading + offset + 360) % 360, pace * dtSec);
-      return;
-    }
-
-    if (this.target) {
-      const left = calculateDistance(this.listener, this.target);
-      if (left <= ARRIVED_M) {
-        this.target = null;
-        return;
-      }
-      const bearing = calculateBearing(this.listener, this.target);
-      this.heading = approachAngle(this.heading, bearing, FACE_TURN_DEG_PER_SEC * dtSec);
-      this.listener = destinationPoint(this.listener, bearing, Math.min(left, pace * dtSec));
-    }
-  }
   /** Re-arm triggers + flags and restart the local clock (fresh playthrough). */
   reset(): void {
     this.stateMemory.clear();
@@ -214,7 +168,7 @@ export class PreviewEngine {
     this.smoothedSpeed = 0;
     this.lastTickPerf = 0;
     this.lastZoneId = null;
-    this.target = null;
+    this.walker.cancelWalk();
     this.audio?.setZone(null);
     this.startedAtPerf = performance.now();
   }
@@ -233,7 +187,7 @@ export class PreviewEngine {
     const deviceClockSec = (nowPerf - this.startedAtPerf) / 1000;
     const dtSec = this.lastTickPerf ? Math.min(0.5, (nowPerf - this.lastTickPerf) / 1000) : 0;
     this.lastTickPerf = nowPerf;
-    this.move(dtSec);
+    this.walker.step(dtSec);
     const user = this.listener;
     const heading = this.heading;
     const rawSpeed =
