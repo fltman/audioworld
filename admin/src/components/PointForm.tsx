@@ -484,7 +484,7 @@ export default function PointForm(props: Props) {
             >
               <option value="loop">Loop</option>
               <option value="reverse">Reverse</option>
-              <option value="stop">Stop</option>
+              <option value="stop">Stop — then fall silent</option>
             </select>
           </label>
         )}

@@ -403,6 +403,11 @@ export interface ResolveOutput {
   state: SourceState;
   /** For a path with stops: the stop the source is currently dwelling at, else null. */
   atStop?: PathStop | null;
+  /** Gated by story flags not yet raised: silent, and not yet part of the walk. */
+  inert?: boolean;
+  /** A one-way ('stop') path that has reached its end: its journey is over — it falls
+   *  silent and leaves the listener's screen. */
+  finished?: boolean;
 }
 
 /** True only if every required flag has been raised (empty/absent = always satisfied). */
@@ -427,13 +432,13 @@ function advanceWaitProgress(
   audibleRadius: number,
   leashRadius: number,
   dtSec: number
-): { position: Coordinates; audible: boolean; atStop: PathStop | null } {
+): { position: Coordinates; audible: boolean; atStop: PathStop | null; done: boolean } {
   const progress = state.progressSec ?? 0;
   const st = pathStateAtTime(path, speed, endBehavior, stops, progress);
   const leashDist = calculateDistance(user, st.position);
   // Advance only while the listener is inside the leash; otherwise hold (wait).
   state.progressSec = leashDist <= leashRadius ? progress + dtSec : progress;
-  return { position: st.position, audible: leashDist <= audibleRadius, atStop: st.atStop };
+  return { position: st.position, audible: leashDist <= audibleRadius, atStop: st.atStop, done: st.done };
 }
 
 /**
@@ -476,23 +481,28 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
   const out = (
     position: Coordinates,
     audible: boolean,
-    atStop: PathStop | null = null
+    atStop: PathStop | null = null,
+    status: Pick<ResolveOutput, 'inert' | 'finished'> = {}
   ): ResolveOutput => {
     const dg = directionalGainOf(point, position, user);
     return {
       position,
       bearing: calculateBearing(user, position),
       distance: calculateDistance(user, position),
-      audible: audible && dg > 0,
+      audible: audible && dg > 0 && !status.finished,
       directionalGain: dg,
       state,
-      atStop,
+      atStop: status.finished ? null : atStop,
+      ...status,
     };
   };
+  /** A one-way path at its end is finished (loops and ping-pongs never finish). */
+  const arrived = (p: { endBehavior: PathEndBehavior; speed: number; path: Coordinates[] }, done: boolean) =>
+    done && p.endBehavior === 'stop' && p.speed > 0 && p.path.length >= 2;
 
   // Gated points stay inert (silent, untriggerable) until their flags are raised.
   if (!flagsSatisfied(point, flags)) {
-    return out(anchorOf(point), false);
+    return out(anchorOf(point), false, null, { inert: true });
   }
 
   switch (point.type) {
@@ -541,18 +551,17 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
           state, point.path, point.speed, point.endBehavior, point.stops,
           user, point.radius, waitRadiusOf(point), dtSec
         );
-        return out(w.position, w.audible, w.atStop);
+        return out(w.position, w.audible, w.atStop, { finished: arrived(point, w.done) });
       }
       const st =
         point.stops && point.stops.length > 0
           ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, clockSec)
           : {
-              position: pointAlongPath(point.path, point.speed * clockSec, point.endBehavior)
-                .position,
+              ...pointAlongPath(point.path, point.speed * clockSec, point.endBehavior),
               atStop: null as PathStop | null,
             };
       const d = calculateDistance(user, st.position);
-      return out(st.position, d <= point.radius, st.atStop);
+      return out(st.position, d <= point.radius, st.atStop, { finished: arrived(point, st.done) });
     }
 
     case 'follow_user': {
@@ -620,19 +629,18 @@ export function resolveSource(point: AudioPoint, input: ResolveInput): ResolveOu
           state, point.path, point.speed, point.endBehavior, point.stops,
           user, point.triggerRadius, waitRadiusOf(point), dtSec
         );
-        return out(w.position, w.audible, w.atStop);
+        return out(w.position, w.audible, w.atStop, { finished: arrived(point, w.done) });
       }
       const elapsed = clockSec - (state.triggeredAtSec ?? clockSec);
       const st =
         point.stops && point.stops.length > 0
           ? pathStateAtTime(point.path, point.speed, point.endBehavior, point.stops, elapsed)
           : {
-              position: pointAlongPath(point.path, point.speed * elapsed, point.endBehavior)
-                .position,
+              ...pointAlongPath(point.path, point.speed * elapsed, point.endBehavior),
               atStop: null as PathStop | null,
             };
       const d = calculateDistance(user, st.position);
-      return out(st.position, d <= point.triggerRadius, st.atStop);
+      return out(st.position, d <= point.triggerRadius, st.atStop, { finished: arrived(point, st.done) });
     }
   }
 }

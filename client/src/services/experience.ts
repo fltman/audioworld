@@ -81,6 +81,20 @@ export interface Waypoint {
   etaSec?: number;
 }
 
+/** One of the nearest sounds you can't hear yet: which way, and how far. */
+export interface Nearby {
+  id: string;
+  name: string;
+  /** Relative azimuth, degrees clockwise from the user's heading. */
+  az: number;
+  distance: number;
+  /** Already heard on this walk (drawn fainter). */
+  heard: boolean;
+}
+
+/** How many of the nearest sounds the radar points to. */
+const NEARBY_COUNT = 3;
+
 /** Everything the HUD renders for one animation frame. */
 export interface FrameState {
   user: Coordinates | null;
@@ -88,6 +102,8 @@ export interface FrameState {
   accuracy: number | null;
   blips: Blip[];
   sources: MapSource[];
+  /** The nearest visible sounds out of earshot, nearest first (radar rim arrows). */
+  nearby: Nearby[];
   waypoints: Waypoint[];
   /** Name of the acoustic zone the listener is inside, or null. */
   zoneName: string | null;
@@ -213,6 +229,8 @@ export class ExperienceEngine {
   /** Anonymous analytics (live only): coarse grid cell → seconds dwelt, + points heard. */
   private readonly visitedCells = new Map<string, number>();
   private readonly reachedPoints = new Set<string>();
+  /** Points heard at least once this walk (sim included), for the radar's nearby arrows. */
+  private readonly heard = new Set<string>();
   /** Point ids already reported in a prior flush, so re-flushing can't double-count. */
   private readonly sentReached = new Set<string>();
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
@@ -428,7 +446,7 @@ export class ExperienceEngine {
     if (!user) {
       this.audio?.update([]);
       return {
-        user: null, headingDeg, accuracy, blips: [], sources: [], waypoints: [],
+        user: null, headingDeg, accuracy, blips: [], sources: [], waypoints: [], nearby: [],
         zoneName: null, audibleCount: 0,
       };
     }
@@ -458,6 +476,7 @@ export class ExperienceEngine {
     const blips: Blip[] = [];
     const sources: MapSource[] = [];
     const waypoints: Waypoint[] = [];
+    const candidates: Nearby[] = [];
     // The first point's own elapsed time, captured in the loop, for the start-return ETA.
     let firstGuideElapsed: number | null = null;
     // Flags raised this frame are merged in AFTER the loop so ordering is irrelevant
@@ -541,11 +560,21 @@ export class ExperienceEngine {
         walls > 0 ? Math.min(air, Math.max(260, Math.round(2200 * Math.pow(0.42, walls)))) : air;
 
       // A hidden point is heard but never drawn: no blip, marker or wayfinding cue (and
-      // the eyes-up sonar, which steers by `sources`, doesn't lead you to it either).
-      const shown = !point.hidden;
+      // the eyes-up sonar, which steers by `sources`, doesn't lead you to it either). A
+      // one-way path that has arrived is done: silent, and gone from the screen too.
+      const shown = !point.hidden && !r.finished;
       if (r.audible) {
         if (shown) blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
+        this.heard.add(point.id);
         if (!this.sim) this.reachedPoints.add(point.id);
+      } else if (shown && !r.inert && r.position) {
+        candidates.push({
+          id: point.id,
+          name: point.name,
+          az,
+          distance: r.distance,
+          heard: this.heard.has(point.id) || this.reachedPoints.has(point.id),
+        });
       }
       // Wayfinding: a compass cue to this sound even when it's out of earshot.
       if (
@@ -699,8 +728,15 @@ export class ExperienceEngine {
       this.persist();
     }
 
+    // The nearest sounds you can't hear yet (a point with its own wayfinding arrow already has one).
+    const cued = new Set(waypoints.map((w) => w.id));
+    const nearby = candidates
+      .filter((c) => !cued.has(c.id))
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, NEARBY_COUNT);
+
     return {
-      user, headingDeg, accuracy, blips, sources, waypoints,
+      user, headingDeg, accuracy, blips, sources, waypoints, nearby,
       zoneName: zone?.name ?? null, audibleCount: blips.length,
     };
   }
@@ -870,6 +906,7 @@ export function useExperience(engine: ExperienceEngine) {
     blips: [],
     sources: [],
     waypoints: [],
+    nearby: [],
     zoneName: null,
     audibleCount: 0,
   });

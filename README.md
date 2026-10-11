@@ -26,6 +26,11 @@ device compass) and **how far away** it is (distance attenuation) — in real he
 All movement is **deterministic and computed client-side** from a shared clock (`shared/src/movement.ts` →
 `resolveSource`), so the audio stays smooth without per-frame server round-trips.
 
+A path whose end behaviour is **Stop** finishes when it reaches its last point (after any final stop): it falls
+silent and leaves the listener's radar and map. **Loop** and **Reverse** paths never finish. On the radar, arrows at
+the rim point to the **three nearest visible sounds you can't hear yet** (fainter once heard) — hidden, finished
+and still-locked points don't count.
+
 ## Architecture notes
 
 - **Direction of sound uses the compass** (`DeviceOrientation` / `webkitCompassHeading`), not GPS heading

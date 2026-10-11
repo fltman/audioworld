@@ -41,6 +41,8 @@ export interface PreviewSource {
   audible: boolean;
   /** Paused at a guided-tour stop. */
   dwelling: boolean;
+  /** A one-way path that has arrived (silent, off the listener's screen). */
+  finished: boolean;
 }
 
 export interface PreviewFrame {
@@ -269,6 +271,7 @@ export class PreviewEngine {
         radius,
         audible: r.audible,
         dwelling: r.atStop != null,
+        finished: !!r.finished,
       });
       const startOffsetSec = startAt != null ? clockSec : undefined;
       if (

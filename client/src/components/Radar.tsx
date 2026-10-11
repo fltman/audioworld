@@ -132,6 +132,7 @@ export function Radar({ engine, frameRef }: RadarProps) {
         if (!seen.has(id)) rendered.current.delete(id);
       }
 
+      const labels: LabelBox[] = [];
       // Wayfinding rim arrows. Sound cues show only when out of earshot; the course
       // start cue always shows (with a return-ETA when its guide is a moving path).
       for (const wp of frame.waypoints) {
@@ -147,11 +148,16 @@ export function Radar({ engine, frameRef }: RadarProps) {
             ctx.fillText(`You’re at the start${eta.replace(' · at start', '')}`, cx, cy + 26);
             ctx.restore();
           } else {
-            drawWaypoint(ctx, cx, cy, R, wp.az, START_WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m${eta}`);
+            drawWaypoint(ctx, cx, cy, R, wp.az, START_WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m${eta}`, labels);
           }
         } else if (!wp.audible) {
-          drawWaypoint(ctx, cx, cy, R, wp.az, WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m`);
+          drawWaypoint(ctx, cx, cy, R, wp.az, WAYFIND, `${wp.name} · ${Math.round(wp.distance)} m`, labels);
         }
+      }
+
+      // The nearest sounds you can't hear yet: which way to walk next.
+      for (const n of frame.nearby) {
+        drawWaypoint(ctx, cx, cy, R, n.az, n.heard ? NEARBY_HEARD : NEARBY, `${n.name} · ${fmtDist(n.distance)}`, labels);
       }
 
       // You.
@@ -237,6 +243,10 @@ const WAYFIND = '#ffcf6b';
 const START_WAYFIND = '#5cff9d';
 /** Within this many metres of the start, the start cue reads "you're at the start". */
 const AT_START_M = 15;
+/** Rim arrows to the nearest sounds out of earshot (fainter once heard). */
+const NEARBY = '#c9bcff';
+const NEARBY_HEARD = 'rgba(201,188,255,0.45)';
+const fmtDist = (m: number): string => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`);
 
 /** Seconds -> m:ss. */
 function fmtClock(sec: number): string {
@@ -245,6 +255,10 @@ function fmtClock(sec: number): string {
 }
 
 /** An arrowhead pinned to the rim in `color`, pointing the way, with a label just inside. */
+/** A label's box on the canvas, so rim labels pointing the same way don't overprint. */
+type LabelBox = { x: number; y: number; w: number };
+const LABEL_H = 13;
+
 function drawWaypoint(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -252,7 +266,8 @@ function drawWaypoint(
   R: number,
   az: number,
   color: string,
-  label: string
+  label: string,
+  placed: LabelBox[]
 ): void {
   const rad = (az * Math.PI) / 180;
   const dirx = Math.sin(rad);
@@ -280,7 +295,18 @@ function drawWaypoint(
   ctx.font = '600 10px ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label, cx + dirx * (rr - 22), cy + diry * (rr - 22));
+  const lx = cx + dirx * (rr - 22);
+  let ly = cy + diry * (rr - 22);
+  const w = ctx.measureText(label).width;
+  // Nudge a label a line toward the centre's side while it would overprint another.
+  const step = diry > 0 ? -LABEL_H : LABEL_H;
+  for (let guard = 0; guard < 6; guard++) {
+    const hit = placed.some((b) => Math.abs(b.y - ly) < LABEL_H && Math.abs(b.x - lx) < (b.w + w) / 2 + 4);
+    if (!hit) break;
+    ly += step;
+  }
+  placed.push({ x: lx, y: ly, w });
+  ctx.fillText(label, lx, ly);
   ctx.restore();
 }
 

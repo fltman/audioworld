@@ -495,7 +495,7 @@ export default function MapView(props: Props) {
     const drawLive = (f: PreviewFrame) => {
       ghosts.update(
         f.sources.flatMap((s) =>
-          s.position && MOVING_TYPES.has(s.type)
+          s.position && MOVING_TYPES.has(s.type) && !s.finished
             ? [
                 {
                   id: s.id,
