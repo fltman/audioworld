@@ -11,7 +11,8 @@ import * as Points from '../models/point';
 import * as Courses from '../models/course';
 import * as Characters from '../models/character';
 import { metaFor } from '../models/upload';
-import { saveToLibrary } from './library';
+import { saveImage, saveToLibrary } from './library';
+import { generateImage } from './openrouter';
 import { canManageCourse, type AuthUser } from './auth';
 import {
   designVoice,
@@ -29,8 +30,8 @@ export interface ToolContext {
   toolCallId: string;
   emit: (e: AssistantEvent) => void;
   changed: Set<AssistantChange>;
-  /** Paid ElevenLabs generations so far this turn (capped). */
-  paid: { count: number };
+  /** Paid generations so far this turn (capped): ElevenLabs audio, and images. */
+  paid: { count: number; images: number };
 }
 
 /** Sent back to the model as the tool message (JSON); `summary` is also shown to the author. */
@@ -42,6 +43,8 @@ export interface ToolResult {
 
 /** At most this many ElevenLabs generations (speech, effects, voice designs) per turn. */
 const MAX_PAID_PER_TURN = 8;
+/** At most this many generated images per turn. */
+const MAX_IMAGES_PER_TURN = 3;
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|opus|webm|flac)$/i;
 
 type JsonSchema = Record<string, unknown>;
@@ -100,6 +103,17 @@ export const ASSISTANT_TOOLS = [
     'Generate a sound effect with ElevenLabs from an English prompt; saved to the sound library, url returned. ' +
       'Costs credits — only when the author asks for audio.',
     { prompt: S('English sound description'), duration_sec: N('0.5–22 s; omit to let the model choose') },
+    ['prompt']
+  ),
+  fn(
+    'generate_cover_image',
+    "Create a landscape (16:9) cover image for the walk's start page. It's shown to the author in the chat with a " +
+      '"Use as cover" button; set set_as_cover only when the author asked for it to become the cover straight away. ' +
+      'Costs money — only when the author asks for an image.',
+    {
+      prompt: S('English image description: subject, place, season, light, mood, style; no text or letters in the image'),
+      set_as_cover: { type: 'boolean', description: 'Also make it the course cover now' },
+    },
     ['prompt']
   ),
   fn('list_voices', 'The ElevenLabs voices available on the account (id, name, category).', {}),
@@ -275,6 +289,27 @@ async function run(name: string, args: Record<string, unknown>, ctx: ToolContext
       const clip = await saveToLibrary(await generateSoundEffect(prompt, dur), `SFX: ${prompt}`, 'sfx');
       ctx.changed.add('library');
       return { ok: true, summary: `Generated the sound “${label(prompt, 40)}”`, data: { url: clip.url } };
+    }
+
+    case 'generate_cover_image': {
+      const prompt = text(args.prompt, 2000);
+      if (!prompt) return fail('Describe the image');
+      if (ctx.paid.images >= MAX_IMAGES_PER_TURN) {
+        return fail(`Image limit for one reply reached (${MAX_IMAGES_PER_TURN}); ask the author before making more.`);
+      }
+      ctx.paid.images += 1;
+      const image = await saveImage(await generateImage(prompt, '16:9'));
+      let applied = false;
+      if (args.set_as_cover === true) {
+        const c = (await Courses.getCourse(ctx.course.id)) ?? ctx.course;
+        applied = !!(await Courses.updateCourse(c.id, { name: c.name, imageUrl: image.url }));
+        if (applied) ctx.changed.add('course');
+      }
+      return {
+        ok: true,
+        summary: applied ? 'Made a cover image and set it as the cover' : 'Made a cover image',
+        data: { url: image.url },
+      };
     }
 
     case 'list_voices': {

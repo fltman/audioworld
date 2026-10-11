@@ -112,10 +112,12 @@ never shows on their radar or map.
 **✨ AI assistant** is a chat that knows the open course — its idea, background, route, zones, points and guides —
 and can build it with you: create and change points, edit the course texts, create guides, design new ElevenLabs
 voices (it shows the three previews to audition; **Use** keeps one and gives it to the guide), voice lines and
-generate sound effects (only when you ask — they cost credits), and suggest narration, lines in a guide's
+generate sound effects, make a 16:9 cover image for the start page (shown in the chat with **Use as cover**) —
+only when you ask, as they cost credits — and suggest narration, lines in a guide's
 persona, sound-effect prompts and Suno music styles (English, about 300 characters). **Talk as** next to the input
 lets the whole chat speak as one of your guides. It can't delete anything. It needs `OPENROUTER_API_KEY` on the
-server; `OPENROUTER_CHAT_MODEL` picks the model (default `anthropic/claude-opus-5.5`). Conversations are kept per
+server; `OPENROUTER_CHAT_MODEL` picks the model (default `anthropic/claude-opus-5.5`) and `OPENROUTER_IMAGE_MODEL`
+the image model (default `google/gemini-3-pro-image`; images are saved as WebP). Conversations are kept per
 course in the browser.
 
 ### Try it on a real phone

@@ -35,8 +35,9 @@ export type AssistantChange = 'points' | 'guides' | 'course' | 'library';
 export type AssistantEvent =
   /** Streamed reply text. */
   | { type: 'delta'; text: string }
-  /** A tool ran (ok) or failed. `summary` is human-readable. */
-  | { type: 'tool'; id: string; name: string; summary: string; ok: boolean }
+  /** A tool ran (ok) or failed. `summary` is human-readable; `url` is a file it made
+   *  (a voiced line, a sound effect, an image) for the chat to show. */
+  | { type: 'tool'; id: string; name: string; summary: string; ok: boolean; url?: string }
   /** Voice previews to audition; the author picks one in the UI. */
   | {
       type: 'voice_previews';

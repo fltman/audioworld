@@ -1234,6 +1234,8 @@ export default function App() {
                     guides={characters}
                     hidden={!showAssistant}
                     onChanged={assistantChanged}
+                    coverUrl={currentCourse?.imageUrl}
+                    onUseCover={(url) => updateCourse(courseId, { imageUrl: url })}
                   />
                 )}
               </aside>

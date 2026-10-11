@@ -5,6 +5,7 @@ import type {
   Character,
   VoicePreview,
 } from '@audioworld/shared';
+import { absoluteAudioUrl } from '../api';
 import { createVoice, streamAssistant } from '../services/assistant';
 import ConfirmButton from './ConfirmButton';
 import Markdown from './Markdown';
@@ -16,12 +17,20 @@ interface Props {
   hidden: boolean;
   /** The assistant changed something: reload it. */
   onChanged: (what: AssistantChange[]) => void;
+  /** The course's current cover (to mark a generated image that already is it). */
+  coverUrl?: string;
+  /** Make a generated image the course cover. */
+  onUseCover: (url: string) => void | Promise<void>;
 }
 
 interface ToolChip {
   id: string;
+  /** The tool that ran (decides how a file it made is shown). */
+  name: string;
   summary: string;
   ok: boolean;
+  /** A file it made: a voiced line, a sound effect, an image. */
+  url?: string;
 }
 
 /** The reply being streamed, in order: text as it's written, and each tool as it runs. */
@@ -76,10 +85,11 @@ function save(courseId: string, messages: AssistantMessage[], personaId: string)
   }
 }
 
-function resultOf(content: string): { ok: boolean; summary: string } {
+function resultOf(content: string): { ok: boolean; summary: string; url?: string } {
   try {
-    const j = JSON.parse(content) as { ok?: boolean; summary?: string };
-    return { ok: j.ok !== false, summary: j.summary ?? 'Done' };
+    const j = JSON.parse(content) as { ok?: boolean; summary?: string; data?: { url?: unknown } };
+    const url = typeof j.data?.url === 'string' ? j.data.url : undefined;
+    return { ok: j.ok !== false, summary: j.summary ?? 'Done', url };
   } catch {
     return { ok: true, summary: 'Done' };
   }
@@ -90,7 +100,7 @@ function resultOf(content: string): { ok: boolean; summary: string } {
  * can build it — create and change points and guides, design voices (three previews to
  * audition), voice lines and effects — or answer as one of the guides.
  */
-export default function AssistantPanel({ courseId, guides, hidden, onChanged }: Props) {
+export default function AssistantPanel({ courseId, guides, hidden, onChanged, coverUrl, onUseCover }: Props) {
   const [messages, setMessages] = useState<AssistantMessage[]>(() => load(courseId).messages);
   const [personaId, setPersonaId] = useState(() => load(courseId).personaId);
   const [input, setInput] = useState('');
@@ -140,7 +150,7 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged }: 
                 break;
               case 'tool':
                 partial = '';
-                setLive((l) => l && [...l, { kind: 'tool', chip: { id: e.id, summary: e.summary, ok: e.ok } }]);
+                setLive((l) => l && [...l, { kind: 'tool', chip: { id: e.id, name: e.name, summary: e.summary, ok: e.ok, url: e.url } }]);
                 break;
               case 'voice_previews':
                 setVoiceCards((v) => ({
@@ -215,7 +225,7 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged }: 
     }
   };
 
-  const results = new Map<string, { ok: boolean; summary: string }>();
+  const results = new Map<string, { ok: boolean; summary: string; url?: string }>();
   for (const m of messages) if (m.role === 'tool') results.set(m.tool_call_id, resultOf(m.content));
 
   const voiceCard = (id: string) => {
@@ -258,11 +268,30 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged }: 
     );
   };
 
-  const chip = (c: ToolChip) => (
+  const chip = (c: ToolChip) => [
     <div key={`t-${c.id}`} className={`ai-tool${c.ok ? '' : ' is-failed'}`}>
       {c.ok ? '✓' : '⚠'} {c.summary}
-    </div>
-  );
+    </div>,
+    c.url && c.name === 'generate_cover_image' ? (
+      <figure key={`i-${c.id}`} className="ai-image">
+        <img src={absoluteAudioUrl(c.url)} alt="Generated cover" />
+        <figcaption>
+          {coverUrl === c.url ? (
+            <span className="ai-image__current">✓ The walk’s cover</span>
+          ) : (
+            <button type="button" className="btn btn-accent small" onClick={() => void onUseCover(c.url!)}>
+              Use as cover
+            </button>
+          )}
+          <a className="ai-image__open" href={absoluteAudioUrl(c.url)} target="_blank" rel="noreferrer">
+            Download
+          </a>
+        </figcaption>
+      </figure>
+    ) : c.url ? (
+      <audio key={`a-${c.id}`} className="ai-audio" controls preload="none" src={absoluteAudioUrl(c.url)} />
+    ) : null,
+  ];
 
   const persona = guides.find((g) => g.id === personaId);
 
@@ -314,7 +343,7 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged }: 
                 {m.tool_calls?.map((c) => {
                   const r = results.get(c.id);
                   return [
-                    chip({ id: c.id, ok: r?.ok ?? false, summary: r?.summary ?? c.function.name }),
+                    chip({ id: c.id, name: c.function.name, ok: r?.ok ?? false, summary: r?.summary ?? c.function.name, url: r?.url }),
                     c.function.name === 'design_voice' ? voiceCard(c.id) : null,
                   ];
                 })}

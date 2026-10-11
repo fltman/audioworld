@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import type { ClipKind, PoiInterpretation } from '@audioworld/shared';
-import { OPENROUTER_API_KEY, OPENROUTER_VISION_MODEL, UPLOAD_DIR } from '../env';
+import { OPENROUTER_API_KEY, OPENROUTER_IMAGE_MODEL, OPENROUTER_VISION_MODEL, UPLOAD_DIR } from '../env';
 
 const URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -132,8 +132,8 @@ export async function interpretPoi(input: {
   return parsed;
 }
 
-/** POST a chat/completions request and return the assistant's text content. */
-async function chatCompletion(messages: unknown[], maxTokens: number): Promise<string> {
+/** POST a chat/completions request and return the parsed response (errors made client-safe). */
+async function post<T>(body: Record<string, unknown>, timeoutMs: number): Promise<T> {
   let res: Response;
   try {
     res = await fetch(URL, {
@@ -142,8 +142,8 @@ async function chatCompletion(messages: unknown[], maxTokens: number): Promise<s
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: OPENROUTER_VISION_MODEL, messages, max_tokens: maxTokens }),
-      signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const name = e instanceof Error ? e.name : '';
@@ -163,12 +163,38 @@ async function chatCompletion(messages: unknown[], maxTokens: number): Promise<s
     }
     throw new OpenRouterError(msg, 502);
   }
-  const j = (await res.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
+  return (await res.json()) as T;
+}
+
+/** POST a chat/completions request and return the assistant's text content. */
+async function chatCompletion(messages: unknown[], maxTokens: number): Promise<string> {
+  const j = await post<{ choices?: Array<{ message?: { content?: unknown } }> }>(
+    { model: OPENROUTER_VISION_MODEL, messages, max_tokens: maxTokens },
+    60_000
+  );
   const content = j.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || !content.trim()) {
     throw new OpenRouterError('The AI returned an empty response', 502);
   }
   return content;
+}
+
+/** Generate one image from a prompt (e.g. aspect "16:9") → its encoded bytes (PNG). */
+export async function generateImage(prompt: string, aspectRatio = '16:9'): Promise<Buffer> {
+  const j = await post<{ choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }> }>(
+    {
+      model: OPENROUTER_IMAGE_MODEL,
+      modalities: ['image', 'text'],
+      image_config: { aspect_ratio: aspectRatio },
+      messages: [{ role: 'user', content: prompt }],
+    },
+    150_000
+  );
+  const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  if (!url?.startsWith('data:image/')) {
+    throw new OpenRouterError('The image model returned no image — try a different description', 502);
+  }
+  return Buffer.from(url.slice(url.indexOf(',') + 1), 'base64');
 }
 
 const PERSONA_SYSTEM =

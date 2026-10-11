@@ -47,7 +47,10 @@ A guide (character) has a name, a persona, an ElevenLabs voice and an optional i
 - Narration: short spoken sentences, concrete and sensory, present tense, about 20–60 seconds per point. eleven_v4 audio tags in square brackets set the delivery — [whispers], [warmly], [laughs], [pause] — use them sparingly, and always write the tags in English, even inside Swedish text.
 - Lines a guide might say about something: write them in that guide's persona and voice, as a few alternatives to choose from.
 - Sound-effect prompts (ElevenLabs or Suno): English, one or two concrete sentences — the source, the action, materials, the space and distance, the mood; say "seamless loop" for beds; no music unless wanted.
-- Music style descriptions for Suno: English, one paragraph of about 300 characters — genre, instrumentation, tempo/BPM, key and mood, production; "instrumental, no vocals" for beds under narration.`;
+- Music style descriptions for Suno: English, one paragraph of about 300 characters — genre, instrumentation, tempo/BPM, key and mood, production; "instrumental, no vocals" for beds under narration.
+
+## Cover images
+generate_cover_image makes a 16:9 landscape cover for the start page. Write the prompt in English from the walk's idea, place and mood: the subject and setting, season and time of day, light, atmosphere and style (photographic unless the idea calls for illustration), composition with calm space at the bottom where the title sits, and "no text, no letters, no logos". It is shown to the author with a "Use as cover" button; only set it as the cover directly when they asked for that.`;
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 /** Round every lat/lng in a JSON-able value (6 dp ≈ 0.1 m) to keep the context lean. */
@@ -296,7 +299,7 @@ export async function runAssistant(opts: {
   ];
   const appended: AssistantMessage[] = [];
   const changed = new Set<AssistantChange>();
-  const paid = { count: 0 };
+  const paid = { count: 0, images: 0 };
   const ctx: Omit<ToolContext, 'toolCallId'> = { course: opts.course, user: opts.user, emit: opts.emit, changed, paid };
 
   for (let step = 0; step < MAX_STEPS; step++) {
@@ -313,7 +316,15 @@ export async function runAssistant(opts: {
     for (const call of toolCalls) {
       if (opts.signal.aborted) return;
       const result = await runTool(call.function.name, call.function.arguments, { ...ctx, toolCallId: call.id });
-      opts.emit({ type: 'tool', id: call.id, name: call.function.name, summary: result.summary, ok: result.ok });
+      const made = (result.data as { url?: unknown } | undefined)?.url;
+      opts.emit({
+        type: 'tool',
+        id: call.id,
+        name: call.function.name,
+        summary: result.summary,
+        ok: result.ok,
+        ...(typeof made === 'string' ? { url: made } : {}),
+      });
       const msg: AssistantMessage = { role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) };
       convo.push(msg);
       appended.push(msg);

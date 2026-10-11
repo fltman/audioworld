@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import type { ClipKind, UploadResult } from '@audioworld/shared';
 import { UPLOAD_DIR } from '../env';
 import { setMeta } from '../models/upload';
@@ -8,6 +9,21 @@ import { ElevenError } from './eleven';
 
 /** Hard cap on a single generated file (defence-in-depth; real mp3s are far smaller). */
 const MAX_GENERATED_BYTES = 30 * 1024 * 1024;
+
+/** Widest a saved generated image is kept (covers show at most this wide). */
+const MAX_IMAGE_WIDTH = 1600;
+
+/** Store a generated image as an upload, re-encoded as WebP: a cover the start page
+ *  loads fast on a phone (a model's PNG is ~2 MB; this is a tenth of that). */
+export async function saveImage(bytes: Buffer): Promise<UploadResult> {
+  const webp = await sharp(bytes)
+    .resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true })
+    .webp({ quality: 82 })
+    .toBuffer();
+  const filename = `${randomUUID()}.webp`;
+  writeFileSync(join(UPLOAD_DIR, filename), webp);
+  return { url: `/uploads/${filename}`, filename, size: webp.length, mimetype: 'image/webp' };
+}
 
 /** Persist generated mp3 bytes into the sound library, exactly like an upload. */
 export async function saveToLibrary(bytes: Buffer, description: string, kind: ClipKind): Promise<UploadResult> {
