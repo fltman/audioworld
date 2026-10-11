@@ -30,6 +30,9 @@ export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 export const OPENROUTER_VISION_MODEL =
   process.env.OPENROUTER_VISION_MODEL || 'google/gemini-3.6-flash';
 
+/** Model for the admin's AI assistant (OpenRouter slug; tool use required). */
+export const OPENROUTER_CHAT_MODEL = process.env.OPENROUTER_CHAT_MODEL || 'anthropic/claude-opus-5.5';
+
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DEV_SECRET = 'dev-insecure-secret-change-me';
 

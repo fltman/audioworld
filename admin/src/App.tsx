@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AcousticZone,
+  AssistantChange,
   AudioPoint,
   AudioPointInput,
   Character,
@@ -35,6 +36,7 @@ import DiscoverPanel from './components/DiscoverPanel';
 import ScoutConvertPanel from './components/ScoutConvertPanel';
 import ZonePanel from './components/ZonePanel';
 import RoutePanel from './components/RoutePanel';
+import AssistantPanel from './components/AssistantPanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import { PreviewEngine } from './services/previewEngine';
@@ -70,7 +72,7 @@ function measureDuration(url: string, timeoutMs = 4000): Promise<number | null> 
 const DEFAULT_ABSORB_DWELL = 8;
 
 /** Which utility panel the right inspector shows when you're not editing a point. */
-type Tool = 'zones' | 'route' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
+type Tool = 'assistant' | 'zones' | 'route' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -405,6 +407,14 @@ export default function App() {
     }
     setZoneDraft(null);
   };
+  // The AI assistant changed something: reload it so the map and panels show it.
+  const assistantChanged = (what: AssistantChange[]) => {
+    if (!courseId) return;
+    if (what.includes('points')) void loadPoints(courseId);
+    if (what.includes('guides')) void api.listCharacters().then(setCharacters).catch(() => {});
+    if (what.includes('course')) void api.listCourses().then(setCourses).catch(() => {});
+  };
+
   // The planned route saves as soon as it's drawn or reshaped ([] deletes it).
   const saveRoute = (route: Coordinates[]) => {
     if (courseId) void updateCourse(courseId, { route });
@@ -840,6 +850,7 @@ export default function App() {
 
   const inCourses = tab === 'courses';
   const hasInspector = inCourses && !!courseId && (!!preview || !!draft || !!tool);
+  const showAssistant = tool === 'assistant' && !preview && !draft;
 
   return (
     <div className="shell">
@@ -984,6 +995,14 @@ export default function App() {
                     <div className="tool-row__grid">
                       <button
                         type="button"
+                        className={`btn small tool-row__ai ${tool === 'assistant' ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('assistant')}
+                        title="Chat with an AI that knows this walk and can build it with you"
+                      >
+                        ✨ AI assistant
+                      </button>
+                      <button
+                        type="button"
                         className={`btn small ${tool === 'zones' || zoneDraft != null ? 'btn-accent' : 'btn-ghost'}`}
                         onClick={() => pickTool('zones')}
                       >
@@ -1074,7 +1093,7 @@ export default function App() {
             />
 
             {hasInspector && (
-              <aside className="inspector">
+              <aside className={`inspector${showAssistant ? ' inspector--wide' : ''}`}>
                 {preview ? (
                   <PreviewPanel
                     engine={preview}
@@ -1207,6 +1226,16 @@ export default function App() {
                     onBulkSync={(m) => void bulkSync(m)}
                   />
                 ) : null}
+                {/* Kept mounted while other panels show, so a reply keeps streaming. */}
+                {courseId && (
+                  <AssistantPanel
+                    key={courseId}
+                    courseId={courseId}
+                    guides={characters}
+                    hidden={!showAssistant}
+                    onChanged={assistantChanged}
+                  />
+                )}
               </aside>
             )}
           </>

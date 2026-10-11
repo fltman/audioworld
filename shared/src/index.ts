@@ -6,3 +6,4 @@ export * from './lint';
 export * from './audioEngine';
 export * from './slug';
 export * from './walker';
+export * from './assistant';

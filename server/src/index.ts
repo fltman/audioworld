@@ -13,6 +13,7 @@ import { discoverRouter } from './routes/discover';
 import { interpretRouter } from './routes/interpret';
 import { enhanceRouter } from './routes/enhance';
 import { uploadRouter } from './routes/upload';
+import { assistantRouter } from './routes/assistant';
 import { authRouter } from './routes/auth';
 import { usersRouter } from './routes/users';
 import { attachUser } from './lib/auth';
@@ -38,6 +39,8 @@ async function main(): Promise<void> {
     next();
   });
   app.use(cors({ origin: CORS_ORIGIN }));
+  // The assistant carries whole conversations: a larger body limit, parsed before the default.
+  app.use('/api/assistant', express.json({ limit: '2mb' }));
   app.use(express.json());
   app.use(attachUser); // populates req.user from a Bearer token when present
 
@@ -79,6 +82,7 @@ async function main(): Promise<void> {
   app.use('/api/interpret', interpretRouter);
   app.use('/api/enhance', enhanceRouter);
   app.use('/api/upload', uploadRouter);
+  app.use('/api/assistant', assistantRouter);
 
   app.use(errorHandler);
 

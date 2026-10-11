@@ -1,15 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { Router } from 'express';
-import type { UploadResult } from '@audioworld/shared';
-import { UPLOAD_DIR } from '../env';
 import { asyncHandler } from '../lib/http';
 import { ValidationError } from '../lib/mapping';
 import { rateLimit } from '../lib/rateLimit';
 import { requireRole, type AuthedRequest } from '../lib/auth';
-import type { ClipKind } from '@audioworld/shared';
-import { setMeta } from '../models/upload';
+import { saveToLibrary } from '../lib/library';
 import {
   ElevenError,
   elevenConfigured,
@@ -31,9 +25,6 @@ generateRouter.use(rateLimit({ windowMs: 60_000, max: 20, key: byUser }));
 // Bounds a single account's daily spend even at the sustained minute-rate.
 const dailyPaidLimit = rateLimit({ windowMs: 24 * 60 * 60 * 1000, max: 300, key: byUser });
 
-/** Hard cap on a single generated file (defence-in-depth; real mp3s are far smaller). */
-const MAX_GENERATED_BYTES = 30 * 1024 * 1024;
-
 // eleven_v4 is the expressive default (ElevenLabs' current flagship); keep a small allowlist
 // so a client can't inject an arbitrary model id into the upstream call.
 const TTS_MODELS = new Set([
@@ -52,17 +43,6 @@ function requireConfigured(): void {
   if (!elevenConfigured()) {
     throw new ElevenError('Audio generation is not configured (no ElevenLabs API key).', 503);
   }
-}
-
-/** Persist generated mp3 bytes into the sound library, exactly like an upload. */
-async function saveToLibrary(bytes: Buffer, description: string, kind: ClipKind): Promise<UploadResult> {
-  if (bytes.length > MAX_GENERATED_BYTES) {
-    throw new ElevenError('Generated audio was unexpectedly large', 502);
-  }
-  const filename = `${randomUUID()}.mp3`;
-  writeFileSync(join(UPLOAD_DIR, filename), bytes);
-  await setMeta(filename, description.slice(0, 200), kind);
-  return { url: `/uploads/${filename}`, filename, size: bytes.length, mimetype: 'audio/mpeg' };
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');

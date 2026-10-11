@@ -70,8 +70,10 @@ The client can't use a real GPS/compass on a laptop, so add `?sim=1`:
 http://localhost:5174/?sim=1
 ```
 
-Move with **WASD / arrow keys**, turn your heading with **Q / E** (or the slider / drag the radar).
-You start on the first point of the course. Put on headphones — the tones pan and attenuate as you walk and turn.
+It opens on the map: **click the map to walk there**, or hold **W/↑** to walk, **←/→** (or Q/E) to turn, **A/D** to
+step aside and **Shift** to hurry (the same controls as the admin's playtest; on the radar, drag to move).
+You start at the planned route's start (else the first point). Put on headphones — the sounds pan and attenuate as
+you walk and turn. On a course's start page this is **Try it on this screen**.
 `?course=<id>` deep-links straight into a course.
 
 ### Playtest while authoring (admin)
@@ -91,6 +93,25 @@ Under **🔊 Zones**, draw a polygon, then pick its reverb character and amount 
 taken from the sound library, a new upload, or a link, with its own volume. **▶ Preview** plays the zone on its own:
 the background at its volume plus a test sound (a hand clap, or one of the course's sounds) through the zone's
 reverb. Changes to the reverb, amount, loop or volume play live while you listen.
+
+### Course settings, route and hidden points (admin)
+
+**⚙️ Settings → About this walk** holds what listeners see on the start page — name, description and a cover
+image — and two notes only for you (and the AI assistant): **the idea** and **background** research.
+**〰 Route** traces the way listeners are meant to walk; it's drawn on their maps and frames the start page map, and
+its length gives the walk's distance and time. A point marked **Hidden on the listener's screen** still plays but
+never shows on their radar or map.
+
+### AI assistant (admin)
+
+**✨ AI assistant** is a chat that knows the open course — its idea, background, route, zones, points and guides —
+and can build it with you: create and change points, edit the course texts, create guides, design new ElevenLabs
+voices (it shows the three previews to audition; **Use** keeps one and gives it to the guide), voice lines and
+generate sound effects (only when you ask — they cost credits), and suggest narration, lines in a guide's
+persona, sound-effect prompts and Suno music styles (English, about 300 characters). **Talk as** next to the input
+lets the whole chat speak as one of your guides. It can't delete anything. It needs `OPENROUTER_API_KEY` on the
+server; `OPENROUTER_CHAT_MODEL` picks the model (default `anthropic/claude-opus-5.5`). Conversations are kept per
+course in the browser.
 
 ### Try it on a real phone
 
