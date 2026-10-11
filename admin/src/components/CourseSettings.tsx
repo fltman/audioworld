@@ -83,7 +83,7 @@ function CourseDetails({ course, onUpdate }: Pick<Props, 'course' | 'onUpdate'>)
           value={form.description}
           onChange={(e) => set({ description: e.currentTarget.value })}
         />
-        <span className="field-hint">Listeners read this on the walk’s start page.</span>
+        <span className="field-hint">Listeners read this on the walk’s start page once you publish.</span>
       </label>
 
       <div className="form-field">
@@ -119,7 +119,9 @@ function CourseDetails({ course, onUpdate }: Pick<Props, 'course' | 'onUpdate'>)
             e.currentTarget.value = '';
           }}
         />
-        <span className="field-hint">Shown at the top of the start page. Landscape works best.</span>
+        <span className="field-hint">
+          Shown at the top of the start page once you publish. Landscape works best.
+        </span>
       </div>
 
       <label className="form-field">
