@@ -86,7 +86,7 @@ export function Experience({ engine, course, onExit }: ExperienceProps) {
           <Radar engine={engine} frameRef={frameRef} />
         </div>
       ) : (
-        <MapView engine={engine} frameRef={frameRef} />
+        <MapView engine={engine} frameRef={frameRef} route={course.route} />
       )}
 
       {engine.isSim() && <SimControls engine={engine} heading={snapshot.headingDeg ?? 0} />}

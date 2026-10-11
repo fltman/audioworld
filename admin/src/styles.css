@@ -1892,6 +1892,20 @@ input[type='range'] {
 .course-settings__delete {
   align-self: flex-start;
 }
+.route-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.route-panel .section-title,
+.route-panel .hint {
+  margin: 0;
+}
+.route-panel__stats {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
 .course-details {
   display: flex;
   flex-direction: column;

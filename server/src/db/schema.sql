@@ -98,6 +98,9 @@ ALTER TABLE courses
   ADD COLUMN IF NOT EXISTS idea text,
   ADD COLUMN IF NOT EXISTS background_info text;
 
+-- The route listeners are meant to walk (a polyline), drawn on their map.
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS route jsonb;
+
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
 CREATE INDEX IF NOT EXISTS scouts_owner_id_idx ON scouts(owner_id);

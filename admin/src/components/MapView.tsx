@@ -22,6 +22,8 @@ import type { PreviewEngine, PreviewFrame } from '../services/previewEngine';
 import { GhostLayer } from './ghostLayer';
 
 const ACCENT = '#7c5cff';
+/** The planned route (warm, so it reads apart from the purple authoring accent). */
+const ROUTE_COLOR = '#f5b84b';
 const DEFAULT_CENTER: [number, number] = [59.3293, 18.0686];
 const DEFAULT_ZOOM = 15;
 /** Playtest camera: once the walking listener comes within this fraction of the map's
@@ -55,6 +57,13 @@ interface Props {
   zoneDraft?: Coordinates[] | null;
   /** True while the user is laying down a zone polygon (debounce clicks, free the dblclick). */
   drawingZone?: boolean;
+  /** The course's planned route, drawn as a dashed line under the points. */
+  route?: Coordinates[];
+  /** The route's corners while tracing it (null when not drawing). */
+  routeDraft?: Coordinates[] | null;
+  /** The route tool is open: the route's corners get drag handles. */
+  editingRoute?: boolean;
+  onRouteVertexDrag?: (index: number, c: Coordinates) => void;
   /** Aggregate heatmap cells: "lat,lng" (4dp) → seconds dwelt. Drawn as warm circles. */
   analyticsCells?: Record<string, number>;
   /** Read-only scout waypoints overlaid as a reference layer while authoring. */
@@ -88,11 +97,11 @@ function markerIcon(color: string, big: boolean, symbol: string, selected = fals
   });
 }
 
-function vertexIcon(): L.DivIcon {
+function vertexIcon(color = ACCENT): L.DivIcon {
   const s = 14;
   return L.divIcon({
     className: 'aw-marker-wrap',
-    html: `<div class="aw-vertex" style="--c:${ACCENT}"></div>`,
+    html: `<div class="aw-vertex" style="--c:${color}"></div>`,
     iconSize: [s, s],
     iconAnchor: [s / 2, s / 2],
   });
@@ -224,6 +233,7 @@ export default function MapView(props: Props) {
   const pointsLayerRef = useRef<L.LayerGroup | null>(null);
   const draftLayerRef = useRef<L.LayerGroup | null>(null);
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const analyticsLayerRef = useRef<L.LayerGroup | null>(null);
   const scoutLayerRef = useRef<L.LayerGroup | null>(null);
   const discoverLayerRef = useRef<L.LayerGroup | null>(null);
@@ -263,6 +273,7 @@ export default function MapView(props: Props) {
 
     analyticsLayerRef.current = L.layerGroup().addTo(map); // heatmap, bottom of the stack
     zonesLayerRef.current = L.layerGroup().addTo(map); // under the point markers
+    routeLayerRef.current = L.layerGroup().addTo(map);
     pointsLayerRef.current = L.layerGroup().addTo(map);
     scoutLayerRef.current = L.layerGroup().addTo(map); // reference pins above points
     discoverLayerRef.current = L.layerGroup().addTo(map);
@@ -290,7 +301,9 @@ export default function MapView(props: Props) {
       }
       const d = stateRef.current.draft;
       const drawing =
-        (!!d && isPathType(d.type) && d.drawingPath) || !!stateRef.current.drawingZone;
+        (!!d && isPathType(d.type) && d.drawingPath) ||
+        !!stateRef.current.drawingZone ||
+        stateRef.current.routeDraft != null;
       if (drawing) {
         // Debounce so the two clicks of a double-click don't add stray vertices.
         if (clickTimer.current) window.clearTimeout(clickTimer.current);
@@ -315,6 +328,7 @@ export default function MapView(props: Props) {
       pointsLayerRef.current = null;
       draftLayerRef.current = null;
       zonesLayerRef.current = null;
+      routeLayerRef.current = null;
       analyticsLayerRef.current = null;
       scoutLayerRef.current = null;
       discoverLayerRef.current = null;
@@ -394,6 +408,43 @@ export default function MapView(props: Props) {
         .addTo(layer);
     });
   }, [props.discoverPlaces, props.selectedPlaces]);
+
+  // The planned route: a dashed line from a filled start dot to a ringed finish. While
+  // tracing, the draft line with its corners; with the route tool open, drag handles.
+  useEffect(() => {
+    const layer = routeLayerRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    const draft = props.routeDraft;
+    const line = draft ?? props.route;
+    if (!line || line.length === 0) return;
+    const latlngs = line.map((c) => [c.lat, c.lng] as [number, number]);
+    L.polyline(latlngs, {
+      color: ROUTE_COLOR,
+      weight: 4,
+      opacity: draft ? 0.95 : 0.75,
+      dashArray: '10 8',
+      interactive: false,
+    }).addTo(layer);
+    if (draft) {
+      for (const ll of latlngs) {
+        L.circleMarker(ll, { radius: 4, color: ROUTE_COLOR, fillColor: ROUTE_COLOR, fillOpacity: 1, interactive: false }).addTo(layer);
+      }
+      return;
+    }
+    if (props.editingRoute) {
+      line.forEach((c, i) => {
+        const handle = L.marker([c.lat, c.lng], { draggable: true, icon: vertexIcon(ROUTE_COLOR) });
+        handle.on('dragend', () => stateRef.current.onRouteVertexDrag?.(i, toCoord(handle.getLatLng())));
+        handle.addTo(layer);
+      });
+      return;
+    }
+    L.circleMarker(latlngs[0]!, { radius: 6, color: '#fff', weight: 2, fillColor: ROUTE_COLOR, fillOpacity: 1, interactive: false }).addTo(layer);
+    if (latlngs.length > 1) {
+      L.circleMarker(latlngs[latlngs.length - 1]!, { radius: 6, color: ROUTE_COLOR, weight: 3, fillOpacity: 0, interactive: false }).addTo(layer);
+    }
+  }, [props.route, props.routeDraft, props.editingRoute]);
 
   // Draw acoustic zones (filled polygons) + the in-progress zone outline.
   useEffect(() => {
@@ -681,10 +732,11 @@ export default function MapView(props: Props) {
     const map = mapRef.current;
     if (!map) return;
     const d = props.draft;
-    const drawing = (!!d && isPathType(d.type) && d.drawingPath) || !!props.drawingZone;
+    const drawing =
+      (!!d && isPathType(d.type) && d.drawingPath) || !!props.drawingZone || props.routeDraft != null;
     if (drawing) map.doubleClickZoom.disable();
     else map.doubleClickZoom.enable();
-  }, [props.draft, props.drawingZone]);
+  }, [props.draft, props.drawingZone, props.routeDraft]);
 
   // Geocode a place name via Nominatim and recentre the map on the first hit.
   const goToPlace = async (e: FormEvent) => {

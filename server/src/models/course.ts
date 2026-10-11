@@ -1,6 +1,7 @@
 import type {
   AcousticZone,
   AnalyticsReport,
+  Coordinates,
   Course,
   CourseAnalytics,
   CourseInput,
@@ -74,6 +75,7 @@ interface CourseRow {
   show_start_wayfinding: boolean;
   eyes_up: boolean;
   zones: AcousticZone[] | null;
+  route: Coordinates[] | null;
   published: PublishedSnapshot | null;
   slug: string | null;
   created_at: Date;
@@ -94,6 +96,7 @@ function rowToCourse(row: CourseRow): Course {
     showStartWayfinding: row.show_start_wayfinding,
     eyesUp: row.eyes_up,
     zones: row.zones ?? [],
+    route: row.route?.length ? row.route : undefined,
     publishedAt: row.published?.publishedAt ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -195,8 +198,8 @@ export async function createCourse(
     try {
       const { rows } = await pool.query<CourseRow>(
         `INSERT INTO courses
-           (name, description, owner_id, show_start_wayfinding, eyes_up, zones, slug, image_url, idea, background_info)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+           (name, description, owner_id, show_start_wayfinding, eyes_up, zones, slug, image_url, idea, background_info, route)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
         [
           input.name,
           input.description ?? null,
@@ -208,6 +211,7 @@ export async function createCourse(
           input.imageUrl ?? null,
           input.idea ?? null,
           input.backgroundInfo ?? null,
+          input.route?.length ? JSON.stringify(input.route) : null,
         ]
       );
       return rowToCourse(rows[0]!);
@@ -238,6 +242,8 @@ export async function updateCourse(
          image_url = COALESCE($8, image_url),
          idea = COALESCE($9, idea),
          background_info = COALESCE($10, background_info),
+         -- [] clears the route (stored as NULL); null leaves it unchanged.
+         route = CASE WHEN $11::jsonb IS NULL THEN route WHEN $11::jsonb = '[]'::jsonb THEN NULL ELSE $11::jsonb END,
          updated_at = now()
        WHERE id = $7 RETURNING *`,
       [
@@ -251,6 +257,7 @@ export async function updateCourse(
         input.imageUrl ?? null,
         input.idea ?? null,
         input.backgroundInfo ?? null,
+        input.route != null ? JSON.stringify(input.route) : null,
       ]
     );
     return rows[0] ? rowToCourse(rows[0]) : null;

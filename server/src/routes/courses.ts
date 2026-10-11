@@ -6,6 +6,7 @@ import multer from 'multer';
 import type {
   AcousticZone,
   AnalyticsReport,
+  Coordinates,
   CourseBundle,
   CourseInput,
   PublishedCourse,
@@ -57,6 +58,7 @@ function validateCourseInput(body: unknown): CourseInput {
       typeof b.showStartWayfinding === 'boolean' ? b.showStartWayfinding : undefined,
     eyesUp: typeof b.eyesUp === 'boolean' ? b.eyesUp : undefined,
     zones: parseZones(b.zones),
+    route: parseRoute(b.route),
     slug: parseSlug(b.slug),
   };
 }
@@ -213,6 +215,31 @@ const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 const MAX_ZONES = 200;
 const MAX_ZONE_VERTICES = 1000;
 
+const MAX_ROUTE_VERTICES = 5000;
+
+/** The planned route: [] clears it, undefined (omitted) leaves it unchanged. */
+function parseRoute(value: unknown): Coordinates[] | undefined {
+  if (value == null) return undefined;
+  if (!Array.isArray(value)) throw new ValidationError('"route" must be an array');
+  if (value.length > MAX_ROUTE_VERTICES) throw new ValidationError(`The route has too many points (max ${MAX_ROUTE_VERTICES})`);
+  if (value.length === 1) throw new ValidationError('A route needs at least 2 points');
+  return value.map((c, i) => {
+    const cc = c as Record<string, unknown>;
+    if (
+      !cc ||
+      typeof cc.lat !== 'number' ||
+      typeof cc.lng !== 'number' ||
+      !Number.isFinite(cc.lat) ||
+      !Number.isFinite(cc.lng) ||
+      Math.abs(cc.lat) > 90 ||
+      Math.abs(cc.lng) > 180
+    ) {
+      throw new ValidationError(`route[${i}] must be finite {lat, lng} in range`);
+    }
+    return { lat: cc.lat, lng: cc.lng };
+  });
+}
+
 /** Validate acoustic zones. Undefined (omitted) means "leave unchanged" on update. */
 function parseZones(value: unknown): AcousticZone[] | undefined {
   if (value == null) return undefined;
@@ -350,6 +377,7 @@ coursesRouter.post(
       showStartWayfinding: course.showStartWayfinding,
       eyesUp: course.eyesUp,
       zones: course.zones,
+      route: course.route,
       points,
       publishedAt: new Date().toISOString(),
     };
@@ -378,6 +406,7 @@ coursesRouter.get(
             showStartWayfinding: snap.showStartWayfinding,
             eyesUp: snap.eyesUp,
             zones: snap.zones,
+            route: snap.route,
           },
           points: snap.points,
           published: true,

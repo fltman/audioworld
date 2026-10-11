@@ -113,6 +113,7 @@ export function buildBundle(course: Course, points: AudioPoint[]): CourseBundle 
       showStartWayfinding: course.showStartWayfinding,
       eyesUp: course.eyesUp,
       zones,
+      route: course.route,
     },
     points,
     assets,

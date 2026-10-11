@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import L from 'leaflet';
-import type { PointType } from '@audioworld/shared';
+import type { Coordinates, PointType } from '@audioworld/shared';
 import type { ExperienceEngine, FrameState } from '../services/experience';
+import { drawRoute } from './route';
 
 interface MapViewProps {
   engine: ExperienceEngine;
   frameRef: MutableRefObject<FrameState>;
+  /** The course's planned route, drawn under the sounds to walk along. */
+  route?: Coordinates[];
 }
 
 const TYPE_COLOR: Record<PointType, string> = {
@@ -43,7 +46,7 @@ function sourceIcon(color: string): L.DivIcon {
  * radius. Colours match the admin. Reads the per-frame ref imperatively so it
  * never triggers React re-renders.
  */
-export function MapView({ engine, frameRef }: MapViewProps) {
+export function MapView({ engine, frameRef, route }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const userMarker = useRef<L.Marker | null>(null);
@@ -64,6 +67,7 @@ export function MapView({ engine, frameRef }: MapViewProps) {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap',
     }).addTo(map);
+    if (route) drawRoute(map, route);
     srcLayer.current = L.layerGroup().addTo(map);
     userMarker.current = L.marker(DEFAULT_CENTER, {
       icon: userIcon(),

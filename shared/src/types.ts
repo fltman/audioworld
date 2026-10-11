@@ -312,6 +312,9 @@ export interface Course {
   slug?: string;
   /** Acoustic zones (reverb + ambient beds) painted over the course area. */
   zones?: AcousticZone[];
+  /** The route listeners are meant to walk, start to finish: drawn on their map to help
+   *  them find their way, and a guide for the admin's AI assistant when placing points. */
+  route?: Coordinates[];
   /**
    * When true, the client always shows a compass cue + distance to the course's
    * start point (the first point, or its first path vertex). If that first point is
@@ -338,6 +341,7 @@ export interface PublishedSnapshot {
   showStartWayfinding?: boolean;
   eyesUp?: boolean;
   zones?: AcousticZone[];
+  route?: Coordinates[];
   points: AudioPoint[];
   publishedAt: string;
 }
@@ -431,6 +435,7 @@ export type CourseInput = Pick<
   | 'showStartWayfinding'
   | 'eyesUp'
   | 'zones'
+  | 'route'
   | 'slug'
 >;
 
@@ -456,7 +461,15 @@ export interface CourseBundle {
   exportedAt: string;
   course: Pick<
     Course,
-    'name' | 'description' | 'imageUrl' | 'idea' | 'backgroundInfo' | 'showStartWayfinding' | 'eyesUp' | 'zones'
+    | 'name'
+    | 'description'
+    | 'imageUrl'
+    | 'idea'
+    | 'backgroundInfo'
+    | 'showStartWayfinding'
+    | 'eyesUp'
+    | 'zones'
+    | 'route'
   >;
   points: AudioPoint[];
   assets: CourseBundleAsset[];

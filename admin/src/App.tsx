@@ -34,6 +34,7 @@ import CourseSettings from './components/CourseSettings';
 import DiscoverPanel from './components/DiscoverPanel';
 import ScoutConvertPanel from './components/ScoutConvertPanel';
 import ZonePanel from './components/ZonePanel';
+import RoutePanel from './components/RoutePanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import { PreviewEngine } from './services/previewEngine';
@@ -69,7 +70,7 @@ function measureDuration(url: string, timeoutMs = 4000): Promise<number | null> 
 const DEFAULT_ABSORB_DWELL = 8;
 
 /** Which utility panel the right inspector shows when you're not editing a point. */
-type Tool = 'zones' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
+type Tool = 'zones' | 'route' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -80,6 +81,8 @@ export default function App() {
   const [points, setPoints] = useState<AudioPoint[]>([]);
   const [zones, setZones] = useState<AcousticZone[]>([]);
   const [zoneDraft, setZoneDraft] = useState<Coordinates[] | null>(null);
+  // The planned route's vertices while tracing it (null when not drawing).
+  const [routeDraft, setRouteDraft] = useState<Coordinates[] | null>(null);
   const [savingZones, setSavingZones] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -368,6 +371,7 @@ export default function App() {
         ...(patch.imageUrl !== undefined ? { imageUrl: patch.imageUrl } : {}),
         ...(patch.idea !== undefined ? { idea: patch.idea } : {}),
         ...(patch.backgroundInfo !== undefined ? { backgroundInfo: patch.backgroundInfo } : {}),
+        ...(patch.route !== undefined ? { route: patch.route } : {}),
         // Only send zones when this update is actually about zones (saveZones); otherwise
         // omit them so the server COALESCE keeps its saved set and unsaved edits aren't
         // overwritten with a stale copy from `courses`.
@@ -401,6 +405,19 @@ export default function App() {
     }
     setZoneDraft(null);
   };
+  // The planned route saves as soon as it's drawn or reshaped ([] deletes it).
+  const saveRoute = (route: Coordinates[]) => {
+    if (courseId) void updateCourse(courseId, { route });
+  };
+  const finishRoute = () => {
+    if (routeDraft && routeDraft.length >= 2) saveRoute(routeDraft);
+    setRouteDraft(null);
+  };
+  const routeVertexDrag = (i: number, c: Coordinates) => {
+    const route = currentCourse?.route;
+    if (route) saveRoute(route.map((v, j) => (j === i ? c : v)));
+  };
+
   const saveZones = async () => {
     if (!courseId) return;
     setSavingZones(true);
@@ -474,6 +491,7 @@ export default function App() {
     setDraft(null);
     setFormError(null);
     if (next !== 'zones') setZoneDraft(null);
+    if (next !== 'route') setRouteDraft(null);
     setMultiSelectMode(next === 'bulk');
     setShowAnalytics(next === 'analytics');
     setTool(next);
@@ -485,6 +503,11 @@ export default function App() {
   };
 
   const mapClick = (coord: Coordinates) => {
+    // While tracing the route, map clicks add its corners.
+    if (routeDraft != null) {
+      setRouteDraft((d) => [...(d ?? []), coord]);
+      return;
+    }
     // While drawing a zone, map clicks lay down polygon corners.
     if (zoneDraft != null) {
       setZoneDraft((d) => [...(d ?? []), coord]);
@@ -498,6 +521,10 @@ export default function App() {
   };
 
   const mapDblClick = () => {
+    if (routeDraft != null) {
+      finishRoute();
+      return;
+    }
     if (zoneDraft != null) {
       finishZone();
       return;
@@ -964,6 +991,14 @@ export default function App() {
                       </button>
                       <button
                         type="button"
+                        className={`btn small ${tool === 'route' ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => pickTool('route')}
+                        title="Draw the route listeners are meant to walk"
+                      >
+                        〰 Route
+                      </button>
+                      <button
+                        type="button"
                         className={`btn small ${tool === 'discover' ? 'btn-accent' : 'btn-ghost'}`}
                         onClick={() => pickTool('discover')}
                       >
@@ -1026,6 +1061,10 @@ export default function App() {
               zones={zones}
               zoneDraft={zoneDraft}
               drawingZone={zoneDraft != null}
+              route={currentCourse?.route}
+              routeDraft={routeDraft}
+              editingRoute={tool === 'route' && routeDraft == null}
+              onRouteVertexDrag={routeVertexDrag}
               analyticsCells={showAnalytics ? analytics?.cells : undefined}
               scoutWaypoints={scoutWaypoints}
               onViewport={setDiscoverBbox}
@@ -1135,6 +1174,17 @@ export default function App() {
                   </section>
                 ) : tool === 'analytics' ? (
                   <AnalyticsPanel analytics={analytics} points={points} loading={analyticsLoading} />
+                ) : tool === 'route' ? (
+                  <RoutePanel
+                    route={currentCourse?.route}
+                    drawing={routeDraft != null}
+                    draftLen={routeDraft?.length ?? 0}
+                    onDraw={(extend) => setRouteDraft(extend ? [...(currentCourse?.route ?? [])] : [])}
+                    onUndo={() => setRouteDraft((d) => (d ? d.slice(0, -1) : d))}
+                    onFinish={finishRoute}
+                    onCancel={() => setRouteDraft(null)}
+                    onDelete={() => saveRoute([])}
+                  />
                 ) : tool === 'settings' && currentCourse ? (
                   <CourseSettings
                     course={currentCourse}

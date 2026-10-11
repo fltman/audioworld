@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import type { AudioPoint } from '@audioworld/shared';
+import type { AudioPoint, Coordinates } from '@audioworld/shared';
 import { anchorOf } from '@audioworld/shared';
+import { drawRoute } from './route';
 
 function startIcon(): L.DivIcon {
   return L.divIcon({
@@ -17,7 +18,7 @@ function startIcon(): L.DivIcon {
  * of the course, or the first vertex if that point is a path — so the listener knows
  * where to physically go before pressing start. Remaining points show as faint dots.
  */
-export function StartMap({ points }: { points: AudioPoint[] }) {
+export function StartMap({ points, route }: { points: AudioPoint[]; route?: Coordinates[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -36,6 +37,17 @@ export function StartMap({ points }: { points: AudioPoint[] }) {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap',
     }).addTo(map);
+    // With a planned route, frame the whole walk; otherwise zoom in on the start.
+    if (route && route.length >= 2) {
+      drawRoute(map, route);
+      map.fitBounds(L.latLngBounds([...route, start].map((c) => [c.lat, c.lng] as [number, number])), {
+        padding: [18, 18],
+        maxZoom: 17,
+        // No zoom animation: the map is rebuilt when the published course arrives, and
+        // removing it mid-animation throws inside Leaflet.
+        animate: false,
+      });
+    }
 
     // Remaining points as faint context dots (the start pin sits on top).
     for (let i = 1; i < points.length; i++) {
@@ -60,7 +72,7 @@ export function StartMap({ points }: { points: AudioPoint[] }) {
       map.remove();
       mapRef.current = null;
     };
-  }, [points]);
+  }, [points, route]);
 
   return <div className="start-map" ref={containerRef} aria-label="Course start location" />;
 }

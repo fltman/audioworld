@@ -158,7 +158,7 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
 
         {points && points.length > 0 && (
           <>
-            <StartMap points={points} />
+            <StartMap points={points} route={course?.route} />
             <p className="gate-hint">Head to the start pin to begin.</p>
           </>
         )}
