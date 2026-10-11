@@ -73,6 +73,8 @@ export interface DraftState {
   height: number;
   /** Off the listener's screen, still heard. */
   hidden: boolean;
+  /** Point ids to head for after this one (the listener's radar + map show them). */
+  next: string[];
   /** Story flags this point sets / requires (comma-separated text). */
   setsFlags: string;
   requiresFlags: string;
@@ -93,6 +95,7 @@ const NUMERIC_DEFAULTS = {
   followSpeed: 2,
   height: 0,
   hidden: false,
+  next: [],
   stillSec: 0,
   facing: 0,
   spread: 180,
@@ -177,6 +180,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     ...FLAG_DEFAULTS,
     height: point.height ?? 0,
     hidden: point.hidden ?? false,
+    next: point.next ?? [],
     setsFlags: (point.setsFlags ?? []).join(', '),
     requiresFlags: (point.requiresFlags ?? []).join(', '),
     flagGroup: point.flagGroup ?? '',
@@ -288,6 +292,7 @@ export function draftToInput(d: DraftState): DraftResult {
     requiresFlags: parseFlags(d.requiresFlags),
     ...(d.height ? { height: d.height } : {}),
     ...(d.hidden ? { hidden: true } : {}),
+    ...(d.next.length ? { next: d.next } : {}),
     ...(d.flagGroup.trim() ? { flagGroup: d.flagGroup.trim() } : {}),
   };
 

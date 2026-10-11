@@ -1085,6 +1085,46 @@ input[type='range'] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* "Next sound" picker in the point form, and its arrows on the map. */
+.next-sounds__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+.next-sounds__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  background: var(--accent-tint);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+}
+.next-sounds__item button {
+  padding: 0 5px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.next-sounds__item button:hover {
+  color: var(--text);
+}
+.aw-flow-arrow {
+  width: 0;
+  height: 0;
+  margin: 0 auto;
+  border-right: 6px solid transparent;
+  border-bottom: 11px solid var(--accent-light);
+  border-left: 6px solid transparent;
+}
 .point-hidden {
   margin-left: 6px;
   padding: 0 5px;

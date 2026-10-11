@@ -803,6 +803,39 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 0 8px var(--c);
 }
+/* A "next" sound: where to walk now — amber ring + its name (hidden on other sounds). */
+.exp-src__next {
+  display: none;
+}
+.exp-src.is-next span {
+  box-shadow: 0 0 0 4px rgba(255, 207, 107, 0.45), 0 0 14px #ffcf6b;
+  animation: exp-next 1.6s ease-in-out infinite;
+}
+.exp-src.is-next .exp-src__next {
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+  font-style: normal;
+  white-space: nowrap;
+  color: #1b1405;
+  background: #ffcf6b;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+@keyframes exp-next {
+  50% {
+    box-shadow: 0 0 0 9px rgba(255, 207, 107, 0), 0 0 14px #ffcf6b;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .exp-src.is-next span {
+    animation: none;
+  }
+}
 
 .start-map {
   /* Contain Leaflet's high pane z-indexes so the sticky Start bar stays on top. */

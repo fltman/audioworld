@@ -185,6 +185,12 @@ export function pointInputToColumns(input: unknown, courseId: string): PointColu
   if (requiresFlags) config.requiresFlags = requiresFlags;
   if (body.height != null) config.height = num(body.height, 'height');
   if (body.hidden === true) config.hidden = true;
+  if (body.next != null) {
+    if (!Array.isArray(body.next)) throw new ValidationError('"next" must be an array of point ids');
+    const next = [...new Set(body.next.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim().slice(0, 64)))];
+    if (next.length > 20) throw new ValidationError('A point can have at most 20 next sounds');
+    if (next.length) config.next = next;
+  }
   if (typeof body.flagGroup === 'string' && body.flagGroup.trim()) {
     config.flagGroup = body.flagGroup.trim();
   }

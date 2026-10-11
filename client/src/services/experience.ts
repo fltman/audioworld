@@ -81,7 +81,8 @@ export interface Waypoint {
   etaSec?: number;
 }
 
-/** One of the nearest sounds you can't hear yet: which way, and how far. */
+/** A sound the radar points to: a next sound the author linked from the last one you
+ *  heard, or else one of the nearest you can't hear yet. */
 export interface Nearby {
   id: string;
   name: string;
@@ -90,6 +91,8 @@ export interface Nearby {
   distance: number;
   /** Already heard on this walk (drawn fainter). */
   heard: boolean;
+  /** One of the "next sounds" of the last point heard (where to go now). */
+  next: boolean;
 }
 
 /** How many of the nearest sounds the radar points to. */
@@ -187,6 +190,8 @@ export interface RunSnapshot {
   reached: string[];
   sentReached: string[];
   state: Record<string, SourceState>;
+  /** The last heard point whose "next sounds" the radar is pointing to. */
+  guideFrom?: string | null;
   /** Epoch ms of the save, for freshness (a very old run isn't offered for resume). */
   savedAt: number;
 }
@@ -231,6 +236,10 @@ export class ExperienceEngine {
   private readonly reachedPoints = new Set<string>();
   /** Points heard at least once this walk (sim included), for the radar's nearby arrows. */
   private readonly heard = new Set<string>();
+  /** Points audible on the previous frame (to notice the moment you reach one). */
+  private readonly audibleBefore = new Set<string>();
+  /** The last point reached that has "next sounds": the radar + map point to those. */
+  private guideFrom: string | null = null;
   /** Point ids already reported in a prior flush, so re-flushing can't double-count. */
   private readonly sentReached = new Set<string>();
   /** Per-point movement/trigger memory the resolver reads + writes each frame. */
@@ -307,6 +316,7 @@ export class ExperienceEngine {
       for (const id of r.reached) this.reachedPoints.add(id);
       for (const id of r.sentReached) this.sentReached.add(id);
       for (const [id, st] of Object.entries(r.state)) this.stateMemory.set(id, { ...st });
+      this.guideFrom = r.guideFrom ?? null;
     }
   }
 
@@ -477,6 +487,8 @@ export class ExperienceEngine {
     const sources: MapSource[] = [];
     const waypoints: Waypoint[] = [];
     const candidates: Nearby[] = [];
+    /** This frame's view of every drawable, reachable point, for the next-sound arrows. */
+    const reachable = new Map<string, Nearby & { audible: boolean }>();
     // The first point's own elapsed time, captured in the loop, for the start-return ETA.
     let firstGuideElapsed: number | null = null;
     // Flags raised this frame are merged in AFTER the loop so ordering is irrelevant
@@ -563,18 +575,22 @@ export class ExperienceEngine {
       // the eyes-up sonar, which steers by `sources`, doesn't lead you to it either). A
       // one-way path that has arrived is done: silent, and gone from the screen too.
       const shown = !point.hidden && !r.finished;
+      const heardBefore = this.heard.has(point.id) || this.reachedPoints.has(point.id);
+      if (shown && !r.inert && r.position) {
+        reachable.set(point.id, { id: point.id, name: point.name, az, distance: r.distance, heard: heardBefore, next: false, audible: r.audible });
+      }
       if (r.audible) {
         if (shown) blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
         this.heard.add(point.id);
         if (!this.sim) this.reachedPoints.add(point.id);
-      } else if (shown && !r.inert && r.position) {
-        candidates.push({
-          id: point.id,
-          name: point.name,
-          az,
-          distance: r.distance,
-          heard: this.heard.has(point.id) || this.reachedPoints.has(point.id),
-        });
+        // Just reached a point that leads on: from now on, show the way to its next sounds.
+        if (!this.audibleBefore.has(point.id) && point.next?.length) this.guideFrom = point.id;
+        this.audibleBefore.add(point.id);
+      } else {
+        this.audibleBefore.delete(point.id);
+        if (shown && !r.inert && r.position) {
+          candidates.push({ id: point.id, name: point.name, az, distance: r.distance, heard: heardBefore, next: false });
+        }
       }
       // Wayfinding: a compass cue to this sound even when it's out of earshot.
       if (
@@ -728,12 +744,22 @@ export class ExperienceEngine {
       this.persist();
     }
 
-    // The nearest sounds you can't hear yet (a point with its own wayfinding arrow already has one).
+    // Where to go now: the next sounds of the last point reached that leads on (those not
+    // yet heard and not already in earshot), else the nearest sounds you can't hear yet.
+    // A point with its own wayfinding arrow already has one.
     const cued = new Set(waypoints.map((w) => w.id));
-    const nearby = candidates
-      .filter((c) => !cued.has(c.id))
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, NEARBY_COUNT);
+    const from = this.guideFrom ? this.points.find((p) => p.id === this.guideFrom) : undefined;
+    const ahead = (from?.next ?? [])
+      .map((id) => reachable.get(id))
+      .filter((n): n is Nearby & { audible: boolean } => !!n && !n.audible && !n.heard && !cued.has(n.id))
+      .map(({ audible: _a, ...n }): Nearby => ({ ...n, next: true }));
+    const nearby =
+      ahead.length > 0
+        ? ahead
+        : candidates
+            .filter((c) => !cued.has(c.id))
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, NEARBY_COUNT);
 
     return {
       user, headingDeg, accuracy, blips, sources, waypoints, nearby,
@@ -755,6 +781,7 @@ export class ExperienceEngine {
       reached: [...this.reachedPoints],
       sentReached: [...this.sentReached],
       state: Object.fromEntries(this.stateMemory),
+      guideFrom: this.guideFrom,
       savedAt: Date.now(),
     };
   }

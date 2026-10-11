@@ -155,9 +155,11 @@ export function Radar({ engine, frameRef }: RadarProps) {
         }
       }
 
-      // The nearest sounds you can't hear yet: which way to walk next.
+      // Where to walk now: the author's next sounds (amber, like the route), else the
+      // nearest sounds you can't hear yet.
       for (const n of frame.nearby) {
-        drawWaypoint(ctx, cx, cy, R, n.az, n.heard ? NEARBY_HEARD : NEARBY, `${n.name} · ${fmtDist(n.distance)}`, labels);
+        if (n.next) drawWaypoint(ctx, cx, cy, R, n.az, WAYFIND, `Next: ${n.name} · ${fmtDist(n.distance)}`, labels);
+        else drawWaypoint(ctx, cx, cy, R, n.az, n.heard ? NEARBY_HEARD : NEARBY, `${n.name} · ${fmtDist(n.distance)}`, labels);
       }
 
       // You.

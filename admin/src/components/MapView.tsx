@@ -3,6 +3,7 @@ import L from 'leaflet';
 import {
   anchorOf,
   audibleRadiusOf,
+  calculateBearing,
   pathVertexTimes,
   sectorPolygon,
   triggerRadiusOf,
@@ -24,6 +25,17 @@ import { GhostLayer } from './ghostLayer';
 const ACCENT = '#7c5cff';
 /** The planned route (warm, so it reads apart from the purple authoring accent). */
 const ROUTE_COLOR = '#f5b84b';
+/** "Next sound" links between points. */
+const FLOW_COLOR = '#cbbcff';
+
+function flowArrowIcon(bearing: number): L.DivIcon {
+  return L.divIcon({
+    className: 'aw-marker-wrap',
+    html: `<div class="aw-flow-arrow" style="transform: rotate(${Math.round(bearing)}deg)"></div>`,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+}
 const DEFAULT_CENTER: [number, number] = [59.3293, 18.0686];
 const DEFAULT_ZOOM = 15;
 /** Playtest camera: once the walking listener comes within this fraction of the map's
@@ -636,6 +648,26 @@ export default function MapView(props: Props) {
         },
         selected.has(id)
       );
+    }
+    // "Next sound" links: a dashed arrow from each point to the one(s) it leads to.
+    const byId = new Map(props.points.map((p) => [p.id, p]));
+    for (const p of props.points) {
+      for (const id of p.next ?? []) {
+        const target = byId.get(id);
+        if (!target || target === p) continue;
+        const a = anchorOf(p);
+        const b = anchorOf(target);
+        L.polyline(
+          [
+            [a.lat, a.lng],
+            [b.lat, b.lng],
+          ],
+          { color: FLOW_COLOR, weight: 2, opacity: 0.75, dashArray: '2 6', interactive: false }
+        ).addTo(layer);
+        // Arrowhead two-thirds of the way along, turned to the bearing.
+        const at: [number, number] = [a.lat + (b.lat - a.lat) * 0.66, a.lng + (b.lng - a.lng) * 0.66];
+        L.marker(at, { icon: flowArrowIcon(calculateBearing(a, b)), interactive: false, keyboard: false }).addTo(layer);
+      }
     }
   }, [props.points, props.draft?.editingId, props.selectedIds, props.multiSelect]);
 

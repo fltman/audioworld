@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import type {
+  AudioPoint,
   Character,
   ElevenVoice,
   FollowMode,
@@ -60,6 +61,8 @@ interface Props {
   onAddPoints: () => void;
   /** Reusable guides available to assign to a moving point. */
   characters: Character[];
+  /** The course's points, to pick this one's next sound(s) from. */
+  points: AudioPoint[];
   saving: boolean;
   uploading: boolean;
   error: string | null;
@@ -788,6 +791,54 @@ export default function PointForm(props: Props) {
           />
           Hidden on the listener’s screen — heard, not seen
         </label>
+      </div>
+
+      <div className="form-field next-sounds">
+        <span className="label">Next sound{draft.next.length > 1 ? 's' : ''}</span>
+        {draft.next.length > 0 && (
+          <ul className="next-sounds__list">
+            {draft.next.map((id) => {
+              const target = props.points.find((p) => p.id === id);
+              return (
+                <li key={id} className="next-sounds__item">
+                  <span>{target ? target.name : <em>a deleted point</em>}</span>
+                  <button
+                    type="button"
+                    aria-label="Remove"
+                    title="Remove"
+                    onClick={() => onChange({ next: draft.next.filter((n) => n !== id) })}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <select
+          className="select"
+          value=""
+          onChange={(e) => {
+            const id = e.currentTarget.value;
+            if (id) onChange({ next: [...draft.next, id] });
+          }}
+        >
+          <option value="">
+            {draft.next.length ? '+ Add another way…' : '+ Choose the sound to head for next…'}
+          </option>
+          {props.points
+            .filter((p) => p.id !== draft.editingId && !draft.next.includes(p.id))
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.hidden ? ' (hidden)' : ''}
+              </option>
+            ))}
+        </select>
+        <span className="field-hint">
+          Once this sound has been heard, the listener’s radar and map point to the next one —
+          several make a choice of ways.
+        </span>
       </div>
 
       {isPathType(draft.type) && (

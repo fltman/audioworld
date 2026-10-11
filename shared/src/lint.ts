@@ -92,5 +92,22 @@ export function flightCheck(points: AudioPoint[], zones?: AcousticZone[]): Fligh
       issues.push({ severity: 'error', message: `Zone "${z.name}" needs at least 3 corners.` });
     }
   }
+  // "Next sound" links must lead somewhere a listener can be shown.
+  const byId = new Map(points.map((p) => [p.id, p]));
+  for (const p of points) {
+    for (const id of p.next ?? []) {
+      const target = byId.get(id);
+      if (!target || id === p.id) {
+        issues.push({ severity: 'warning', message: `"${p.name}" points to a next sound that no longer exists.`, pointId: p.id });
+      } else if (target.hidden) {
+        issues.push({
+          severity: 'warning',
+          message: `"${p.name}" points to "${target.name}" as next, but it's hidden on the listener's screen — no arrow will show.`,
+          pointId: p.id,
+        });
+      }
+    }
+  }
+
   return issues;
 }

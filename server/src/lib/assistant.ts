@@ -31,7 +31,8 @@ const PRIMER = `You are the authoring assistant inside AudioWorld's admin. Audio
 - Coordinates are WGS84 {lat, lng}. When a planned route exists it is the way listeners walk, start to finish: place points along it, in walking order, spaced so their audible radii don't overlap unless that's intended (walking pace is about 1.3 m/s, so 60 m is about 45 s). The first point in the list is where the walk starts.
 
 ## Point JSON (create_point / update_point)
-Common fields: name, type, audio {kind 'upload'|'url', url ('' = not voiced yet), title, description — for a single point, the facts its narration is written from}, volume 0–1, playback {loop, stopAfter (play once), reload (restart on re-entry), loopGapSec}, sync 'individual'|'global', height (m, + up), hidden (kept off the listener's screen but still heard), setsFlags / requiresFlags (story gating by flags), flagGroup (an exclusive choice).
+Common fields: name, type, audio {kind 'upload'|'url', url ('' = not voiced yet), title, description — for a single point, the facts its narration is written from}, volume 0–1, playback {loop, stopAfter (play once), reload (restart on re-entry), loopGapSec}, sync 'individual'|'global', height (m, + up), hidden (kept off the listener's screen but still heard), next (ids of the point(s) to head for after this one — once it's heard, the listener's radar and map point there; several = a choice of ways), setsFlags / requiresFlags (story gating by flags), flagGroup (an exclusive choice).
+When you lay out a sequence of points, link each to the one after it with next (create them first, then set next with update_point using the returned ids).
 Types:
 - static: center {lat,lng}, radius (audible, m). Optional triggerRadius (silent until the listener is that close — jump scares), stillSec (only after standing still that long), fleeOnMove, facing + spread (a directional wedge, degrees).
 - static_circling: center, circleRadius, speed (m/s along the circle), radius.

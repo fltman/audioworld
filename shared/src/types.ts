@@ -94,6 +94,9 @@ export interface BaseAudioPoint {
   /** Kept off the listener's screen — no radar blip, map marker or wayfinding cue — yet
    *  still heard: a sound meant to surprise, or to feel unseen. Absent = shown. */
   hidden?: boolean;
+  /** The sound(s) to head for after this one, by point id. Once the listener has heard
+   *  this point, their radar and map point to these (several = a choice of ways). */
+  next?: string[];
   /**
    * Story flags this point RAISES on the visitor's device the first time it is
    * heard/reached (e.g. ["OLD-LADY"]). Other points can gate on them.

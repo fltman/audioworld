@@ -1119,6 +1119,7 @@ export default function App() {
                     onUndoVertex={undoVertex}
                     onAddPoints={addPoints}
                     characters={characters}
+                    points={points}
                     saving={saving}
                     uploading={uploading}
                     error={formError}

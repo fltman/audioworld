@@ -31,6 +31,11 @@ silent and leaves the listener's radar and map. **Loop** and **Reverse** paths n
 the rim point to the **three nearest visible sounds you can't hear yet** (fainter once heard) — hidden, finished
 and still-locked points don't count.
 
+A point can name its **next sound(s)** (in the point form; drawn as dashed arrows on the admin map). Once the
+listener has heard a point that leads on, their radar points to its next sounds instead — amber, "Next: …" — and
+the map highlights them with a dashed line from where they stand; several next sounds offer a choice of ways. When
+those have been heard (or none are set), the radar falls back to the nearest sounds.
+
 ## Architecture notes
 
 - **Direction of sound uses the compass** (`DeviceOrientation` / `webkitCompassHeading`), not GPS heading

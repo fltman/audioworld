@@ -6,6 +6,7 @@ import multer from 'multer';
 import type {
   AcousticZone,
   AnalyticsReport,
+  AudioPoint,
   Coordinates,
   CourseBundle,
   CourseInput,
@@ -500,8 +501,19 @@ coursesRouter.post(
         req.user!.id
       );
       courseId = course.id;
+      // Points get fresh ids here, so "next" links are re-pointed once they all exist.
+      const idMap = new Map<string, string>();
+      const created: Array<{ point: AudioPoint; next: string[] }> = [];
       for (const point of bundle.points) {
-        await Points.create(course.id, rewritePointUrls(point, urlMap));
+        const { next, ...rest } = rewritePointUrls(point, urlMap);
+        const p = await Points.create(course.id, rest);
+        if (typeof point.id === 'string') idMap.set(point.id, p.id);
+        if (next?.length) created.push({ point: p, next });
+      }
+      for (const { point, next } of created) {
+        const { id, courseId: _c, createdAt: _a, updatedAt: _u, ...input } = point;
+        const mapped = next.map((n) => idMap.get(n)).filter((n): n is string => !!n);
+        if (mapped.length) await Points.update(id, { ...input, next: mapped });
       }
       res.status(201).json({ success: true, data: course });
     } catch (err) {

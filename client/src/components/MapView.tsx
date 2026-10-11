@@ -35,10 +35,15 @@ function goalIcon(): L.DivIcon {
   return L.divIcon({ className: 'exp-goal', html: '<span></span>', iconSize: [22, 22], iconAnchor: [11, 11] });
 }
 
-function sourceIcon(color: string): L.DivIcon {
+/** Escape a name before it goes into a marker's HTML. */
+const esc = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+function sourceIcon(color: string, name: string): L.DivIcon {
   return L.divIcon({
     className: 'exp-src',
-    html: `<span style="--c:${color}"></span>`,
+    // The label only shows on a "next" sound (where to walk now).
+    html: `<span style="--c:${color}"></span><em class="exp-src__next">Next · ${esc(name)}</em>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8],
   });
@@ -99,6 +104,7 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
 
     let raf = 0;
     let centered = false;
+    const guideLines = new Map<string, L.Polyline>();
 
     const loop = () => {
       const f = frameRef.current;
@@ -125,6 +131,27 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
         }
       }
 
+      // The author's next sounds: highlighted, with a dashed line from you to each.
+      const nextIds = new Set(f.nearby.filter((n) => n.next).map((n) => n.id));
+      for (const [id, line] of guideLines) {
+        if (!nextIds.has(id) || !f.user) {
+          line.remove();
+          guideLines.delete(id);
+        }
+      }
+      if (f.user) {
+        for (const s of f.sources) {
+          if (!s.position || !nextIds.has(s.id)) continue;
+          const pts: L.LatLngExpression[] = [
+            [f.user.lat, f.user.lng],
+            [s.position.lat, s.position.lng],
+          ];
+          const line = guideLines.get(s.id);
+          if (line) line.setLatLngs(pts);
+          else guideLines.set(s.id, L.polyline(pts, { color: '#ffcf6b', weight: 4, opacity: 0.9, dashArray: '1 10', lineCap: 'round', interactive: false }).addTo(map));
+        }
+      }
+
       const seen = new Set<string>();
       for (const s of f.sources) {
         if (!s.position) continue;
@@ -133,7 +160,7 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
         const ll: L.LatLngExpression = [s.position.lat, s.position.lng];
         let node = srcNodes.current.get(s.id);
         if (!node) {
-          const marker = L.marker(ll, { icon: sourceIcon(color), interactive: false });
+          const marker = L.marker(ll, { icon: sourceIcon(color, s.name), interactive: false });
           const circle = L.circle(ll, {
             radius: s.audibleRadius,
             color,
@@ -148,7 +175,10 @@ export function MapView({ engine, frameRef, route }: MapViewProps) {
           srcNodes.current.set(s.id, node);
         }
         node.marker.setLatLng(ll);
-        node.marker.setOpacity(s.audible ? 1 : 0.5);
+        const isNext = nextIds.has(s.id);
+        node.marker.setOpacity(s.audible || isNext ? 1 : 0.5);
+        node.marker.setZIndexOffset(isNext ? 500 : 0);
+        node.marker.getElement()?.classList.toggle('is-next', isNext);
         node.circle.setLatLng(ll);
         node.circle.setRadius(s.audibleRadius);
         node.circle.setStyle({
