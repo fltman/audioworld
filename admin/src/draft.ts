@@ -71,6 +71,8 @@ export interface DraftState {
   followSpeed: number;
   /** Height in metres above the listener (+up / -down); 0 = level. */
   height: number;
+  /** Off the listener's screen, still heard. */
+  hidden: boolean;
   /** Story flags this point sets / requires (comma-separated text). */
   setsFlags: string;
   requiresFlags: string;
@@ -90,6 +92,7 @@ const NUMERIC_DEFAULTS = {
   followRadius: 8,
   followSpeed: 2,
   height: 0,
+  hidden: false,
   stillSec: 0,
   facing: 0,
   spread: 180,
@@ -173,6 +176,7 @@ export function pointToDraft(point: AudioPoint): DraftState {
     endBehavior: 'loop',
     ...FLAG_DEFAULTS,
     height: point.height ?? 0,
+    hidden: point.hidden ?? false,
     setsFlags: (point.setsFlags ?? []).join(', '),
     requiresFlags: (point.requiresFlags ?? []).join(', '),
     flagGroup: point.flagGroup ?? '',
@@ -283,6 +287,7 @@ export function draftToInput(d: DraftState): DraftResult {
     setsFlags: parseFlags(d.setsFlags),
     requiresFlags: parseFlags(d.requiresFlags),
     ...(d.height ? { height: d.height } : {}),
+    ...(d.hidden ? { hidden: true } : {}),
     ...(d.flagGroup.trim() ? { flagGroup: d.flagGroup.trim() } : {}),
   };
 

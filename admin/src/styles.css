@@ -1085,6 +1085,15 @@ input[type='range'] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.point-hidden {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--muted);
+  vertical-align: 1px;
+}
 
 /* ---------- Sound library ---------- */
 .sound-list {

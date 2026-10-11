@@ -29,6 +29,11 @@ export default function PointList({ points, onEdit, onDelete, editingId }: Props
                 </span>
                 <span className="point-name">
                   {p.name || <em className="muted">unnamed</em>}
+                  {p.hidden && (
+                    <span className="point-hidden" title="Hidden on the listener’s screen — heard, not seen">
+                      hidden
+                    </span>
+                  )}
                 </span>
                 {confirmId === p.id ? (
                   <span className="row-actions">

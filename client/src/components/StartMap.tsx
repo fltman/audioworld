@@ -39,6 +39,7 @@ export function StartMap({ points }: { points: AudioPoint[] }) {
 
     // Remaining points as faint context dots (the start pin sits on top).
     for (let i = 1; i < points.length; i++) {
+      if (points[i]!.hidden) continue;
       const a = anchorOf(points[i]!);
       L.circleMarker([a.lat, a.lng], {
         radius: 4,

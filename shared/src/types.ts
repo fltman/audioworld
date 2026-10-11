@@ -91,6 +91,9 @@ export interface BaseAudioPoint {
   /** Height in metres relative to the listener (+up, -down). 0/absent = level. Drives
    *  elevation: walk under a raised source and it swings overhead. */
   height?: number;
+  /** Kept off the listener's screen — no radar blip, map marker or wayfinding cue — yet
+   *  still heard: a sound meant to surprise, or to feel unseen. Absent = shown. */
+  hidden?: boolean;
   /**
    * Story flags this point RAISES on the visitor's device the first time it is
    * heard/reached (e.g. ["OLD-LADY"]). Other points can gate on them.

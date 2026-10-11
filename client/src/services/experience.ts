@@ -531,12 +531,16 @@ export class ExperienceEngine {
       const cutoffHz =
         walls > 0 ? Math.min(air, Math.max(260, Math.round(2200 * Math.pow(0.42, walls)))) : air;
 
+      // A hidden point is heard but never drawn: no blip, marker or wayfinding cue (and
+      // the eyes-up sonar, which steers by `sources`, doesn't lead you to it either).
+      const shown = !point.hidden;
       if (r.audible) {
-        blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
+        if (shown) blips.push({ id: point.id, name: point.name, az, distance: r.distance, audibleRadius: radius, gain });
         if (!this.sim) this.reachedPoints.add(point.id);
       }
       // Wayfinding: a compass cue to this sound even when it's out of earshot.
       if (
+        shown &&
         (point.type === 'path' || point.type === 'path_triggered') &&
         point.showWayfinding &&
         r.position
@@ -564,15 +568,17 @@ export class ExperienceEngine {
               : clockSec - r.state.triggeredAtSec;
         }
       }
-      sources.push({
-        id: point.id,
-        name: point.name,
-        type: point.type,
-        position: r.position,
-        audible: r.audible,
-        gain,
-        audibleRadius: radius,
-      });
+      if (shown) {
+        sources.push({
+          id: point.id,
+          name: point.name,
+          type: point.type,
+          position: r.position,
+          audible: r.audible,
+          gain,
+          audibleRadius: radius,
+        });
+      }
       // For a global source, seek playback to the shared loop position; undefined = start at 0.
       const startOffsetSec = startAt != null ? clockSec : undefined;
 

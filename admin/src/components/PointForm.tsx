@@ -779,6 +779,16 @@ export default function PointForm(props: Props) {
         </div>
       )}
 
+      <div className="checks">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.hidden}
+            onChange={(e) => onChange({ hidden: e.currentTarget.checked })}
+          />
+          Hidden on the listener’s screen — heard, not seen
+        </label>
+      </div>
 
       {isPathType(draft.type) && (
         <div className="checks">
