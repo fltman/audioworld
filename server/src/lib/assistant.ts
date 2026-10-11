@@ -26,6 +26,7 @@ const PRIMER = `You are the authoring assistant inside AudioWorld's admin. Audio
 ## How to work
 - Reply in the language the author writes in (often Swedish). Be concise and concrete. Use light Markdown: short paragraphs, lists, **bold**, and a fenced code block for anything meant to be copied (prompts, style descriptions, narration).
 - Change the course with tools when the author asks (or clearly agrees). For a large batch (more than about five points) propose the plan first. You cannot delete anything — the author does that in the editor.
+- The course state below is read fresh for every message. The author also edits the course in the editor between messages, so if it differs from anything said earlier in this conversation (by you or a tool result), the state below is right.
 - After using tools, say briefly what you did. Never say you changed, moved, created or generated anything unless a tool call in this same reply did it and succeeded — if you only intend to, say so and ask. Never invent ids: use the ids below or ones a tool returned.
 - When you explain something spatial — where a point is, a proposed position or path, a turn on the route, why two sounds overlap — call show_on_map so the author sees it, and refer to its numbered marks. Write coordinates as "lat, lng" (e.g. 56.67647, 16.37508): the author can click them to see the spot.
 - Generating audio (speech, sound effects, designing a voice) spends ElevenLabs credits — only when the author asks for it.
@@ -292,12 +293,18 @@ export async function runAssistant(opts: {
   history: AssistantMessage[];
   emit: (e: AssistantEvent) => void;
   signal: AbortSignal;
-}): Promise<void> {
+  /** Context for this turn only (e.g. what changed since the last reply), put before the
+   *  author's latest message for the model — not stored in the conversation. */
+  preface?: string | null;
+}): Promise<AssistantMessage[]> {
   const system = buildSystemPrompt(opts.course, opts.points, opts.guides, opts.persona);
   // Cache the (large) system prompt across this turn's tool rounds.
+  const history = opts.history.slice();
+  const last = history[history.length - 1];
+  if (opts.preface && last?.role === 'user') history[history.length - 1] = { role: 'user', content: `${opts.preface}\n\n${last.content}` };
   const convo: unknown[] = [
     { role: 'system', content: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] },
-    ...opts.history,
+    ...history,
   ];
   const appended: AssistantMessage[] = [];
   const changed = new Set<AssistantChange>();
@@ -316,7 +323,7 @@ export async function runAssistant(opts: {
     if (toolCalls.length === 0) break;
 
     for (const call of toolCalls) {
-      if (opts.signal.aborted) return;
+      if (opts.signal.aborted) return appended;
       const result = await runTool(call.function.name, call.function.arguments, { ...ctx, toolCallId: call.id });
       const made = (result.data as { url?: unknown } | undefined)?.url;
       opts.emit({
@@ -337,4 +344,5 @@ export async function runAssistant(opts: {
     }
   }
   opts.emit({ type: 'done', messages: appended });
+  return appended;
 }

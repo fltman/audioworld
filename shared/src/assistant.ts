@@ -16,8 +16,26 @@ export type AssistantMessage =
   | { role: 'assistant'; content: string | null; tool_calls?: AssistantToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 
-export interface AssistantRequest {
+/** One saved conversation, as listed. */
+export interface AssistantChatSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+/** One saved conversation with its messages. */
+export interface AssistantChat extends AssistantChatSummary {
   messages: AssistantMessage[];
+  personaId: string | null;
+}
+
+/** Ask the assistant: a new message in a chat (none = start a new chat), or `retry` to
+ *  answer the chat's last message again. The server keeps the conversation. */
+export interface AssistantRequest {
+  chatId?: string | null;
+  message?: string;
+  retry?: boolean;
   /** Speak as this guide (character id) for the whole reply; null/absent = the assistant. */
   personaId?: string | null;
 }
@@ -46,6 +64,8 @@ export interface VoicePreview {
 export type AssistantChange = 'points' | 'guides' | 'course' | 'library';
 
 export type AssistantEvent =
+  /** The chat this reply belongs to (sent first; new for a first message). */
+  | { type: 'chat'; chat: AssistantChatSummary }
   /** Streamed reply text. */
   | { type: 'delta'; text: string }
   /** A tool ran (ok) or failed. `summary` is human-readable; `url` is a file it made

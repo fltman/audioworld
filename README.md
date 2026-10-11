@@ -124,8 +124,9 @@ your map** — numbered lime marks for spots, existing points, proposed lines an
 the map hides them, **Show again** in the chat brings them back) — and coordinates it writes are clickable. **Talk as** next to the input
 lets the whole chat speak as one of your guides. It can't delete anything. It needs `OPENROUTER_API_KEY` on the
 server; `OPENROUTER_CHAT_MODEL` picks the model (default `anthropic/claude-opus-5.5`) and `OPENROUTER_IMAGE_MODEL`
-the image model (default `google/gemini-3-pro-image`; images are saved as WebP). Conversations are kept per
-course in the browser.
+the image model (default `google/gemini-3-pro-image`; images are saved as WebP). Chats are saved on the server per
+course and author — pick one to carry on, **New** starts another — and before each reply the assistant is told what
+you changed in the editor since its last one (edited, new and deleted points, course texts, route, zones, guides).
 
 ### Try it on a real phone
 

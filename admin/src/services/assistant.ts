@@ -1,4 +1,11 @@
-import type { AssistantEvent, AssistantRequest, CreateVoiceRequest } from '@audioworld/shared';
+import type {
+  AssistantChat,
+  AssistantChatSummary,
+  AssistantEvent,
+  AssistantMessage,
+  AssistantRequest,
+  CreateVoiceRequest,
+} from '@audioworld/shared';
 import { ApiError, BASE, getToken } from '../api';
 
 /**
@@ -52,13 +59,32 @@ export async function streamAssistant(
   }
 }
 
-/** Keep a designed voice preview (and give it to a guide). */
-export async function createVoice(req: CreateVoiceRequest): Promise<{ voiceId: string; name: string; guideId: string | null }> {
-  const headers = new Headers({ 'Content-Type': 'application/json' });
+/** A JSON call to the assistant API (ApiResponse envelope), authorised as the author. */
+async function call<T>(path: string, method = 'GET', payload?: unknown): Promise<T> {
+  const headers = new Headers();
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const res = await fetch(`${BASE}/api/assistant/voices`, { method: 'POST', headers, body: JSON.stringify(req) });
-  const body = (await res.json().catch(() => ({}))) as { success?: boolean; data?: { voiceId: string; name: string; guideId: string | null }; error?: string };
-  if (!res.ok || !body.success || !body.data) throw new ApiError(body.error ?? `Could not save the voice (${res.status}).`, res.status);
+  if (payload !== undefined) headers.set('Content-Type', 'application/json');
+  const res = await fetch(`${BASE}/api/assistant${path}`, {
+    method,
+    headers,
+    body: payload !== undefined ? JSON.stringify(payload) : undefined,
+  });
+  const body = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: string };
+  if (!res.ok || !body.success || body.data === undefined) {
+    throw new ApiError(body.error ?? `The assistant request failed (${res.status}).`, res.status);
+  }
   return body.data;
 }
+
+/** Keep a designed voice preview (and give it to a guide). */
+export const createVoice = (req: CreateVoiceRequest) =>
+  call<{ voiceId: string; name: string; guideId: string | null }>('/voices', 'POST', req);
+
+/** The author's saved chats about a course, most recent first. */
+export const listChats = (courseId: string) => call<AssistantChatSummary[]>(`/${courseId}/chats`);
+export const getChat = (id: string) => call<AssistantChat>(`/chats/${id}`);
+export const deleteChat = (id: string) => call<{ id: string }>(`/chats/${id}`, 'DELETE');
+/** Save a conversation held elsewhere (the browser) as a chat. */
+export const importChat = (courseId: string, chat: { messages: AssistantMessage[]; personaId: string | null }) =>
+  call<AssistantChat>(`/${courseId}/chats`, 'POST', chat);

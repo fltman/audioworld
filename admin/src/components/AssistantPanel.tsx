@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   AssistantChange,
+  AssistantChatSummary,
   AssistantMessage,
   Character,
   Coordinates,
@@ -8,7 +9,7 @@ import type {
   VoicePreview,
 } from '@audioworld/shared';
 import { absoluteAudioUrl } from '../api';
-import { createVoice, streamAssistant } from '../services/assistant';
+import { createVoice, deleteChat, getChat, importChat, listChats, streamAssistant } from '../services/assistant';
 import ConfirmButton from './ConfirmButton';
 import Markdown from './Markdown';
 
@@ -53,8 +54,8 @@ interface VoiceCard {
   error: string | null;
 }
 
-const STORE = (courseId: string) => `audioworld.assistant.${courseId}`;
-const MAX_STORED_CHARS = 300_000;
+/** Where chats were kept in the browser before they moved to the server. */
+const OLD_STORE = (courseId: string) => `audioworld.assistant.${courseId}`;
 
 const SUGGESTIONS = [
   'Suggest points along the planned route',
@@ -64,32 +65,45 @@ const SUGGESTIONS = [
   'Sound-effect prompts for the places in the walk',
 ];
 
-function load(courseId: string): { messages: AssistantMessage[]; personaId: string } {
-  try {
-    const raw = localStorage.getItem(STORE(courseId));
-    if (raw) {
-      const j = JSON.parse(raw) as { messages?: AssistantMessage[]; personaId?: string };
-      return { messages: Array.isArray(j.messages) ? j.messages : [], personaId: j.personaId ?? '' };
-    }
-  } catch {
-    /* no storage — start fresh */
+/** In-flight moves, so every caller (a re-mount, a quick reopen) waits for the same one. */
+const migrations = new Map<string, Promise<void>>();
+
+/** Move a chat kept in this browser (before chats were saved on the server) over, once. */
+function migrateLocalChat(courseId: string): Promise<void> {
+  let run = migrations.get(courseId);
+  if (!run) {
+    run = moveLocalChat(courseId);
+    migrations.set(courseId, run);
   }
-  return { messages: [], personaId: '' };
+  return run;
 }
 
-function save(courseId: string, messages: AssistantMessage[], personaId: string): void {
+async function moveLocalChat(courseId: string): Promise<void> {
+  let raw: string | null = null;
   try {
-    let kept = messages;
-    // Bounded: drop the oldest turns (from a user message on) until it fits.
-    while (kept.length && JSON.stringify(kept).length > MAX_STORED_CHARS) {
-      const next = kept.findIndex((m, i) => i > 0 && m.role === 'user');
-      kept = next > 0 ? kept.slice(next) : [];
-    }
-    localStorage.setItem(STORE(courseId), JSON.stringify({ messages: kept, personaId }));
+    raw = localStorage.getItem(OLD_STORE(courseId));
   } catch {
-    /* storage full or blocked — the chat still works this session */
+    return;
+  }
+  if (!raw) return;
+  // Take it out first, so a second run (another tab, a re-mount) can't move it twice.
+  localStorage.removeItem(OLD_STORE(courseId));
+  try {
+    const j = JSON.parse(raw) as { messages?: AssistantMessage[]; personaId?: string };
+    if (Array.isArray(j.messages) && j.messages.some((m) => m.role === 'user')) {
+      await importChat(courseId, { messages: j.messages, personaId: j.personaId || null });
+    }
+  } catch {
+    try {
+      localStorage.setItem(OLD_STORE(courseId), raw); // put it back for the next try
+    } catch {
+      /* storage gone — nothing more to do */
+    }
   }
 }
+
+const shortDate = (iso: string): string =>
+  new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /** The annotations of a show_on_map call, from its (model-written) arguments. */
 function annotationsOf(args: string | undefined): MapAnnotation[] {
@@ -131,8 +145,12 @@ function resultOf(content: string): { ok: boolean; summary: string; url?: string
  * audition), voice lines and effects — or answer as one of the guides.
  */
 export default function AssistantPanel({ courseId, guides, hidden, onChanged, coverUrl, onUseCover, onAnnotate }: Props) {
-  const [messages, setMessages] = useState<AssistantMessage[]>(() => load(courseId).messages);
-  const [personaId, setPersonaId] = useState(() => load(courseId).personaId);
+  // Saved chats (on the server) and the open one; null = a new chat, not saved until sent.
+  const [chats, setChats] = useState<AssistantChatSummary[]>([]);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [personaId, setPersonaId] = useState('');
+  const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState<LiveItem[] | null>(null);
@@ -146,9 +164,63 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
   onAnnotateRef.current = onAnnotate;
   const showCoord = (c: Coordinates) => onAnnotate([{ kind: 'mark', at: c, label: `${c.lat}, ${c.lng}` }]);
 
-  // Each course has its own conversation (the panel is keyed by course, so it remounts).
-  useEffect(() => save(courseId, messages, personaId), [courseId, messages, personaId]);
-  useEffect(() => () => abortRef.current?.abort(), []);
+  const openChat = useCallback(async (id: string | null) => {
+    abortRef.current?.abort();
+    setLive(null);
+    setError(null);
+    setVoiceCards({});
+    following.current = true;
+    if (!id) {
+      setChatId(null);
+      setMessages([]);
+      return;
+    }
+    try {
+      const chat = await getChat(id);
+      setChatId(chat.id);
+      setMessages(chat.messages);
+      setPersonaId(chat.personaId ?? '');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open the chat');
+    }
+  }, []);
+
+  // Each course has its own chats (the panel is keyed by course, so it remounts): open the
+  // most recent one, after moving any chat this browser still holds to the server.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      await migrateLocalChat(courseId);
+      try {
+        const list = await listChats(courseId);
+        if (!live) return;
+        setChats(list);
+        if (list[0]) await openChat(list[0].id);
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : 'Could not load the chats');
+      } finally {
+        if (live) setLoading(false);
+      }
+    })();
+    return () => {
+      live = false;
+      abortRef.current?.abort();
+    };
+  }, [courseId, openChat]);
+
+  const refreshChats = () => void listChats(courseId).then(setChats).catch(() => {});
+
+  const removeChat = async () => {
+    if (!chatId) return;
+    try {
+      await deleteChat(chatId);
+      const list = chats.filter((c) => c.id !== chatId);
+      setChats(list);
+      await openChat(list[0]?.id ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the chat');
+    }
+  };
 
   // Follow the conversation as it grows — unless the author has scrolled up to read.
   // Whether we're following is decided by where they were *before* new content landed
@@ -174,7 +246,7 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
   }, []);
 
   const runTurn = useCallback(
-    async (history: AssistantMessage[]) => {
+    async (turn: { message?: string; retry?: boolean }) => {
       const ac = new AbortController();
       abortRef.current = ac;
       setBusy(true);
@@ -185,9 +257,13 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
       try {
         await streamAssistant(
           courseId,
-          { messages: history, personaId: personaId || null },
+          { chatId, ...turn, personaId: personaId || null },
           (e) => {
             switch (e.type) {
+              case 'chat':
+                setChatId(e.chat.id);
+                setChats((list) => (list.some((c) => c.id === e.chat.id) ? list : [e.chat, ...list]));
+                break;
               case 'delta':
                 partial += e.text;
                 setLive((l) => {
@@ -241,19 +317,19 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
         setLive(null);
         setBusy(false);
         if (abortRef.current === ac) abortRef.current = null;
+        refreshChats();
       }
     },
-    [courseId, personaId]
+    [courseId, chatId, personaId]
   );
 
   const send = (text: string) => {
     const t = text.trim();
     if (!t || busy) return;
-    const next: AssistantMessage[] = [...messages, { role: 'user', content: t }];
     following.current = true; // you just wrote: show it, and the reply
-    setMessages(next);
+    setMessages((m) => [...m, { role: 'user', content: t }]);
     setInput('');
-    void runTurn(next);
+    void runTurn({ message: t });
   };
 
   const pickVoice = async (cardId: string, i: number) => {
@@ -358,16 +434,37 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
     <section className="section ai" hidden={hidden}>
       <div className="ai__head">
         <span className="section-title">AI assistant</span>
-        {messages.length > 0 && !busy && (
-          <ConfirmButton className="btn btn-ghost small" onConfirm={() => setMessages([])}>
-            New chat
-          </ConfirmButton>
-        )}
+        <div className="ai__chatbar">
+          <select
+            className="select ai__chats"
+            value={chatId ?? ''}
+            disabled={busy || loading}
+            title="Your saved chats about this walk"
+            onChange={(e) => void openChat(e.currentTarget.value || null)}
+          >
+            {!chatId && <option value="">{loading ? 'Loading…' : 'New chat'}</option>}
+            {chats.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title} · {shortDate(c.updatedAt)}
+              </option>
+            ))}
+          </select>
+          {chatId && !busy && (
+            <button type="button" className="btn btn-ghost small" onClick={() => void openChat(null)}>
+              New
+            </button>
+          )}
+          {chatId && !busy && (
+            <ConfirmButton className="btn btn-ghost small" onConfirm={() => void removeChat()}>
+              Delete
+            </ConfirmButton>
+          )}
+        </div>
       </div>
 
       <div className="ai__list" ref={listRef} onScroll={onScroll}>
         <div className="ai__inner" ref={innerRef}>
-          {messages.length === 0 && !live && (
+          {messages.length === 0 && !live && !loading && (
             <div className="ai__empty">
               <p className="hint">
                 I know this walk — its idea, background, route, points and guides — and I can build
@@ -444,7 +541,7 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
             <div className="ai-error">
               <span>{error}</span>
               {!busy && messages[messages.length - 1]?.role === 'user' && (
-                <button type="button" className="btn btn-ghost small" onClick={() => void runTurn(messages)}>
+                <button type="button" className="btn btn-ghost small" onClick={() => void runTurn({ retry: true })}>
                   Try again
                 </button>
               )}

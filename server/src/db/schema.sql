@@ -105,3 +105,19 @@ CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id)
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
 CREATE INDEX IF NOT EXISTS scouts_owner_id_idx ON scouts(owner_id);
 CREATE INDEX IF NOT EXISTS characters_owner_id_idx ON characters(owner_id);
+
+-- The admin's AI assistant conversations: per course and author, so a chat can be picked
+-- up later (on any device). `seen` is a fingerprint of the course after the last reply,
+-- to tell the assistant what the author changed in the editor since.
+CREATE TABLE IF NOT EXISTS assistant_chats (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id   uuid NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title       text NOT NULL DEFAULT '',
+  persona_id  text,
+  messages    jsonb NOT NULL DEFAULT '[]',
+  seen        jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS assistant_chats_course_user_idx ON assistant_chats(course_id, user_id, updated_at DESC);

@@ -2178,6 +2178,20 @@ input[type='range'] {
 }
 .ai__head .section-title {
   margin: 0;
+  white-space: nowrap;
+}
+.ai__chatbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ai__chats {
+  width: auto;
+  min-width: 0;
+  max-width: 230px;
+  padding: 5px 8px;
+  font-size: 12px;
 }
 .ai__list {
   flex: 1;
