@@ -1,3 +1,5 @@
+import type { Coordinates } from './types';
+
 /**
  * The admin's AI assistant: the conversation format (OpenAI-style chat messages, as the
  * model sees them) and the events the server streams back while it works.
@@ -19,6 +21,17 @@ export interface AssistantRequest {
   /** Speak as this guide (character id) for the whole reply; null/absent = the assistant. */
   personaId?: string | null;
 }
+
+/** Something the assistant shows on the author's map while it explains (numbered in order). */
+export type MapAnnotation =
+  /** A spot, e.g. a proposed position. */
+  | { kind: 'mark'; at: Coordinates; label?: string }
+  /** An existing point of the course. */
+  | { kind: 'point'; id: string; label?: string }
+  /** A line, e.g. a proposed path or a stretch of the route. */
+  | { kind: 'line'; path: Coordinates[]; label?: string }
+  /** A circular area. */
+  | { kind: 'area'; at: Coordinates; radius: number; label?: string };
 
 /** One of the candidate voices ElevenLabs designs from a description. */
 export interface VoicePreview {
@@ -48,6 +61,8 @@ export type AssistantEvent =
       previews: VoicePreview[];
     }
   | { type: 'changed'; what: AssistantChange[] }
+  /** Show these on the author's map (replacing what was shown before). */
+  | { type: 'map'; annotations: MapAnnotation[] }
   /** The turn is over: the messages it appended to the conversation. */
   | { type: 'done'; messages: AssistantMessage[] }
   | { type: 'error'; error: string };

@@ -1,9 +1,17 @@
 import { useState, type ReactNode } from 'react';
+import type { Coordinates } from '@audioworld/shared';
 
-/** Inline Markdown: `code`, **bold**, *italic* / _italic_. Built as React nodes (no HTML). */
-function inline(text: string, key: string): ReactNode[] {
+/** Called when a coordinate pair in the text is clicked (show it on the map). */
+type OnCoord = ((c: Coordinates) => void) | undefined;
+
+/** "56.67647, 16.37508" — a lat, lng pair written in the text. */
+const COORD = /^(-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})$/;
+
+/** Inline Markdown: `code`, **bold**, *italic* / _italic_, and clickable coordinates.
+ *  Built as React nodes (no HTML). */
+function inline(text: string, key: string, onCoord?: OnCoord): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
+  const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_|-?\d{1,2}\.\d{3,},\s*-?\d{1,3}\.\d{3,})/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -11,9 +19,21 @@ function inline(text: string, key: string): ReactNode[] {
     if (m.index > last) out.push(text.slice(last, m.index));
     const t = m[0];
     const k = `${key}-${i++}`;
-    if (t.startsWith('`')) out.push(<code key={k}>{t.slice(1, -1)}</code>);
-    else if (t.startsWith('**')) out.push(<strong key={k}>{inline(t.slice(2, -2), k)}</strong>);
-    else out.push(<em key={k}>{inline(t.slice(1, -1), k)}</em>);
+    const coord = COORD.exec(t);
+    if (coord) {
+      const c = { lat: Number(coord[1]), lng: Number(coord[2]) };
+      out.push(
+        onCoord && Math.abs(c.lat) <= 90 && Math.abs(c.lng) <= 180 ? (
+          <button key={k} type="button" className="md-coord" title="Show on the map" onClick={() => onCoord(c)}>
+            📍 {t}
+          </button>
+        ) : (
+          t
+        )
+      );
+    } else if (t.startsWith('`')) out.push(<code key={k}>{t.slice(1, -1)}</code>);
+    else if (t.startsWith('**')) out.push(<strong key={k}>{inline(t.slice(2, -2), k, onCoord)}</strong>);
+    else out.push(<em key={k}>{inline(t.slice(1, -1), k, onCoord)}</em>);
     last = m.index + t.length;
   }
   if (last < text.length) out.push(text.slice(last));
@@ -47,7 +67,7 @@ function CodeBlock({ text }: { text: string }) {
  * fenced code blocks, plus inline emphasis and code. Rendered as plain React elements, so
  * model output can never inject HTML.
  */
-export default function Markdown({ text }: { text: string }) {
+export default function Markdown({ text, onCoord }: { text: string; onCoord?: OnCoord }) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -71,7 +91,7 @@ export default function Markdown({ text }: { text: string }) {
     if (heading) {
       blocks.push(
         <p key={key} className="md-h">
-          {inline(heading[1]!, key)}
+          {inline(heading[1]!, key, onCoord)}
         </p>
       );
       i++;
@@ -84,14 +104,14 @@ export default function Markdown({ text }: { text: string }) {
         items.push(lines[i]!.replace(/^\s*([-*•]|\d+[.)])\s+/, ''));
         i++;
       }
-      const lis = items.map((it, j) => <li key={j}>{inline(it, `${key}-${j}`)}</li>);
+      const lis = items.map((it, j) => <li key={j}>{inline(it, `${key}-${j}`, onCoord)}</li>);
       blocks.push(ordered ? <ol key={key}>{lis}</ol> : <ul key={key}>{lis}</ul>);
       continue;
     }
     if (/^\s*>/.test(line)) {
       const quote: string[] = [];
       while (i < lines.length && /^\s*>/.test(lines[i]!)) quote.push(lines[i++]!.replace(/^\s*>\s?/, ''));
-      blocks.push(<blockquote key={key}>{inline(quote.join(' '), key)}</blockquote>);
+      blocks.push(<blockquote key={key}>{inline(quote.join(' '), key, onCoord)}</blockquote>);
       continue;
     }
     const para: string[] = [];
@@ -107,7 +127,7 @@ export default function Markdown({ text }: { text: string }) {
         {para.map((l, j) => (
           <span key={j}>
             {j > 0 && <br />}
-            {inline(l, `${key}-${j}`)}
+            {inline(l, `${key}-${j}`, onCoord)}
           </span>
         ))}
       </p>

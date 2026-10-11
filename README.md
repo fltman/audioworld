@@ -119,7 +119,9 @@ and can build it with you: create and change points, edit the course texts, crea
 voices (it shows the three previews to audition; **Use** keeps one and gives it to the guide), voice lines and
 generate sound effects, make a 16:9 cover image for the start page (shown in the chat with **Use as cover**) —
 only when you ask, as they cost credits — and suggest narration, lines in a guide's
-persona, sound-effect prompts and Suno music styles (English, about 300 characters). **Talk as** next to the input
+persona, sound-effect prompts and Suno music styles (English, about 300 characters). When it explains something spatial it **shows it on
+your map** — numbered lime marks for spots, existing points, proposed lines and areas, zoomed to fit (**Clear** on
+the map hides them, **Show again** in the chat brings them back) — and coordinates it writes are clickable. **Talk as** next to the input
 lets the whole chat speak as one of your guides. It can't delete anything. It needs `OPENROUTER_API_KEY` on the
 server; `OPENROUTER_CHAT_MODEL` picks the model (default `anthropic/claude-opus-5.5`) and `OPENROUTER_IMAGE_MODEL`
 the image model (default `google/gemini-3-pro-image`; images are saved as WebP). Conversations are kept per

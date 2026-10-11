@@ -4,7 +4,9 @@ import type {
   AssistantChange,
   AssistantEvent,
   AudioPoint,
+  Coordinates,
   Course,
+  MapAnnotation,
 } from '@audioworld/shared';
 import { DEFAULT_PLAYBACK } from '@audioworld/shared';
 import * as Points from '../models/point';
@@ -60,6 +62,32 @@ const O = (description: string): JsonSchema => ({ type: 'object', description, a
  *  removing things stays with the author in the editor. */
 export const ASSISTANT_TOOLS = [
   fn('get_point', 'Every setting of one point (geometry, stops, audio, flags).', { id: S('Point id') }, ['id']),
+  fn(
+    'show_on_map',
+    "Show things on the author's map while you explain — numbered in the order given, and the map zooms to " +
+      'them: a mark (a spot, e.g. a proposed position), an existing point, a line (e.g. a proposed path or a ' +
+      'stretch of the route) or an area. Replaces what you showed before. Refer to the numbers in your reply.',
+    {
+      items: {
+        type: 'array',
+        description: 'What to show, at most 20',
+        items: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['mark', 'point', 'line', 'area'] },
+            lat: N('mark / area: latitude'),
+            lng: N('mark / area: longitude'),
+            id: S('point: its id'),
+            path: { type: 'array', description: 'line: [{lat, lng}, …]', items: { type: 'object' } },
+            radius: N('area: radius in metres'),
+            label: S('A short label shown on the map'),
+          },
+          required: ['kind'],
+        },
+      },
+    },
+    ['items']
+  ),
   fn(
     'create_point',
     'Create a point in this course. `point` uses the AudioPoint JSON shape described in the system prompt ' +
@@ -189,6 +217,37 @@ export async function runTool(name: string, rawArgs: string, ctx: ToolContext): 
 
 async function run(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   switch (name) {
+    case 'show_on_map': {
+      const items = Array.isArray(args.items) ? args.items.slice(0, 20) : [];
+      const coord = (lat: unknown, lng: unknown): Coordinates | null =>
+        typeof lat === 'number' && typeof lng === 'number' && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+          ? { lat, lng }
+          : null;
+      const annotations: MapAnnotation[] = [];
+      const points = await Points.listByCourse(ctx.course.id);
+      for (const raw of items) {
+        const it = obj(raw);
+        const label = text(it.label, 60) || undefined;
+        if (it.kind === 'point') {
+          if (typeof it.id === 'string' && points.some((p) => p.id === it.id)) annotations.push({ kind: 'point', id: it.id, label });
+        } else if (it.kind === 'line') {
+          const path = (Array.isArray(it.path) ? it.path : [])
+            .map((c) => coord(obj(c).lat, obj(c).lng))
+            .filter((c): c is Coordinates => !!c)
+            .slice(0, 500);
+          if (path.length >= 2) annotations.push({ kind: 'line', path, label });
+        } else {
+          const at = coord(it.lat, it.lng);
+          if (!at) continue;
+          const radius = typeof it.radius === 'number' ? Math.max(1, Math.min(5000, it.radius)) : 0;
+          annotations.push(it.kind === 'area' && radius ? { kind: 'area', at, radius, label } : { kind: 'mark', at, label });
+        }
+      }
+      if (annotations.length === 0) return fail('Nothing valid to show (check ids and coordinates)');
+      ctx.emit({ type: 'map', annotations });
+      return { ok: true, summary: `Showed ${annotations.length} mark${annotations.length === 1 ? '' : 's'} on the map` };
+    }
+
     case 'get_point': {
       const p = await ownPoint(ctx, args.id);
       return p ? { ok: true, summary: `Read “${p.name}”`, data: pointForModel(p) } : fail('No such point in this course');

@@ -4,6 +4,7 @@ import {
   anchorOf,
   audibleRadiusOf,
   calculateBearing,
+  destinationPoint,
   pathVertexTimes,
   sectorPolygon,
   triggerRadiusOf,
@@ -12,6 +13,7 @@ import {
   type BBox,
   type Coordinates,
   type DiscoveredPlace,
+  type MapAnnotation,
   type PointType,
   type ScoutWaypoint,
 } from '@audioworld/shared';
@@ -27,6 +29,17 @@ const ACCENT = '#7c5cff';
 const ROUTE_COLOR = '#f5b84b';
 /** "Next sound" links between points. */
 const FLOW_COLOR = '#cbbcff';
+/** The AI assistant's annotations: a colour nothing else on the map uses. */
+const ANNOT_COLOR = '#c6ff3d';
+
+function annotIcon(n: number, label: string | undefined): L.DivIcon {
+  return L.divIcon({
+    className: 'aw-marker-wrap',
+    html: `<div class="aw-annot"><b>${n}</b>${label ? `<span>${esc(label)}</span>` : ''}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
 
 function flowArrowIcon(bearing: number): L.DivIcon {
   return L.divIcon({
@@ -76,6 +89,9 @@ interface Props {
   /** The route tool is open: the route's corners get drag handles. */
   editingRoute?: boolean;
   onRouteVertexDrag?: (index: number, c: Coordinates) => void;
+  /** What the AI assistant is showing while it explains (numbered, the map zooms to it). */
+  annotations?: MapAnnotation[] | null;
+  onClearAnnotations?: () => void;
   /** Aggregate heatmap cells: "lat,lng" (4dp) → seconds dwelt. Drawn as warm circles. */
   analyticsCells?: Record<string, number>;
   /** Read-only scout waypoints overlaid as a reference layer while authoring. */
@@ -244,6 +260,7 @@ export default function MapView(props: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const pointsLayerRef = useRef<L.LayerGroup | null>(null);
   const draftLayerRef = useRef<L.LayerGroup | null>(null);
+  const annotLayerRef = useRef<L.LayerGroup | null>(null);
   const zonesLayerRef = useRef<L.LayerGroup | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const analyticsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -290,6 +307,7 @@ export default function MapView(props: Props) {
     scoutLayerRef.current = L.layerGroup().addTo(map); // reference pins above points
     discoverLayerRef.current = L.layerGroup().addTo(map);
     draftLayerRef.current = L.layerGroup().addTo(map);
+    annotLayerRef.current = L.layerGroup().addTo(map); // the assistant's marks, on top
 
     // Report the visible bounds for area-based place discovery (throttled by moveend).
     const emitViewport = () => {
@@ -339,6 +357,7 @@ export default function MapView(props: Props) {
       mapRef.current = null;
       pointsLayerRef.current = null;
       draftLayerRef.current = null;
+      annotLayerRef.current = null;
       zonesLayerRef.current = null;
       routeLayerRef.current = null;
       analyticsLayerRef.current = null;
@@ -420,6 +439,53 @@ export default function MapView(props: Props) {
         .addTo(layer);
     });
   }, [props.discoverPlaces, props.selectedPlaces]);
+
+  // What the AI assistant is showing: numbered marks (spots, existing points, lines,
+  // areas) in a colour of their own, and the map zooms to fit them.
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = annotLayerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+    const list = props.annotations;
+    if (!list?.length) return;
+    const bounds = L.latLngBounds([]);
+    const badge = (at: L.LatLngExpression, n: number, label?: string) =>
+      L.marker(at, { icon: annotIcon(n, label), interactive: false, keyboard: false, zIndexOffset: 2000 }).addTo(layer);
+    list.forEach((a, i) => {
+      const n = i + 1;
+      if (a.kind === 'mark') {
+        badge([a.at.lat, a.at.lng], n, a.label);
+        bounds.extend([a.at.lat, a.at.lng]);
+      } else if (a.kind === 'point') {
+        const p = stateRef.current.points.find((x) => x.id === a.id);
+        if (!p) return;
+        const c = anchorOf(p);
+        L.circleMarker([c.lat, c.lng], { radius: 18, color: ANNOT_COLOR, weight: 3, fillOpacity: 0, interactive: false }).addTo(layer);
+        badge([c.lat, c.lng], n, a.label ?? p.name);
+        bounds.extend([c.lat, c.lng]);
+      } else if (a.kind === 'line') {
+        const ll = a.path.map((c) => [c.lat, c.lng] as [number, number]);
+        L.polyline(ll, { color: ANNOT_COLOR, weight: 4, opacity: 0.95, dashArray: '10 7', interactive: false }).addTo(layer);
+        badge(ll[Math.floor(ll.length / 2)]!, n, a.label);
+        for (const x of ll) bounds.extend(x);
+      } else {
+        const circle = L.circle([a.at.lat, a.at.lng], {
+          radius: a.radius,
+          color: ANNOT_COLOR,
+          weight: 2,
+          fillColor: ANNOT_COLOR,
+          fillOpacity: 0.12,
+          interactive: false,
+        }).addTo(layer);
+        // Number it on its top edge: its centre is usually a point with a mark of its own.
+        const top = destinationPoint(a.at, 0, a.radius);
+        badge([top.lat, top.lng], n, a.label);
+        bounds.extend(circle.getBounds());
+      }
+    });
+    if (bounds.isValid()) map.fitBounds(bounds.pad(0.3), { maxZoom: 18 });
+  }, [props.annotations]);
 
   // The planned route: a dashed line from a filled start dot to a ringed finish. While
   // tracing, the draft line with its corners; with the route tool open, drag handles.
@@ -826,6 +892,23 @@ export default function MapView(props: Props) {
         </button>
         {notFound && <span className="map-search__hint">Not found</span>}
       </form>
+
+      {props.annotations && props.annotations.length > 0 && (
+        <div
+          className="map-annot-bar"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          <span>
+            ✨ Shown by the assistant ({props.annotations.length})
+          </span>
+          <button type="button" className="btn btn-ghost small" onClick={() => props.onClearAnnotations?.()}>
+            Clear
+          </button>
+        </div>
+      )}
 
       <div className="legend">
         {POINT_TYPE_ORDER.map((t) => (

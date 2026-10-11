@@ -3,6 +3,7 @@ import type {
   AcousticZone,
   AssistantChange,
   AudioPoint,
+  MapAnnotation,
   AudioPointInput,
   Character,
   Coordinates,
@@ -83,6 +84,9 @@ export default function App() {
   const [points, setPoints] = useState<AudioPoint[]>([]);
   const [zones, setZones] = useState<AcousticZone[]>([]);
   const [zoneDraft, setZoneDraft] = useState<Coordinates[] | null>(null);
+  // What the AI assistant is showing on the map (cleared with its button or a new course).
+  const [annotations, setAnnotations] = useState<MapAnnotation[] | null>(null);
+  useEffect(() => setAnnotations(null), [courseId]);
   // The planned route's vertices while tracing it (null when not drawing).
   const [routeDraft, setRouteDraft] = useState<Coordinates[] | null>(null);
   const [savingZones, setSavingZones] = useState(false);
@@ -1084,6 +1088,8 @@ export default function App() {
               routeDraft={routeDraft}
               editingRoute={tool === 'route' && routeDraft == null}
               onRouteVertexDrag={routeVertexDrag}
+              annotations={annotations}
+              onClearAnnotations={() => setAnnotations(null)}
               analyticsCells={showAnalytics ? analytics?.cells : undefined}
               scoutWaypoints={scoutWaypoints}
               onViewport={setDiscoverBbox}
@@ -1237,6 +1243,7 @@ export default function App() {
                     onChanged={assistantChanged}
                     coverUrl={currentCourse?.imageUrl}
                     onUseCover={(url) => updateCourse(courseId, { imageUrl: url })}
+                    onAnnotate={setAnnotations}
                   />
                 )}
               </aside>

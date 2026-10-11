@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
   AssistantChange,
   AssistantMessage,
   Character,
+  Coordinates,
+  MapAnnotation,
   VoicePreview,
 } from '@audioworld/shared';
 import { absoluteAudioUrl } from '../api';
@@ -21,6 +23,8 @@ interface Props {
   coverUrl?: string;
   /** Make a generated image the course cover. */
   onUseCover: (url: string) => void | Promise<void>;
+  /** Show these on the map (the assistant explaining something spatial). */
+  onAnnotate: (annotations: MapAnnotation[]) => void;
 }
 
 interface ToolChip {
@@ -31,6 +35,8 @@ interface ToolChip {
   ok: boolean;
   /** A file it made: a voiced line, a sound effect, an image. */
   url?: string;
+  /** Its arguments (from the history), e.g. to show a map annotation again. */
+  args?: string;
 }
 
 /** The reply being streamed, in order: text as it's written, and each tool as it runs. */
@@ -85,6 +91,30 @@ function save(courseId: string, messages: AssistantMessage[], personaId: string)
   }
 }
 
+/** The annotations of a show_on_map call, from its (model-written) arguments. */
+function annotationsOf(args: string | undefined): MapAnnotation[] {
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const at = (o: Record<string, unknown>): Coordinates | null =>
+    num(o.lat) && num(o.lng) ? { lat: o.lat, lng: o.lng } : null;
+  try {
+    const items = (JSON.parse(args ?? '{}') as { items?: unknown[] }).items ?? [];
+    return items.flatMap((raw): MapAnnotation[] => {
+      const o = (raw ?? {}) as Record<string, unknown>;
+      const label = typeof o.label === 'string' ? o.label.slice(0, 60) : undefined;
+      if (o.kind === 'point' && typeof o.id === 'string') return [{ kind: 'point', id: o.id, label }];
+      if (o.kind === 'line' && Array.isArray(o.path)) {
+        const path = o.path.map((c) => at((c ?? {}) as Record<string, unknown>)).filter((c): c is Coordinates => !!c);
+        return path.length >= 2 ? [{ kind: 'line', path, label }] : [];
+      }
+      const c = at(o);
+      if (!c) return [];
+      return o.kind === 'area' && num(o.radius) ? [{ kind: 'area', at: c, radius: o.radius, label }] : [{ kind: 'mark', at: c, label }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 function resultOf(content: string): { ok: boolean; summary: string; url?: string } {
   try {
     const j = JSON.parse(content) as { ok?: boolean; summary?: string; data?: { url?: unknown } };
@@ -100,7 +130,7 @@ function resultOf(content: string): { ok: boolean; summary: string; url?: string
  * can build it — create and change points and guides, design voices (three previews to
  * audition), voice lines and effects — or answer as one of the guides.
  */
-export default function AssistantPanel({ courseId, guides, hidden, onChanged, coverUrl, onUseCover }: Props) {
+export default function AssistantPanel({ courseId, guides, hidden, onChanged, coverUrl, onUseCover, onAnnotate }: Props) {
   const [messages, setMessages] = useState<AssistantMessage[]>(() => load(courseId).messages);
   const [personaId, setPersonaId] = useState(() => load(courseId).personaId);
   const [input, setInput] = useState('');
@@ -112,16 +142,36 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
   const listRef = useRef<HTMLDivElement | null>(null);
   const onChangedRef = useRef(onChanged);
   onChangedRef.current = onChanged;
+  const onAnnotateRef = useRef(onAnnotate);
+  onAnnotateRef.current = onAnnotate;
+  const showCoord = (c: Coordinates) => onAnnotate([{ kind: 'mark', at: c, label: `${c.lat}, ${c.lng}` }]);
 
   // Each course has its own conversation (the panel is keyed by course, so it remounts).
   useEffect(() => save(courseId, messages, personaId), [courseId, messages, personaId]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // Follow the conversation as it grows (unless the author scrolled up to read).
-  useEffect(() => {
+  // Follow the conversation as it grows — unless the author has scrolled up to read.
+  // Whether we're following is decided by where they were *before* new content landed
+  // (a tool card or an image can be taller than any "near the bottom" margin), and the
+  // content is watched for growth too, so images and players loading later still follow.
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const following = useRef(true);
+  const toBottom = () => {
     const el = listRef.current;
-    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
-  }, [messages, live, voiceCards]);
+    if (el && following.current) el.scrollTop = el.scrollHeight;
+  };
+  const onScroll = () => {
+    const el = listRef.current;
+    if (el) following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  };
+  useLayoutEffect(toBottom, [messages, live, voiceCards, error, hidden]);
+  useEffect(() => {
+    const inner = innerRef.current;
+    if (!inner) return;
+    const ro = new ResizeObserver(toBottom);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
 
   const runTurn = useCallback(
     async (history: AssistantMessage[]) => {
@@ -169,6 +219,9 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
               case 'changed':
                 onChangedRef.current(e.what);
                 break;
+              case 'map':
+                onAnnotateRef.current(e.annotations);
+                break;
               case 'done':
                 appended = e.messages;
                 break;
@@ -197,6 +250,7 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
     const t = text.trim();
     if (!t || busy) return;
     const next: AssistantMessage[] = [...messages, { role: 'user', content: t }];
+    following.current = true; // you just wrote: show it, and the reply
     setMessages(next);
     setInput('');
     void runTurn(next);
@@ -270,7 +324,12 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
 
   const chip = (c: ToolChip) => [
     <div key={`t-${c.id}`} className={`ai-tool${c.ok ? '' : ' is-failed'}`}>
-      {c.ok ? '✓' : '⚠'} {c.summary}
+      {c.ok ? (c.name === 'show_on_map' ? '📍' : '✓') : '⚠'} {c.summary}
+      {c.ok && c.name === 'show_on_map' && c.args && (
+        <button type="button" className="ai-tool__again" onClick={() => onAnnotate(annotationsOf(c.args))}>
+          Show again
+        </button>
+      )}
     </div>,
     c.url && c.name === 'generate_cover_image' ? (
       <figure key={`i-${c.id}`} className="ai-image">
@@ -306,83 +365,92 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
         )}
       </div>
 
-      <div className="ai__list" ref={listRef}>
-        {messages.length === 0 && !live && (
-          <div className="ai__empty">
-            <p className="hint">
-              I know this walk — its idea, background, route, points and guides — and I can build
-              it with you: place and change points, create guides and design their voices, write
-              narration, and suggest prompts for sound effects and music.
-            </p>
-            <div className="ai__suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" className="ai__suggestion" onClick={() => send(s)}>
-                  {s}
-                </button>
-              ))}
+      <div className="ai__list" ref={listRef} onScroll={onScroll}>
+        <div className="ai__inner" ref={innerRef}>
+          {messages.length === 0 && !live && (
+            <div className="ai__empty">
+              <p className="hint">
+                I know this walk — its idea, background, route, points and guides — and I can build
+                it with you: place and change points, create guides and design their voices, write
+                narration, and suggest prompts for sound effects and music.
+              </p>
+              <div className="ai__suggestions">
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} type="button" className="ai__suggestion" onClick={() => send(s)}>
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {messages.map((m, i) => {
-          if (m.role === 'user') {
-            return (
-              <div key={i} className="ai-msg ai-msg--user">
-                {m.content}
-              </div>
-            );
-          }
-          if (m.role === 'assistant') {
-            return (
-              <div key={i} className="ai-turn">
-                {m.content && (
-                  <div className="ai-msg ai-msg--bot">
-                    <Markdown text={m.content} />
-                  </div>
-                )}
-                {m.tool_calls?.map((c) => {
-                  const r = results.get(c.id);
-                  return [
-                    chip({ id: c.id, name: c.function.name, ok: r?.ok ?? false, summary: r?.summary ?? c.function.name, url: r?.url }),
-                    c.function.name === 'design_voice' ? voiceCard(c.id) : null,
-                  ];
-                })}
-              </div>
-            );
-          }
-          return null;
-        })}
-
-        {live && (
-          <div className="ai-turn">
-            {live.map((item, i) =>
-              item.kind === 'text' ? (
-                <div key={`l-${i}`} className="ai-msg ai-msg--bot">
-                  <Markdown text={item.text} />
+          {messages.map((m, i) => {
+            if (m.role === 'user') {
+              return (
+                <div key={i} className="ai-msg ai-msg--user">
+                  {m.content}
                 </div>
-              ) : (
-                [chip(item.chip), voiceCard(item.chip.id)]
-              )
-            )}
-            {live[live.length - 1]?.kind !== 'text' && (
-              <div className="ai-typing" aria-label="Working">
-                <span />
-                <span />
-                <span />
-              </div>
-            )}
-          </div>
-        )}
-        {error && (
-          <div className="ai-error">
-            <span>{error}</span>
-            {!busy && messages[messages.length - 1]?.role === 'user' && (
-              <button type="button" className="btn btn-ghost small" onClick={() => void runTurn(messages)}>
-                Try again
-              </button>
-            )}
-          </div>
-        )}
+              );
+            }
+            if (m.role === 'assistant') {
+              return (
+                <div key={i} className="ai-turn">
+                  {m.content && (
+                    <div className="ai-msg ai-msg--bot">
+                      <Markdown text={m.content} onCoord={showCoord} />
+                    </div>
+                  )}
+                  {m.tool_calls?.map((c) => {
+                    const r = results.get(c.id);
+                    return [
+                      chip({
+                        id: c.id,
+                        name: c.function.name,
+                        ok: r?.ok ?? false,
+                        summary: r?.summary ?? c.function.name,
+                        url: r?.url,
+                        args: c.function.arguments,
+                      }),
+                      c.function.name === 'design_voice' ? voiceCard(c.id) : null,
+                    ];
+                  })}
+                </div>
+              );
+            }
+            return null;
+          })}
+
+          {live && (
+            <div className="ai-turn">
+              {live.map((item, i) =>
+                item.kind === 'text' ? (
+                  <div key={`l-${i}`} className="ai-msg ai-msg--bot">
+                    <Markdown text={item.text} onCoord={showCoord} />
+                  </div>
+                ) : (
+                  [chip(item.chip), voiceCard(item.chip.id)]
+                )
+              )}
+              {live[live.length - 1]?.kind !== 'text' && (
+                <div className="ai-typing" aria-label="Working">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              )}
+            </div>
+          )}
+          {error && (
+            <div className="ai-error">
+              <span>{error}</span>
+              {!busy && messages[messages.length - 1]?.role === 'user' && (
+                <button type="button" className="btn btn-ghost small" onClick={() => void runTurn(messages)}>
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <form
