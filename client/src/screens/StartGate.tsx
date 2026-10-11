@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AudioPoint, Course } from '@audioworld/shared';
-import { getPublished } from '../api';
+import type { AudioPoint, Coordinates, Course } from '@audioworld/shared';
+import { anchorOf, pathLength } from '@audioworld/shared';
+import { absoluteAudioUrl, getPublished } from '../api';
 import { ExperienceEngine, type RunSnapshot } from '../services/experience';
 import { clearRun, readResumable, runKey } from '../services/runStore';
 import { isSecureEnough } from '../services/geolocation';
@@ -125,69 +126,112 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
     downloading && downloading.total > 0
       ? Math.round((downloading.done / downloading.total) * 100)
       : 0;
+  const stats = points ? walkStats(points, course?.route) : null;
+  const start = course?.route?.[0] ?? (points?.[0] ? anchorOf(points[0]) : null);
+  const cover = course?.imageUrl ? absoluteAudioUrl(course.imageUrl) : null;
 
   return (
     <div className="screen screen--gate">
-      <button className="link-back" onClick={onBack}>
-        &#8592; Courses
-      </button>
+      <header className={`gate-hero${cover ? ' gate-hero--image' : ''}`}>
+        {cover && <img className="gate-hero__img" src={cover} alt="" />}
+        <div className="gate-hero__inner">
+          <button className="gate-back" onClick={onBack}>
+            &#8592; All walks
+          </button>
+          <div className="gate-hero__text">
+            <p className="gate-kicker">🎧 Sound walk</p>
+            <h1 className="gate-title">
+              {course?.name ?? (loadFailed ? 'Couldn’t load this walk' : 'Loading…')}
+            </h1>
+            {stats && (
+              <ul className="gate-facts">
+                {stats.meters >= 50 && <li>{distanceLabel(stats.meters)}</li>}
+                {stats.meters >= 50 && <li>about {durationLabel(stats.meters)}</li>}
+                <li>
+                  {stats.sounds} sound{stats.sounds === 1 ? '' : 's'}
+                </li>
+              </ul>
+            )}
+          </div>
+        </div>
+      </header>
 
-      <div className="gate-body">
-        <h1 className="gate-title">
-          {course?.name ?? (loadFailed ? 'Couldn’t load this walk' : 'Loading…')}
-        </h1>
-
+      <main className="gate-main">
         {!course && loadFailed && (
-          <>
-            <p className="gate-desc">Check your connection and try again.</p>
-            <button type="button" className="btn-primary" onClick={() => void load()}>
+          <div className="gate-card">
+            <p className="gate-text">Check your connection and try again.</p>
+            <button type="button" className="btn-test" onClick={() => void load()}>
               Try again
             </button>
-          </>
+          </div>
+        )}
+
+        {course?.description && <Description text={course.description} />}
+        {course && (
+          <p className="gate-explainer">
+            Put on headphones and walk. The sounds sit in the real world around you — turn your
+            head and they stay where they are.
+          </p>
+        )}
+
+        {points && points.length > 0 && start && (
+          <section className="gate-card">
+            <h2 className="gate-card__title">Where it starts</h2>
+            <StartMap points={points} route={course?.route} />
+            <div className="gate-card__row">
+              <span className="gate-text">Head to the start pin to begin.</span>
+              <a className="gate-link" href={directionsUrl(start)} target="_blank" rel="noopener noreferrer">
+                Directions ↗
+              </a>
+            </div>
+          </section>
         )}
 
         {course && (
-          <>
-            {course.description && <p className="gate-desc">{course.description}</p>}
-            <p className="gate-explainer">
-              🎧 A GPS sound walk — put on headphones and walk; the sounds sit in the real world
-              around you.
-            </p>
-          </>
-        )}
-
-        {points && points.length > 0 && (
-          <>
-            <StartMap points={points} route={course?.route} />
-            <p className="gate-hint">Head to the start pin to begin.</p>
-          </>
-        )}
-
-        {canOffline && (
-          <div className="offline">
-            {pack ? (
-              <div className="offline__row">
-                <span className="offline__ok">✓ Available offline</span>
-                <button type="button" className="linkish" onClick={() => void handleRemove()}>
-                  Remove
-                </button>
-              </div>
-            ) : downloading ? (
-              <div className="offline__progress">
-                <div className="offline__bar">
-                  <div className="offline__fill" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="offline__pct">Downloading… {pct}%</span>
-              </div>
-            ) : (
-              <button type="button" className="btn-offline" onClick={() => void handleDownload()}>
-                ⭳ Download for offline
-                {estimate && estimate.tiles > 0 && (
-                  <span className="offline__hint"> · map + {estimate.audio} clips</span>
-                )}
+          <section className="gate-card">
+            <h2 className="gate-card__title">Before you go</h2>
+            <ul className="gate-checklist">
+              <li>🎧 Headphones on — the sound is 3D</li>
+              <li>🔊 Volume up</li>
+              {!preferSim && <li>📍 Allow location and compass when asked — that’s how the sound knows where you are</li>}
+            </ul>
+            <div className="gate-card__actions">
+              <button type="button" className="btn-test" disabled={testing} onClick={() => void runTest()}>
+                {testing ? 'Playing…' : tested ? '▶ Play again' : '▶ Test sound'}
               </button>
+              {canOffline &&
+                (pack ? (
+                  <span className="offline__row">
+                    <span className="offline__ok">✓ Available offline</span>
+                    <button type="button" className="linkish" onClick={() => void handleRemove()}>
+                      Remove
+                    </button>
+                  </span>
+                ) : downloading ? (
+                  <span className="offline__progress">
+                    <span className="offline__bar">
+                      <span className="offline__fill" style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="offline__pct">Downloading… {pct}%</span>
+                  </span>
+                ) : (
+                  <button type="button" className="btn-offline" onClick={() => void handleDownload()}>
+                    ↓ Save for offline
+                    {estimate && estimate.tiles > 0 && (
+                      <span className="offline__hint"> · map + {estimate.audio} clips</span>
+                    )}
+                  </button>
+                ))}
+            </div>
+            {tested && (
+              <p className="gate-text gate-text--ok">
+                You should have heard a tone sweep from left to right. Heard nothing?{' '}
+                <button type="button" className="linkish" onClick={() => window.location.reload()}>
+                  Reload the page
+                </button>
+              </p>
             )}
-          </div>
+          </section>
         )}
 
         {error && <div className="notice notice--error">{error}</div>}
@@ -196,41 +240,11 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
             Location and compass need HTTPS (or localhost). Audio still works.
           </div>
         )}
+      </main>
 
-        {course && (
-          <>
-            <div className="audio-check">
-              <p className="audio-check__title">Check your sound first</p>
-              <ul className="audio-check__list">
-                <li>🎧 Put on headphones</li>
-                <li>🔊 Turn the volume up</li>
-                <li>
-                  Heard nothing?{' '}
-                  <button type="button" className="linkish" onClick={() => window.location.reload()}>
-                    Reload the page
-                  </button>
-                </li>
-              </ul>
-              <button
-                type="button"
-                className="btn-test"
-                disabled={testing}
-                onClick={() => void runTest()}
-              >
-                {testing ? 'Playing…' : tested ? 'Play test sound again' : '▶ Play test sound'}
-              </button>
-              {tested && (
-                <p className="audio-check__ok">You should have heard a tone sweep left → right.</p>
-              )}
-            </div>
-
-            {!preferSim && (
-              <p className="gate-hint gate-hint--prime">
-                Starting will ask for your location and compass — that’s how the sound knows where
-                you are.
-              </p>
-            )}
-
+      {course && (
+        <footer className="gate-cta">
+          <div className="gate-cta__inner">
             <button
               className="btn-primary"
               disabled={!ready}
@@ -244,21 +258,65 @@ export function StartGate({ courseId, course: initialCourse, preferSim, onReady,
                     ? 'Start simulation'
                     : 'Start listening'}
             </button>
-
-            {resumable && !busy && (
-              <button type="button" className="linkish" onClick={startOver}>
-                Start over from the beginning
+            <div className="gate-cta__links">
+              {resumable && !busy && (
+                <button type="button" className="linkish" onClick={startOver}>
+                  Start over
+                </button>
+              )}
+              <button className="link-sim" disabled={busy} onClick={() => void handleStart(!preferSim)}>
+                {preferSim ? 'Use real sensors' : 'Try it on this screen'}
               </button>
-            )}
-
-            <p className="gate-hint">Put on headphones and face any direction — you are the center.</p>
-
-            <button className="link-sim" disabled={busy} onClick={() => void handleStart(!preferSim)}>
-              {preferSim ? 'Use real sensors' : 'Simulate on desktop'}
-            </button>
-          </>
-        )}
-      </div>
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
+}
+
+/** Long descriptions start folded to a few lines, with a toggle. */
+function Description({ text }: { text: string }) {
+  const long = text.length > 280;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="gate-desc-wrap">
+      <p className={`gate-desc${long && !open ? ' gate-desc--folded' : ''}`}>{text}</p>
+      {long && (
+        <button type="button" className="gate-more" onClick={() => setOpen((o) => !o)}>
+          {open ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** An easy walking pace including stops to listen (m/s). */
+const WALK_MPS = 1.2;
+
+/** How far the walk goes — along the planned route, else from point to point in order. */
+function walkStats(points: AudioPoint[], route: Coordinates[] | undefined): { meters: number; sounds: number } {
+  const meters =
+    route && route.length >= 2 ? pathLength(route) : pathLength(points.map((p) => anchorOf(p)));
+  return { meters, sounds: points.length };
+}
+
+function distanceLabel(m: number): string {
+  return m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+function durationLabel(m: number): string {
+  const min = Math.max(5, Math.round(m / WALK_MPS / 60 / 5) * 5);
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const rest = min % 60;
+  return rest ? `${h} h ${rest} min` : `${h} h`;
+}
+
+/** Walking directions to the start in the phone's own maps app. */
+function directionsUrl(c: Coordinates): string {
+  const at = `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`;
+  return /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)
+    ? `https://maps.apple.com/?daddr=${at}&dirflg=w`
+    : `https://www.google.com/maps/dir/?api=1&destination=${at}&travelmode=walking`;
 }

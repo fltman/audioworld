@@ -24,7 +24,8 @@ export function StartMap({ points, route }: { points: AudioPoint[]; route?: Coor
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current || points.length === 0) return;
-    const start = anchorOf(points[0]!);
+    // The planned route's first corner is where the walk begins; else the first point.
+    const start = route && route.length >= 2 ? route[0]! : anchorOf(points[0]!);
     const map = L.map(containerRef.current, {
       zoomControl: false,
       attributionControl: false,

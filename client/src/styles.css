@@ -177,9 +177,6 @@ body {
 }
 
 /* --- Start gate ---------------------------------------------------------- */
-.screen--gate {
-  justify-content: space-between;
-}
 .link-back,
 .link-sim {
   background: none;
@@ -198,15 +195,6 @@ body {
   color: var(--accent);
   align-self: center;
 }
-.gate-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  text-align: center;
-}
 .gate-title {
   font-size: 28px;
   margin: 0;
@@ -216,12 +204,6 @@ body {
   margin: 0;
   color: var(--muted);
   max-width: 32ch;
-}
-.gate-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 28ch;
 }
 .btn-primary {
   margin-top: 8px;
@@ -245,39 +227,6 @@ body {
   cursor: default;
 }
 
-.audio-check {
-  width: 100%;
-  max-width: 340px;
-  padding: 14px 16px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-  border-radius: 14px;
-  background: var(--panel);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.audio-check__title {
-  margin: 0;
-  font-weight: 650;
-  font-size: 15px;
-}
-.audio-check__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--muted);
-  text-align: center;
-}
-.audio-check__ok {
-  margin: 0;
-  font-size: 12px;
-  color: var(--accent);
-}
 .btn-test {
   padding: 10px 22px;
   font-size: 14px;
@@ -300,6 +249,237 @@ body {
   text-decoration: underline;
   cursor: pointer;
   font: inherit;
+}
+
+/* The share-link landing page: a cover hero, the story, where it starts, a short
+   checklist, and a Start button that stays within thumb's reach at the bottom. */
+.screen--gate {
+  height: auto;
+  min-height: 100dvh;
+  padding: 0;
+  /* Solid: the body's glow repeats per viewport height and would seam a long page. */
+  background: var(--bg);
+}
+.gate-hero {
+  position: relative;
+  display: flex;
+  min-height: min(46vh, 420px);
+  overflow: hidden;
+  /* No cover image: sound rings rippling out from the walk's start. */
+  background:
+    repeating-radial-gradient(circle at 78% 30%, rgba(124, 92, 255, 0.16) 0 1px, transparent 1px 34px),
+    radial-gradient(90% 120% at 78% 30%, #2a1f5c 0%, #15122b 55%, var(--bg) 100%);
+}
+.gate-hero__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gate-hero::after {
+  /* Fade into the page below. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 10, 18, 0) 55%, var(--bg) 100%);
+}
+.gate-hero--image::after {
+  /* Over a photo, also darken the top (for the back button) and behind the title. */
+  background: linear-gradient(180deg, rgba(10, 10, 18, 0.35) 0%, rgba(10, 10, 18, 0) 30%, rgba(10, 10, 18, 0.55) 62%, var(--bg) 100%);
+}
+.gate-hero__inner {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding: max(env(safe-area-inset-top), 14px) 20px 22px;
+}
+.gate-back {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(10, 10, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+.gate-hero__text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gate-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c9bcff;
+}
+.screen--gate .gate-title {
+  margin: 0;
+  font-size: clamp(28px, 7vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+}
+.gate-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.gate-facts li {
+  padding: 4px 11px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(10, 10, 18, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+.gate-main {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 20px 24px;
+}
+.screen--gate .gate-desc {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #d8d4f0;
+  white-space: pre-line;
+  user-select: text;
+}
+.gate-desc--folded {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gate-more {
+  margin-top: 6px;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.gate-explainer {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.gate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+}
+.gate-card__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gate-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gate-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.gate-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.gate-text--ok {
+  color: #c9bcff;
+}
+.gate-link {
+  flex-shrink: 0;
+  padding: 8px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.gate-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.gate-cta {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  padding: 28px 20px max(env(safe-area-inset-bottom), 14px);
+  background: linear-gradient(180deg, rgba(10, 10, 18, 0) 0%, var(--bg) 38%);
+}
+.gate-cta__inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.gate-cta .btn-primary {
+  width: 100%;
+  max-width: 420px;
+  margin-top: 0;
+}
+.gate-cta__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.screen--gate .btn-offline {
+  padding: 10px 16px;
+  font-size: 14px;
 }
 
 /* --- Offline pack -------------------------------------------------------- */
@@ -350,6 +530,11 @@ body {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
   overflow: hidden;
+}
+/* The progress bar's parts are spans (they sit inline in the checklist card). */
+.offline__bar,
+.offline__fill {
+  display: block;
 }
 .offline__fill {
   height: 100%;
@@ -568,10 +753,11 @@ body {
 }
 
 .start-map {
+  /* Contain Leaflet's high pane z-indexes so the sticky Start bar stays on top. */
+  isolation: isolate;
   width: 100%;
-  max-width: 340px;
-  height: 190px;
-  border-radius: 14px;
+  height: 220px;
+  border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -629,18 +815,6 @@ body {
 }
 
 /* ---------- UX pass additions ---------- */
-/* One-line explainer on the share-link gate (share links skip the picker's brand). */
-.gate-explainer {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 32ch;
-}
-/* Permission-priming line above the primary Start button. */
-.gate-hint--prime {
-  color: var(--warn);
-  max-width: 32ch;
-}
 /* Persistent, tappable muted banner during the walk. */
 .mute-banner {
   align-self: center;
