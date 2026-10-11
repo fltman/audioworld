@@ -165,6 +165,11 @@ export const api = {
     form.append('file', file);
     return request<UploadResult>('/api/upload', { method: 'POST', body: form });
   },
+  uploadImage: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<UploadResult>('/api/upload/image', { method: 'POST', body: form });
+  },
   // Scout sets — captured in the field on a phone, shown as a read-only reference layer.
   listScouts: () => request<ScoutSet[]>('/api/scouts'),
   getScout: (id: string) => request<ScoutSet>(`/api/scouts/${id}`),

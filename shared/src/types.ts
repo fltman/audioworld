@@ -296,6 +296,13 @@ export interface Course {
   id: string;
   name: string;
   description?: string;
+  /** Cover image (an `/uploads/...` path or an https URL) shown on the course's start page. */
+  imageUrl?: string;
+  /** Authoring notes — the idea behind the walk: premise, mood, arc, audience. Never shown
+   *  to listeners; it briefs authors and the admin's AI assistant. */
+  idea?: string;
+  /** Authoring notes — background research the walk draws on: history, facts, sources. */
+  backgroundInfo?: string;
   /** The superuser who owns/authored this course (null for legacy/admin-created). */
   ownerId?: string | null;
   /** Unique, readable short address: the course is shared as `<site>/<slug>`. */
@@ -324,6 +331,7 @@ export interface Course {
 export interface PublishedSnapshot {
   name: string;
   description?: string;
+  imageUrl?: string;
   showStartWayfinding?: boolean;
   eyesUp?: boolean;
   zones?: AcousticZone[];
@@ -412,7 +420,15 @@ export type AudioPointInput = DistributiveOmit<
 /** Payload accepted when creating/updating a course. */
 export type CourseInput = Pick<
   Course,
-  'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones' | 'slug'
+  | 'name'
+  | 'description'
+  | 'imageUrl'
+  | 'idea'
+  | 'backgroundInfo'
+  | 'showStartWayfinding'
+  | 'eyesUp'
+  | 'zones'
+  | 'slug'
 >;
 
 /** One audio clip travelling inside a course bundle, base64-inlined. */
@@ -435,7 +451,10 @@ export interface CourseBundle {
   format: 'audioworld-course';
   version: 1;
   exportedAt: string;
-  course: Pick<Course, 'name' | 'description' | 'showStartWayfinding' | 'eyesUp' | 'zones'>;
+  course: Pick<
+    Course,
+    'name' | 'description' | 'imageUrl' | 'idea' | 'backgroundInfo' | 'showStartWayfinding' | 'eyesUp' | 'zones'
+  >;
   points: AudioPoint[];
   assets: CourseBundleAsset[];
 }

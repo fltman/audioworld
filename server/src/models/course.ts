@@ -67,6 +67,9 @@ interface CourseRow {
   id: string;
   name: string;
   description: string | null;
+  image_url: string | null;
+  idea: string | null;
+  background_info: string | null;
   owner_id: string | null;
   show_start_wayfinding: boolean;
   eyes_up: boolean;
@@ -82,6 +85,10 @@ function rowToCourse(row: CourseRow): Course {
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
+    // '' is how an author clears these (COALESCE keeps a stored value on null).
+    imageUrl: row.image_url || undefined,
+    idea: row.idea || undefined,
+    backgroundInfo: row.background_info || undefined,
     ownerId: row.owner_id ?? null,
     slug: row.slug ?? undefined,
     showStartWayfinding: row.show_start_wayfinding,
@@ -187,8 +194,9 @@ export async function createCourse(
     const slug = input.slug ?? (await freeSlug(slugify(input.name)));
     try {
       const { rows } = await pool.query<CourseRow>(
-        `INSERT INTO courses (name, description, owner_id, show_start_wayfinding, eyes_up, zones, slug)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        `INSERT INTO courses
+           (name, description, owner_id, show_start_wayfinding, eyes_up, zones, slug, image_url, idea, background_info)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
         [
           input.name,
           input.description ?? null,
@@ -197,6 +205,9 @@ export async function createCourse(
           input.eyesUp ?? false,
           JSON.stringify(input.zones ?? []),
           slug,
+          input.imageUrl ?? null,
+          input.idea ?? null,
+          input.backgroundInfo ?? null,
         ]
       );
       return rowToCourse(rows[0]!);
@@ -224,6 +235,9 @@ export async function updateCourse(
          eyes_up = COALESCE($4, eyes_up),
          zones = COALESCE($5, zones),
          slug = COALESCE($6, slug),
+         image_url = COALESCE($8, image_url),
+         idea = COALESCE($9, idea),
+         background_info = COALESCE($10, background_info),
          updated_at = now()
        WHERE id = $7 RETURNING *`,
       [
@@ -234,6 +248,9 @@ export async function updateCourse(
         input.zones != null ? JSON.stringify(input.zones) : null,
         input.slug ?? null,
         id,
+        input.imageUrl ?? null,
+        input.idea ?? null,
+        input.backgroundInfo ?? null,
       ]
     );
     return rows[0] ? rowToCourse(rows[0]) : null;

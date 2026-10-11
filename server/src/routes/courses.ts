@@ -50,12 +50,37 @@ function validateCourseInput(body: unknown): CourseInput {
   return {
     name: b.name,
     description: typeof b.description === 'string' ? b.description : undefined,
+    imageUrl: parseImageUrl(b.imageUrl),
+    idea: parseNotes(b.idea, 'idea'),
+    backgroundInfo: parseNotes(b.backgroundInfo, 'backgroundInfo'),
     showStartWayfinding:
       typeof b.showStartWayfinding === 'boolean' ? b.showStartWayfinding : undefined,
     eyesUp: typeof b.eyesUp === 'boolean' ? b.eyesUp : undefined,
     zones: parseZones(b.zones),
     slug: parseSlug(b.slug),
   };
+}
+
+/** The cover image: an uploaded file or an https URL; "" clears it, undefined leaves it. */
+function parseImageUrl(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== 'string') throw new ValidationError('"imageUrl" must be a string');
+  const v = value.trim();
+  if (v === '') return '';
+  if (v.length > 2000 || !(/^\/uploads\/[\w.-]+$/.test(v) || /^https:\/\/\S+$/.test(v))) {
+    throw new ValidationError('The cover image must be an uploaded image or an https:// link');
+  }
+  return v;
+}
+
+const MAX_NOTES = 20_000;
+
+/** Free-text authoring notes (idea, background); "" clears, undefined leaves unchanged. */
+function parseNotes(value: unknown, field: string): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== 'string') throw new ValidationError(`"${field}" must be a string`);
+  if (value.length > MAX_NOTES) throw new ValidationError(`"${field}" is too long (max ${MAX_NOTES} characters)`);
+  return value;
 }
 
 /** A course's short address. Undefined (omitted) leaves it unchanged / auto-derives it. */
@@ -321,6 +346,7 @@ coursesRouter.post(
     const snapshot: PublishedSnapshot = {
       name: course.name,
       description: course.description,
+      imageUrl: course.imageUrl,
       showStartWayfinding: course.showStartWayfinding,
       eyesUp: course.eyesUp,
       zones: course.zones,
@@ -348,6 +374,7 @@ coursesRouter.get(
             ...course,
             name: snap.name,
             description: snap.description,
+            imageUrl: snap.imageUrl,
             showStartWayfinding: snap.showStartWayfinding,
             eyesUp: snap.eyesUp,
             zones: snap.zones,
@@ -438,7 +465,11 @@ coursesRouter.post(
     let courseId: string | null = null;
     try {
       const zones = rewriteZoneUrls(bundle.course.zones ?? [], urlMap);
-      const course = await Courses.createCourse({ ...bundle.course, zones }, req.user!.id);
+      const { imageUrl } = bundle.course;
+      const course = await Courses.createCourse(
+        { ...bundle.course, zones, imageUrl: imageUrl ? (urlMap.get(imageUrl) ?? imageUrl) : imageUrl },
+        req.user!.id
+      );
       courseId = course.id;
       for (const point of bundle.points) {
         await Points.create(course.id, rewritePointUrls(point, urlMap));

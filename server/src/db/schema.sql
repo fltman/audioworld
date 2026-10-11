@@ -91,6 +91,13 @@ CREATE TABLE IF NOT EXISTS characters (
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS slug text;
 CREATE UNIQUE INDEX IF NOT EXISTS courses_slug_idx ON courses(slug);
 
+-- Cover image for the start page, and authoring notes (the walk's idea + background
+-- research) that brief the admin's AI assistant.
+ALTER TABLE courses
+  ADD COLUMN IF NOT EXISTS image_url text,
+  ADD COLUMN IF NOT EXISTS idea text,
+  ADD COLUMN IF NOT EXISTS background_info text;
+
 CREATE INDEX IF NOT EXISTS audio_points_course_id_idx ON audio_points(course_id);
 CREATE INDEX IF NOT EXISTS courses_owner_id_idx ON courses(owner_id);
 CREATE INDEX IF NOT EXISTS scouts_owner_id_idx ON scouts(owner_id);

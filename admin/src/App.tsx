@@ -364,6 +364,10 @@ export default function App() {
         description: patch.description ?? current.description,
         showStartWayfinding: patch.showStartWayfinding ?? current.showStartWayfinding ?? false,
         eyesUp: patch.eyesUp ?? current.eyesUp ?? false,
+        // Cover + notes only when this update sets them (omitted = the server keeps them).
+        ...(patch.imageUrl !== undefined ? { imageUrl: patch.imageUrl } : {}),
+        ...(patch.idea !== undefined ? { idea: patch.idea } : {}),
+        ...(patch.backgroundInfo !== undefined ? { backgroundInfo: patch.backgroundInfo } : {}),
         // Only send zones when this update is actually about zones (saveZones); otherwise
         // omit them so the server COALESCE keeps its saved set and unsaved edits aren't
         // overwritten with a stale copy from `courses`.

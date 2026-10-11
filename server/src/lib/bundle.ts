@@ -22,6 +22,12 @@ const MIME_BY_EXT: Record<string, string> = {
   '.opus': 'audio/opus',
   '.webm': 'audio/webm',
   '.flac': 'audio/flac',
+  // The course's cover image travels in the bundle too.
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
 };
 const EXT_BY_MIME: Record<string, string> = {
   'audio/mpeg': '.mp3',
@@ -33,6 +39,10 @@ const EXT_BY_MIME: Record<string, string> = {
   'audio/opus': '.opus',
   'audio/webm': '.webm',
   'audio/flac': '.flac',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
 };
 
 const mimeForFile = (filename: string): string =>
@@ -86,7 +96,8 @@ function readAsset(url: string): CourseBundleAsset | null {
 /** Build a self-contained bundle for a course + its points (reads asset files). */
 export function buildBundle(course: Course, points: AudioPoint[]): CourseBundle {
   const zones = course.zones ?? [];
-  const assets = collectAssetUrls(points, zones)
+  const assets = [...collectAssetUrls(points, zones), ...(course.imageUrl ? [course.imageUrl] : [])]
+    .filter((u) => u.startsWith(UPLOADS_PREFIX))
     .map(readAsset)
     .filter((a): a is CourseBundleAsset => a !== null);
   return {
@@ -96,6 +107,9 @@ export function buildBundle(course: Course, points: AudioPoint[]): CourseBundle 
     course: {
       name: course.name,
       description: course.description,
+      imageUrl: course.imageUrl,
+      idea: course.idea,
+      backgroundInfo: course.backgroundInfo,
       showStartWayfinding: course.showStartWayfinding,
       eyesUp: course.eyesUp,
       zones,
