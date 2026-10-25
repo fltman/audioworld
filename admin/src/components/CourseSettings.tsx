@@ -3,6 +3,7 @@ import type { Course } from '@audioworld/shared';
 import { isValidSlug, MAX_SLUG_LENGTH } from '@audioworld/shared';
 import { absoluteAudioUrl, api } from '../api';
 import ShareCourse, { clientBase } from './ShareCourse';
+import HelpLink from './HelpLink';
 
 interface Props {
   course: Course;
@@ -68,7 +69,10 @@ function CourseDetails({ course, onUpdate }: Pick<Props, 'course' | 'onUpdate'>)
 
   return (
     <section className="section course-details">
-      <div className="section-title">About this walk</div>
+      <div className="section-title">
+        About this walk
+        <HelpLink to="installningar/om-rundan" label="om rundan" />
+      </div>
 
       <label className="form-field">
         <span className="label">Name</span>
@@ -192,7 +196,10 @@ export default function CourseSettings({ course, onUpdate, onSaveSlug, onExport,
     <>
       <CourseDetails course={course} onUpdate={onUpdate} />
       <section className="section course-settings">
-        <div className="section-title">Listening &amp; sharing</div>
+        <div className="section-title">
+          Listening &amp; sharing
+          <HelpLink to="installningar/lyssna-och-dela" label="lyssna och dela" />
+        </div>
         <label className="form-field">
           <span className="label">Short address</span>
           <div className="field-row">

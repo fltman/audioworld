@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ElevenVoice, UploadListItem } from '@audioworld/shared';
 import { ApiError, absoluteAudioUrl, api } from '../api';
+import HelpLink from './HelpLink';
 
 const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|opus|webm|flac)$/i;
 export const isAudio = (filename: string): boolean => AUDIO_EXT.test(filename);
@@ -435,6 +436,7 @@ export default function SoundLibrary() {
       <div className="sounds__head">
         <div className="section-title" style={{ margin: 0 }}>
           Sound library <span className="count-pill">{clips.length}</span>
+          <HelpLink to="ljud" label="ljudbiblioteket" />
         </div>
         {clips.length > 0 && (
           <input

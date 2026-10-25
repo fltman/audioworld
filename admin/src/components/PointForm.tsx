@@ -15,6 +15,7 @@ import { POINT_TYPE_META, isPathType } from '../pointTypes';
 import { ApiError, absoluteAudioUrl, api, wikipediaExtract } from '../api';
 import PointNarrate from './PointNarrate';
 import ConfirmButton from './ConfirmButton';
+import HelpLink from './HelpLink';
 
 /** Seconds -> m:ss. */
 function fmtTime(sec: number): string {
@@ -218,6 +219,7 @@ export default function PointForm(props: Props) {
       <div className="section-title">
         <span className="dot" style={{ background: meta.color }} />
         {draft.editingId ? 'Edit' : 'New'} {meta.label}
+        <HelpLink to="punktredigeraren" label="punktredigeraren" />
       </div>
 
       {isPathType(draft.type) ? (
@@ -613,7 +615,10 @@ export default function PointForm(props: Props) {
 
       {isPathType(draft.type) && draft.path.length >= 2 && (
         <div className="form-field">
-          <span className="label">Stops · pause &amp; narrate (arrival time shown)</span>
+          <div className="label-row">
+            <span className="label">Stops · pause &amp; narrate (arrival time shown)</span>
+            <HelpLink to="stopp/stopp" label="stopp längs vägen" />
+          </div>
           <div className="stops">
             {draft.path.map((_, i) => {
               const stop = draft.stops.find((s) => s.index === i);
@@ -794,7 +799,10 @@ export default function PointForm(props: Props) {
       </div>
 
       <div className="form-field next-sounds">
-        <span className="label">Next sound{draft.next.length > 1 ? 's' : ''}</span>
+        <div className="label-row">
+          <span className="label">Next sound{draft.next.length > 1 ? 's' : ''}</span>
+          <HelpLink to="flaggor/nasta-ljud" label="nästa ljud" />
+        </div>
         {draft.next.length > 0 && (
           <ul className="next-sounds__list">
             {draft.next.map((id) => {
@@ -877,7 +885,10 @@ export default function PointForm(props: Props) {
       )}
 
       <label className="form-field">
-        <span className="label">Sets flags when visited</span>
+        <div className="label-row">
+          <span className="label">Sets flags when visited</span>
+          <HelpLink to="flaggor" label="berättelseflaggor" />
+        </div>
         <input
           className="input"
           placeholder="OLD-LADY, KEY (comma-separated)"
@@ -906,7 +917,10 @@ export default function PointForm(props: Props) {
 
       {canSync && (
         <div className="form-field">
-          <span className="label">Timing</span>
+          <div className="label-row">
+            <span className="label">Timing</span>
+            <HelpLink to="punktredigeraren/timing" label="individuell eller gemensam tid" />
+          </div>
           <div className="seg">
             <button
               type="button"

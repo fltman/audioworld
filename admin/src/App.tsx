@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AcousticZone,
   AssistantChange,
@@ -41,6 +41,11 @@ import AssistantPanel from './components/AssistantPanel';
 import PublishBar from './components/PublishBar';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import { PreviewEngine } from './services/previewEngine';
+import HelpLink from './components/HelpLink';
+import { parseHelpHash, type HelpRoute } from './help';
+
+// The docs are only loaded once someone opens the help.
+const HelpView = lazy(() => import('./components/HelpView'));
 
 const LS_KEY = 'audioworld.admin.courseId';
 const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -72,13 +77,37 @@ function measureDuration(url: string, timeoutMs = 4000): Promise<number | null> 
 /** Provisional dwell (s) for a folded-in clip until its real length is measured. */
 const DEFAULT_ABSORB_DWELL = 8;
 
+/** The workspace tabs; the help is shown over whichever one is open. */
+type WorkTab = 'courses' | 'sounds' | 'guides' | 'users';
+
 /** Which utility panel the right inspector shows when you're not editing a point. */
 type Tool = 'assistant' | 'zones' | 'route' | 'discover' | 'scout' | 'analytics' | 'bulk' | 'settings' | 'new-course' | null;
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [tab, setTab] = useState<'courses' | 'sounds' | 'guides' | 'users'>('courses');
+  const [workTab, setWorkTab] = useState<WorkTab>('courses');
+  // The help is open while the address is a `#help/…` link — so "?" buttons, shared links
+  // and the back button all just work. What's under it stays mounted, so nothing is lost.
+  const [helpRoute, setHelpRoute] = useState<HelpRoute | null>(() => parseHelpHash(window.location.hash));
+  useEffect(() => {
+    const onHash = () => setHelpRoute(parseHelpHash(window.location.hash));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const tab: WorkTab | 'help' = helpRoute ? 'help' : workTab;
+  const openTab = (t: WorkTab | 'help') => {
+    if (t === 'help') {
+      if (!helpRoute) window.location.hash = '#help';
+      return;
+    }
+    setWorkTab(t);
+    if (helpRoute) {
+      // Leave the help as a step in the history, so back returns to it.
+      window.history.pushState(null, '', window.location.pathname + window.location.search);
+      setHelpRoute(null);
+    }
+  };
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
   const [points, setPoints] = useState<AudioPoint[]>([]);
@@ -293,7 +322,11 @@ export default function App() {
   const logout = () => {
     setToken(null);
     setUser(null);
-    setTab('courses');
+    setWorkTab('courses');
+    if (helpRoute) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      setHelpRoute(null);
+    }
     setPreview(null);
     setCourses([]);
     setCourseId(null);
@@ -853,7 +886,9 @@ export default function App() {
   }
 
   const inCourses = tab === 'courses';
-  const hasInspector = inCourses && !!courseId && (!!preview || !!draft || !!tool);
+  const helpOpen = tab === 'help';
+  // The course workspace stays mounted under the help (a "?" mustn't lose an open editor).
+  const hasInspector = workTab === 'courses' && !!courseId && (!!preview || !!draft || !!tool);
   const showAssistant = tool === 'assistant' && !preview && !draft;
 
   return (
@@ -866,21 +901,21 @@ export default function App() {
           <button
             type="button"
             className={`tab${tab === 'courses' ? ' is-active' : ''}`}
-            onClick={() => setTab('courses')}
+            onClick={() => openTab('courses')}
           >
             Courses
           </button>
           <button
             type="button"
             className={`tab${tab === 'sounds' ? ' is-active' : ''}`}
-            onClick={() => setTab('sounds')}
+            onClick={() => openTab('sounds')}
           >
             Sounds
           </button>
           <button
             type="button"
             className={`tab${tab === 'guides' ? ' is-active' : ''}`}
-            onClick={() => setTab('guides')}
+            onClick={() => openTab('guides')}
           >
             Guides
           </button>
@@ -888,11 +923,19 @@ export default function App() {
             <button
               type="button"
               className={`tab${tab === 'users' ? ' is-active' : ''}`}
-              onClick={() => setTab('users')}
+              onClick={() => openTab('users')}
             >
               Users
             </button>
           )}
+          <button
+            type="button"
+            className={`tab${tab === 'help' ? ' is-active' : ''}`}
+            onClick={() => openTab('help')}
+            title="Hjälp och dokumentation"
+          >
+            Help
+          </button>
         </nav>
 
         {inCourses && (
@@ -950,20 +993,20 @@ export default function App() {
       )}
 
       <div className="workspace">
-        {tab === 'users' && user.role === 'admin' ? (
-          <div className="workspace-panel">
+        {workTab === 'users' && user.role === 'admin' ? (
+          <div className={`workspace-panel${helpOpen ? ' is-hidden' : ''}`}>
             <UsersPanel me={user} />
           </div>
-        ) : tab === 'sounds' ? (
-          <div className="workspace-panel">
+        ) : workTab === 'sounds' ? (
+          <div className={`workspace-panel${helpOpen ? ' is-hidden' : ''}`}>
             <SoundLibrary />
           </div>
-        ) : tab === 'guides' ? (
-          <div className="workspace-panel">
+        ) : workTab === 'guides' ? (
+          <div className={`workspace-panel${helpOpen ? ' is-hidden' : ''}`}>
             <CharacterManager characters={characters} onChange={setCharacters} />
           </div>
         ) : (
-          <>
+          <div className={`course-layout${helpOpen ? ' is-hidden' : ''}`}>
             <aside className="sidebar">
               {!courseId ? (
                 <p className="section muted">Pick a course above, or create one with “+ New”.</p>
@@ -995,7 +1038,10 @@ export default function App() {
                     onCancel={cancelDraft}
                   />
                   <div className="section tool-row">
-                    <span className="label">Tools</span>
+                    <div className="label-row">
+                      <span className="label">Tools</span>
+                      <HelpLink to="punkter/verktyg" label="verktygen" />
+                    </div>
                     <div className="tool-row__grid">
                       <button
                         type="button"
@@ -1111,6 +1157,7 @@ export default function App() {
                       setZones((z) => z.map((zz) => (zz.id === id ? { ...zz, ...patch } : zz)))
                     }
                     onSaveZones={() => void saveZones()}
+                    keysActive={!helpOpen}
                   />
                 ) : draft ? (
                   <PointForm
@@ -1172,7 +1219,10 @@ export default function App() {
                   />
                 ) : tool === 'scout' ? (
                   <section className="section">
-                    <div className="section-title">Scout layer</div>
+                    <div className="section-title">
+                      Scout layer
+                      <HelpLink to="scout" label="Scout" />
+                    </div>
                     <select
                       className="select"
                       value={scoutId ?? ''}
@@ -1248,7 +1298,12 @@ export default function App() {
                 )}
               </aside>
             )}
-          </>
+          </div>
+        )}
+        {helpOpen && helpRoute && (
+          <Suspense fallback={<p className="section muted">Loading…</p>}>
+            <HelpView section={helpRoute.section} anchor={helpRoute.anchor} />
+          </Suspense>
         )}
       </div>
     </div>

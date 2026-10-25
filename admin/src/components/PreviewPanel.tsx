@@ -8,6 +8,7 @@ import {
   type WalkSpeed,
 } from '@audioworld/shared';
 import type { PreviewBlip, PreviewEngine } from '../services/previewEngine';
+import HelpLink from './HelpLink';
 
 interface Props {
   engine: PreviewEngine;
@@ -18,6 +19,8 @@ interface Props {
   savingZones: boolean;
   onZoneUpdate: (id: string, patch: Partial<AcousticZone>) => void;
   onSaveZones: () => void;
+  /** False while the panel is out of sight (the help is open): keys then belong to the page. */
+  keysActive?: boolean;
 }
 
 /** Compass arrow for a relative azimuth (0 = ahead / up). */
@@ -37,6 +40,7 @@ export default function PreviewPanel({
   savingZones,
   onZoneUpdate,
   onSaveZones,
+  keysActive = true,
 }: Props) {
   const [audible, setAudible] = useState<PreviewBlip[]>([]);
   const [heading, setHeading] = useState(0);
@@ -68,6 +72,7 @@ export default function PreviewPanel({
   // Hold to walk / turn. Capture phase + stopPropagation so Leaflet's own arrow-key
   // panning (when the map has focus) doesn't fight the listener.
   useEffect(() => {
+    if (!keysActive) return;
     const onDown = (e: KeyboardEvent) => {
       engine.sprint = e.shiftKey;
       // macOS swallows the keyup of a key released while ⌘ is down — drop everything
@@ -95,7 +100,7 @@ export default function PreviewPanel({
       window.removeEventListener('blur', onBlur);
       engine.releaseAll();
     };
-  }, [engine]);
+  }, [engine, keysActive]);
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
@@ -114,6 +119,7 @@ export default function PreviewPanel({
       <div className="section-title">
         <span className="dot" style={{ background: '#7c5cff' }} />
         Playtest · {audible.length} audible
+        <HelpLink to="provlyssna" label="provlyssna" />
       </div>
 
       <p className="geo-status">

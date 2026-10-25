@@ -1,6 +1,7 @@
 import type { Coordinates } from '@audioworld/shared';
 import { pathLength } from '@audioworld/shared';
 import ConfirmButton from './ConfirmButton';
+import HelpLink from './HelpLink';
 
 /** Walking pace used for the route's time estimate (m/s, an easy stroll). */
 const WALK_MPS = 1.3;
@@ -29,7 +30,10 @@ export default function RoutePanel({ route, drawing, draftLen, onDraw, onUndo, o
   const length = route && route.length >= 2 ? pathLength(route) : 0;
   return (
     <section className="section route-panel">
-      <div className="section-title">Planned route</div>
+      <div className="section-title">
+        Planned route
+        <HelpLink to="rutt" label="planerad rutt" />
+      </div>
       <p className="hint">
         The way you mean listeners to walk, start to finish. It’s drawn on their map, and the AI
         assistant follows it when it places points.

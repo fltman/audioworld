@@ -1,5 +1,6 @@
 import type { PointType } from '@audioworld/shared';
 import { POINT_TYPE_META, POINT_TYPE_ORDER } from '../pointTypes';
+import HelpLink from './HelpLink';
 
 interface Props {
   activeType: PointType | null;
@@ -12,7 +13,10 @@ interface Props {
 export default function Toolbar({ activeType, placing, disabled, onPick, onCancel }: Props) {
   return (
     <section className="section">
-      <div className="section-title">Place a point</div>
+      <div className="section-title">
+        Place a point
+        <HelpLink to="punkter/placera" label="placera en punkt" />
+      </div>
       <div className="type-grid">
         {POINT_TYPE_ORDER.map((t) => {
           const meta = POINT_TYPE_META[t];

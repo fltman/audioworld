@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Role, User } from '@audioworld/shared';
 import { api } from '../api';
+import HelpLink from './HelpLink';
 
 const ROLES: Role[] = ['basic', 'superuser', 'admin'];
 const ROLE_CLASS: Record<Role, string> = {
@@ -78,6 +79,7 @@ export default function UsersPanel({ me }: { me: User }) {
       <div className="users__head">
         <div className="section-title" style={{ margin: 0 }}>
           Team <span className="count-pill">{users.length}</span>
+          <HelpLink to="anvandare" label="användare och roller" />
         </div>
         {users.length > 4 && (
           <input

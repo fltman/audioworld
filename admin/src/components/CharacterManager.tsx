@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Character, CharacterInput, ElevenVoice, UploadListItem } from '@audioworld/shared';
 import { ApiError, absoluteAudioUrl, api } from '../api';
 import ConfirmButton from './ConfirmButton';
+import HelpLink from './HelpLink';
 
 interface Props {
   characters: Character[];
@@ -165,6 +166,7 @@ export default function CharacterManager({ characters, onChange }: Props) {
             + New guide
           </button>
         )}
+        <HelpLink to="guider" label="guider" />
       </div>
 
       <p className="muted">

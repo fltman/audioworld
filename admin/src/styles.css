@@ -2556,3 +2556,399 @@ input[type='range'] {
   color: var(--text);
   border-color: var(--accent);
 }
+
+/* ---------- Help: docs view, "?" links ---------- */
+/* The course workspace (sidebar | map | inspector) as one block, so it can stay mounted
+   (hidden) while the help is open over it. */
+.course-layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.workspace > .is-hidden {
+  display: none;
+}
+
+/* A small round "?" that opens the help at the matching section. */
+.help-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+}
+.help-link:hover,
+.help-link:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+.legend-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.help {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.help__nav {
+  width: 300px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 14px 12px 40px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+.help__search {
+  position: sticky;
+  top: -14px;
+  z-index: 1;
+  margin: -14px -12px 6px;
+  padding: 14px 12px 8px;
+  background: var(--panel);
+}
+.help__group-title {
+  margin: 14px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.help__toc,
+.help__sub,
+.help__results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.help__toc a,
+.help__sub a {
+  display: block;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.help__toc a:hover,
+.help__sub a:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.help__toc a.is-active {
+  color: var(--text);
+  background: var(--accent-tint);
+  font-weight: 600;
+}
+.help__sub {
+  margin: 2px 0 6px 12px;
+  padding-left: 6px;
+  border-left: 1px solid var(--line);
+}
+.help__sub a {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.help__sub a.is-active {
+  color: var(--accent-light);
+}
+.help__count {
+  margin: 4px 8px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.help__hit {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-decoration: none;
+}
+.help__hit:hover,
+.help__hit.is-active {
+  background: var(--panel-2);
+}
+.help__hit-where {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-light);
+}
+.help__hit-snippet {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.help__main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  scroll-padding-top: 16px;
+}
+.help__article {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 28px 36px 80px;
+}
+.help__pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 48px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.help__pager-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.help__pager-link span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.help__pager-link:hover {
+  border-color: var(--accent);
+}
+.help__pager-link--next {
+  margin-left: auto;
+  text-align: right;
+}
+
+/* The help pages' Markdown. */
+.doc {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.doc h1 {
+  margin: 0 0 14px;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.doc h2 {
+  margin: 36px 0 10px;
+  padding-top: 20px;
+  font-size: 19px;
+  line-height: 1.3;
+  border-top: 1px solid var(--line);
+}
+.doc h3 {
+  margin: 26px 0 6px;
+  font-size: 15px;
+}
+.doc h4 {
+  margin: 18px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.doc p {
+  margin: 0 0 12px;
+}
+.doc ul,
+.doc ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.doc li + li {
+  margin-top: 4px;
+}
+.doc li > ul {
+  margin: 4px 0 0;
+}
+.doc a {
+  color: var(--accent-light);
+}
+.doc strong {
+  font-weight: 650;
+}
+.doc code {
+  padding: 1px 5px;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.doc kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+.doc blockquote {
+  margin: 0 0 14px;
+  padding-left: 12px;
+  color: var(--muted);
+  border-left: 2px solid var(--line);
+}
+.doc hr {
+  margin: 28px 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.doc-anchor {
+  margin-left: 8px;
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: none;
+  opacity: 0;
+}
+.doc h2:hover .doc-anchor,
+.doc h3:hover .doc-anchor,
+.doc h4:hover .doc-anchor,
+.doc-anchor:focus-visible {
+  opacity: 1;
+}
+.doc .doc-anchor {
+  color: var(--muted);
+}
+.doc-table {
+  margin: 0 0 16px;
+  overflow-x: auto;
+}
+.doc-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.doc-table th,
+.doc-table td {
+  padding: 7px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.doc-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.doc-callout {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--accent-tint);
+}
+.doc-callout p:last-child {
+  margin-bottom: 0;
+}
+.doc-callout__label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-light);
+}
+.doc-callout--tip {
+  border-left-color: var(--success);
+  background: var(--success-tint);
+}
+.doc-callout--tip .doc-callout__label {
+  color: var(--success);
+}
+.doc-callout--note {
+  border-left-color: var(--info);
+  background: var(--info-tint);
+}
+.doc-callout--note .doc-callout__label {
+  color: var(--info);
+}
+.doc-callout--warning {
+  border-left-color: var(--warn);
+  background: var(--warn-tint);
+}
+.doc-callout--warning .doc-callout__label {
+  color: var(--warn);
+}
+.doc-code {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.doc-figure {
+  margin: 0 0 18px;
+}
+.doc-figure img {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.doc-figure figcaption {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.doc-video video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.doc-inline-img {
+  max-height: 1.4em;
+  vertical-align: middle;
+}
+.doc-mark {
+  padding: 0 1px;
+  color: var(--text);
+  background: var(--warn-tint);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 -1px 0 var(--warn-strong);
+}
+.discover .section-title {
+  margin-bottom: 0;
+}

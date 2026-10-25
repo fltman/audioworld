@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FlightIssue } from '@audioworld/shared';
 import ShareCourse from './ShareCourse';
+import HelpLink from './HelpLink';
 
 interface Props {
   courseId: string;
@@ -80,6 +81,7 @@ export default function PublishBar({
           >
             {publishing ? 'Publishing…' : publishedAt ? 'Publish changes' : 'Publish'}
           </button>
+          <HelpLink to="publicera" label="publicera och flight check" />
         </div>
       </div>
 

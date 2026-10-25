@@ -1,4 +1,5 @@
 import type { AudioPoint, CourseAnalytics } from '@audioworld/shared';
+import HelpLink from './HelpLink';
 
 interface Props {
   analytics: CourseAnalytics | null;
@@ -18,6 +19,7 @@ export default function AnalyticsPanel({ analytics, points, loading }: Props) {
     <section className="section">
       <div className="section-title">
         Analytics{sessions > 0 ? ` · ${sessions} session${sessions === 1 ? '' : 's'}` : ''}
+        <HelpLink to="statistik" label="statistik" />
       </div>
       {loading ? (
         <p className="muted">Loading…</p>

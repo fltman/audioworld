@@ -12,6 +12,7 @@ import { absoluteAudioUrl } from '../api';
 import { createVoice, deleteChat, getChat, importChat, listChats, streamAssistant } from '../services/assistant';
 import ConfirmButton from './ConfirmButton';
 import Markdown from './Markdown';
+import HelpLink from './HelpLink';
 
 interface Props {
   courseId: string;
@@ -433,7 +434,10 @@ export default function AssistantPanel({ courseId, guides, hidden, onChanged, co
   return (
     <section className="section ai" hidden={hidden}>
       <div className="ai__head">
-        <span className="section-title">AI assistant</span>
+        <span className="section-title">
+          AI assistant
+          <HelpLink to="ai-assistent" label="AI-assistenten" />
+        </span>
         <div className="ai__chatbar">
           <select
             className="select ai__chats"

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import HelpLink from './HelpLink';
 
 interface Props {
   onCreate: (name: string, description: string) => void;
@@ -17,7 +18,10 @@ export default function NewCourseForm({ onCreate, onCancel }: Props) {
 
   return (
     <section className="section form">
-      <div className="section-title">New course</div>
+      <div className="section-title">
+        New course
+        <HelpLink to="kom-igang/ny-runda" label="skapa en runda" />
+      </div>
       <label className="form-field">
         <span className="label">Name</span>
         <input

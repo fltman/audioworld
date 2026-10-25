@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AudioPoint } from '@audioworld/shared';
 import { POINT_TYPE_META } from '../pointTypes';
+import HelpLink from './HelpLink';
 
 interface Props {
   points: AudioPoint[];
@@ -15,7 +16,10 @@ export default function PointList({ points, onEdit, onDelete, editingId }: Props
 
   return (
     <section className="section">
-      <div className="section-title">Points ({points.length})</div>
+      <div className="section-title">
+        Points ({points.length})
+        <HelpLink to="punkter/punktlistan" label="punktlistan" />
+      </div>
       {points.length === 0 ? (
         <p className="muted">Pick a type above and click the map to add one.</p>
       ) : (

@@ -7,6 +7,7 @@ import type {
   ScoutWaypoint,
 } from '@audioworld/shared';
 import { ApiError, absoluteAudioUrl, api } from '../api';
+import HelpLink from './HelpLink';
 
 interface Props {
   waypoints: ScoutWaypoint[];
@@ -162,7 +163,10 @@ export default function ScoutConvertPanel({ waypoints, courseId, onPointsCreated
 
   return (
     <section className="section">
-      <div className="section-title">POI → audio points (AI)</div>
+      <div className="section-title">
+        POI → audio points (AI)
+        <HelpLink to="scout/poi" label="gör om scoutpunkter till ljudpunkter" />
+      </div>
       {!courseId && <p className="muted">Select a course above to place points into.</p>}
       <p className="muted">
         The AI reads each POI’s note + photos and drafts narration; a guide voice speaks it

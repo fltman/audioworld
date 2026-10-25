@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SyncMode } from '@audioworld/shared';
+import HelpLink from './HelpLink';
 
 interface Props {
   count: number;
@@ -43,6 +44,7 @@ export default function BulkBar({
           <button type="button" className="btn btn-ghost small" onClick={onClear} disabled={busy || none}>
             Clear
           </button>
+          <HelpLink to="flerval" label="Multi-select" />
         </div>
       </div>
 

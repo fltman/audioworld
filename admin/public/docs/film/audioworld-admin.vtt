@@ -1,0 +1,310 @@
+WEBVTT
+
+00:00:00.600 --> 00:00:01.600
+Hej!
+
+00:00:01.400 --> 00:00:02.400
+Jag heter Lova.
+
+00:00:02.840 --> 00:00:08.920
+I den här filmen visar jag hur man bygger en ljudvandring i AudioWorld, och vad man kan göra i admin.
+
+00:00:09.720 --> 00:00:12.440
+Först bygger vi grunderna i en ny runda.
+
+00:00:12.760 --> 00:00:19.000
+Sedan går vi igenom demorundan Kalmar i lurarna, där varje punkt visar en ny möjlighet.
+
+00:00:20.566 --> 00:00:23.686
+När du har loggat in hamnar du på fliken Courses.
+
+00:00:24.166 --> 00:00:34.846
+Överst finns flikarna: Courses för rundorna, Sounds för ljudbiblioteket, Guides för dina guider, och Help, där hela dokumentationen finns.
+
+00:00:35.126 --> 00:00:44.486
+Här väljer du vilken runda du arbetar med, med plus New skapar du en ny, och Playtest låter dig provlyssna direkt i webbläsaren.
+
+00:00:44.726 --> 00:00:51.766
+Till vänster finns publiceringen, de fem punkttyperna, verktygen och listan med alla punkter.
+
+00:00:52.006 --> 00:00:53.606
+I mitten ligger kartan.
+
+00:00:54.086 --> 00:00:56.246
+Varje färg är en punkttyp.
+
+00:00:57.799 --> 00:00:59.559
+Vi börjar med en ny runda.
+
+00:00:59.799 --> 00:01:04.439
+Klicka på plus New, skriv ett namn och klicka på Create.
+
+00:01:04.919 --> 00:01:07.959
+Leta sedan upp platsen med sökrutan på kartan.
+
+00:01:08.519 --> 00:01:16.199
+Under Settings fyller du i det besökaren ser på rundans startsida: namn, beskrivning och omslagsbild.
+
+00:01:16.439 --> 00:01:20.239
+Idén och bakgrunden längre ner är dina egna anteckningar.
+
+00:01:20.439 --> 00:01:24.359
+Besökaren ser dem aldrig, men AI-assistenten läser dem.
+
+00:01:24.599 --> 00:01:26.119
+Glöm inte att spara.
+
+00:01:27.666 --> 00:01:32.266
+Rita sedan rutten, alltså vägen du vill att besökaren ska gå.
+
+00:01:32.546 --> 00:01:37.746
+Klicka på Route och Draw the route, och klicka ut hörnen längs vägen.
+
+00:01:38.306 --> 00:01:41.666
+Dubbelklicka eller klicka på Finish när du är framme.
+
+00:01:41.986 --> 00:01:45.746
+Admin räknar ut längden och ungefär hur lång tid det tar att gå.
+
+00:01:46.226 --> 00:01:51.426
+Rutten ritas ut på besökarens karta, och du kan dra i hörnen för att justera den.
+
+00:01:52.969 --> 00:01:55.209
+Nu placerar vi en ljudpunkt.
+
+00:01:55.529 --> 00:01:59.369
+Välj Static och klicka på kartan där ljudet ska finnas.
+
+00:01:59.609 --> 00:02:02.209
+Cirkeln visar hur långt bort det hörs.
+
+00:02:02.489 --> 00:02:06.369
+Ge punkten ett namn och skriv vad den handlar om i faktarutan.
+
+00:02:06.649 --> 00:02:10.729
+Under Narrate this point väljer du en röst eller en guide.
+
+00:02:11.049 --> 00:02:19.089
+Write narration låter AI:n skriva en berättelse av faktan, i guidens ton, och texten kan du sedan redigera fritt.
+
+00:02:19.369 --> 00:02:24.889
+Render audio läser in den med ElevenLabs, och klippet hamnar direkt i punkten.
+
+00:02:25.129 --> 00:02:27.929
+Justera den hörbara radien och spara.
+
+00:02:29.474 --> 00:02:34.994
+En akustisk zon ger ett område en egen klang och en egen bakgrund.
+
+00:02:35.034 --> 00:02:39.794
+Öppna Zones och rita zonen, hörn för hörn, och klicka på Finish.
+
+00:02:40.354 --> 00:02:46.834
+Välj karaktär på efterklangen, till exempel hall eller tunnel, och hur mycket den ska höras.
+
+00:02:47.074 --> 00:02:51.714
+Lägg gärna till en bakgrundsloop från ljudbiblioteket, och lyssna med Preview.
+
+00:02:52.194 --> 00:02:54.834
+Spara med Save zone changes.
+
+00:02:56.774 --> 00:02:58.774
+Nu byter vi till demorundan.
+
+00:02:59.334 --> 00:03:07.094
+Kalmar i lurarna går från Kalmar Turistcenter genom Kvarnholmen till Kalmar slott, drygt två kilometer.
+
+00:03:07.414 --> 00:03:09.774
+Den streckade linjen är rutten.
+
+00:03:10.054 --> 00:03:15.374
+Varje punkt visar en möjlighet, och guiden förklarar den medan besökaren går.
+
+00:03:15.734 --> 00:03:18.374
+Nu tittar vi på hur punkterna är inställda.
+
+00:03:19.922 --> 00:03:23.122
+Välkomstpunkten är en vanlig statisk punkt.
+
+00:03:23.682 --> 00:03:28.042
+Play once betyder att berättelsen bara spelas en gång.
+
+00:03:28.482 --> 00:03:31.842
+Under Narration languages finns en engelsk version.
+
+00:03:32.002 --> 00:03:35.602
+Den som har engelska på telefonen hör den i stället.
+
+00:03:35.842 --> 00:03:42.402
+Domkyrkans klockor ligger trettiofem meter upp, och går i en slinga med fyrtiofem sekunders paus.
+
+00:03:42.482 --> 00:03:48.242
+Rådmannen är ett riktat ljud: han är vänd mot torget och hörs inte bakom sig.
+
+00:03:48.322 --> 00:03:55.362
+När besökaren har hört honom sätts flaggan RÅDMANNEN, och Next sound pekar ut vart man ska gå sedan.
+
+00:03:56.922 --> 00:03:58.762
+Ljud kan också röra sig.
+
+00:03:59.402 --> 00:04:04.362
+Måsarna över gästhamnen är ett cirklande ljud, med radie och fart.
+
+00:04:05.002 --> 00:04:08.042
+Måsen som vill ha din glass är ett följande ljud.
+
+00:04:08.522 --> 00:04:12.522
+Den väntar tills du kommer nära, och cirklar sedan runt ditt huvud.
+
+00:04:13.082 --> 00:04:23.402
+Ett följande ljud kan också sitta på dig, svepa från öra till öra, eller jaga dig, som hunden på stranden, som ger upp när du är arton meter bort.
+
+00:04:24.955 --> 00:04:27.355
+Stadsvakten är en väg med stopp.
+
+00:04:27.915 --> 00:04:34.075
+Han går längs gatorna från Stortorget till Västerport, och kartan visar när han når varje hörn.
+
+00:04:34.715 --> 00:04:37.795
+Vid fyra av hörnen stannar han och berättar.
+
+00:04:38.155 --> 00:04:44.035
+Varje stopp kan få en egen berättelse, skriven och inläst på samma sätt som en punkt.
+
+00:04:44.395 --> 00:04:51.355
+Med Wait for the listener väntar han in besökaren, och Show direction and distance visar var han är.
+
+00:04:51.675 --> 00:04:56.875
+Han kräver flaggan RÅDMANNEN, så han vaknar först när man har hört rådmannen.
+
+00:04:58.422 --> 00:05:01.462
+Några ljud väntar på rätt ögonblick.
+
+00:05:01.782 --> 00:05:04.902
+Portvakten i Västerport är ett skrämselljud.
+
+00:05:05.382 --> 00:05:10.582
+Han är tyst tills besökaren är sju meter bort, och han är dold på skärmen.
+
+00:05:10.902 --> 00:05:16.822
+Koltrasten sjunger först när man har stått still i fem sekunder, och tystnar när man rör sig.
+
+00:05:17.142 --> 00:05:19.542
+Kanonkulan är en utlöst väg.
+
+00:05:19.942 --> 00:05:27.222
+Den startar när besökaren kommer inom räckhåll och flyger femton meter upp, och när den har landat försvinner den.
+
+00:05:27.542 --> 00:05:35.302
+Skeppet Kalmar Nyckel seglar på en gemensam klocka, Global, så att alla hör det på samma plats samtidigt.
+
+00:05:36.855 --> 00:05:39.295
+Flaggor styr berättelsen.
+
+00:05:39.655 --> 00:05:46.215
+I Stadsparken pekar Next sound mot två vägar, och på kartan syns det som streckade pilar.
+
+00:05:46.535 --> 00:05:51.535
+Drottningens väg och källarmästarens väg ligger i samma exklusiva grupp.
+
+00:05:51.815 --> 00:05:56.695
+Den väg besökaren går in på först sätter sin flagga, och låser den andra.
+
+00:05:57.175 --> 00:06:03.695
+Drottning Margareta kräver flaggan DROTTNINGEN, så den som valde källarmästaren hör henne aldrig.
+
+00:06:03.975 --> 00:06:08.775
+Innan du publicerar kontrollerar admin att varje flagga går att nå.
+
+00:06:10.322 --> 00:06:12.722
+Innan du publicerar kan du provlyssna.
+
+00:06:13.282 --> 00:06:16.242
+Klicka på Playtest och ta på dig hörlurarna.
+
+00:06:16.802 --> 00:06:19.682
+En virtuell lyssnare står vid första punkten.
+
+00:06:19.922 --> 00:06:23.762
+Klicka på kartan för att gå dit, eller gå med piltangenterna.
+
+00:06:24.322 --> 00:06:29.242
+Panelen visar vilka ljud som hörs, från vilket håll och hur långt bort.
+
+00:06:29.522 --> 00:06:32.002
+Du kan gå, jogga eller cykla.
+
+00:06:32.482 --> 00:06:35.682
+Rörliga ljud syns på kartan medan du lyssnar.
+
+00:06:36.002 --> 00:06:37.842
+Stop avslutar.
+
+00:06:39.389 --> 00:06:46.589
+AI-assistenten känner hela rundan: idén, bakgrunden, rutten och alla punkter.
+
+00:06:46.989 --> 00:06:51.629
+Öppna AI assistant och fråga, eller be den bygga något.
+
+00:06:51.709 --> 00:07:00.109
+Den kan skapa och ändra punkter, skriva texter, ta fram guider och röster, ljudeffekter och omslagsbilder.
+
+00:07:00.189 --> 00:07:04.829
+När den förklarar något som har med platser att göra visar den det på kartan.
+
+00:07:04.909 --> 00:07:07.069
+Den kan aldrig radera något.
+
+00:07:11.022 --> 00:07:13.662
+Under Sounds finns ljudbiblioteket.
+
+00:07:14.142 --> 00:07:19.422
+Här genererar du ljudeffekter och tal med AI, genom att beskriva ljudet.
+
+00:07:19.742 --> 00:07:25.862
+Varje klipp får ett kort där du kan lyssna och döpa om det, och se hur många punkter som använder det.
+
+00:07:26.382 --> 00:07:29.742
+Under Guides skapar du återanvändbara guider.
+
+00:07:29.902 --> 00:07:38.382
+En guide har ett namn, en persona som AI:n skriver i, en röst, och ett ljud som spelas när guiden går mellan stoppen.
+
+00:07:43.255 --> 00:07:44.855
+När allt är klart publicerar du.
+
+00:07:44.935 --> 00:07:49.175
+Flight check visar fel som måste rättas, och varningar.
+
+00:07:49.655 --> 00:07:51.095
+Klicka på Publish.
+
+00:07:51.575 --> 00:07:55.335
+Under Share får du länken och en QR-kod att skriva ut.
+
+00:07:55.815 --> 00:08:05.335
+Under Settings kan du ändra rundans korta adress, visa besökaren vägen till start, och exportera eller importera hela rundan som en fil.
+
+00:08:05.815 --> 00:08:13.335
+Analytics visar anonymt hur långt besökarna har kommit, och med Multi-select ändrar du många punkter på en gång.
+
+00:08:15.430 --> 00:08:17.750
+All dokumentation finns i admin.
+
+00:08:18.310 --> 00:08:24.430
+Under Help förklaras varje knapp och fält, och du kan söka, till exempel på flaggor.
+
+00:08:24.710 --> 00:08:28.710
+Frågetecknen i panelerna tar dig direkt till rätt avsnitt.
+
+00:08:30.264 --> 00:08:31.944
+Det var allt för den här gången.
+
+00:08:32.184 --> 00:08:39.144
+Gå gärna demorundan själv: starta vid Kalmar Turistcenter, ta på dig hörlurarna och följ pilen.
+
+00:08:39.184 --> 00:08:42.264
+Och har du frågor, så finns svaren under Help.
+
+00:08:42.504 --> 00:08:44.424
+Lycka till med din egen runda!

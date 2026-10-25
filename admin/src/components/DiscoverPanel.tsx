@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { BBox, DiscoveredPlace, PlaceCategory } from '@audioworld/shared';
 import { PLACE_CATEGORIES } from '@audioworld/shared';
 import { api } from '../api';
+import HelpLink from './HelpLink';
 
 interface Props {
   /** Current map viewport (the area searched). */
@@ -58,7 +59,11 @@ export default function DiscoverPanel({
   };
 
   return (
-    <div className="discover">
+    <section className="section discover">
+      <div className="section-title">
+        Discover places
+        <HelpLink to="upptack" label="Discover" />
+      </div>
       <div className="discover-cats">
         {PLACE_CATEGORIES.map((c) => (
           <label key={c.key} className="check">
@@ -149,6 +154,6 @@ export default function DiscoverPanel({
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

@@ -23,6 +23,7 @@ import { POINT_TYPE_META, POINT_TYPE_ORDER, isPathType } from '../pointTypes';
 import { absoluteAudioUrl } from '../api';
 import type { PreviewEngine, PreviewFrame } from '../services/previewEngine';
 import { GhostLayer } from './ghostLayer';
+import HelpLink from './HelpLink';
 
 const ACCENT = '#7c5cff';
 /** The planned route (warm, so it reads apart from the purple authoring accent). */
@@ -267,6 +268,8 @@ export default function MapView(props: Props) {
   const scoutLayerRef = useRef<L.LayerGroup | null>(null);
   const discoverLayerRef = useRef<L.LayerGroup | null>(null);
   const clickTimer = useRef<number | null>(null);
+  // A fit asked for while the map was hidden (under the help): done once it's visible.
+  const pendingFit = useRef(false);
   const stateRef = useRef(props);
   stateRef.current = props;
 
@@ -288,11 +291,19 @@ export default function MapView(props: Props) {
       DEFAULT_ZOOM
     );
     mapRef.current = map;
+    // Dev only: a handle for scripted runs (the admin film in scripts/admin-film).
+    if (import.meta.env.DEV) (window as unknown as { __awMap?: L.Map }).__awMap = map;
 
     // Re-measure whenever the container resizes: the initial flex layout settling, the
     // right-hand inspector opening/closing (which changes the map width), and window
     // resizes. Without this Leaflet keeps a stale size and tiles render offset.
-    const resizeObs = new ResizeObserver(() => map.invalidateSize());
+    const resizeObs = new ResizeObserver(() => {
+      map.invalidateSize();
+      if (pendingFit.current && map.getSize().x > 0) {
+        pendingFit.current = false;
+        fitToPoints(map, stateRef.current.points);
+      }
+    });
     resizeObs.observe(containerRef.current);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -822,6 +833,11 @@ export default function MapView(props: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    // A hidden map has no size to fit to — fit when it's shown instead.
+    if (map.getSize().x === 0) {
+      pendingFit.current = true;
+      return;
+    }
     fitToPoints(map, stateRef.current.points);
   }, [props.fitToken]);
 
@@ -911,6 +927,10 @@ export default function MapView(props: Props) {
       )}
 
       <div className="legend">
+        <div className="legend-head">
+          Map
+          <HelpLink to="kartan/symboler" label="kartans symboler" />
+        </div>
         {POINT_TYPE_ORDER.map((t) => (
           <div key={t} className="legend-row">
             <span className="dot" style={{ background: POINT_TYPE_META[t].color }} />

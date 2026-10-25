@@ -10,6 +10,7 @@ import { api } from '../api';
 import { ZonePreview, type TestSound } from '../services/zonePreview';
 import ConfirmButton from './ConfirmButton';
 import { clipName, effectiveKind, isAudio, type Kind } from './SoundLibrary';
+import HelpLink from './HelpLink';
 
 const REVERBS: ReverbCharacter[] = ['outdoor', 'room', 'hall', 'cathedral', 'tunnel'];
 
@@ -202,6 +203,7 @@ export default function ZonePanel({
       <div className="section-title">
         Acoustic zones ({zones.length})
         {dirty && <span className="section-head__badge">· unsaved</span>}
+        <HelpLink to="zoner" label="akustiska zoner" />
       </div>
 
       {drawing ? (
