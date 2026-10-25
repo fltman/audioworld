@@ -17,6 +17,7 @@ import type {
 import { flightCheck, isValidSlug, MAX_SLUG_LENGTH } from '@audioworld/shared';
 import * as Courses from '../models/course';
 import * as Points from '../models/point';
+import * as Uploads from '../models/upload';
 import { ValidationError } from '../lib/mapping';
 import { asyncHandler } from '../lib/http';
 import { buildBundle, extForAsset, rewritePointUrls, rewriteZoneUrls } from '../lib/bundle';
@@ -193,6 +194,10 @@ function parseBundle(buf: Buffer): CourseBundle {
       throw new ValidationError('Each asset needs string url, filename, mime and data');
     }
     if (o.data.length > MAX_ASSET_B64) throw new ValidationError('An audio asset is too large');
+    // Optional library name + kind: keep them only when well-formed.
+    if (typeof o.description === 'string') o.description = o.description.slice(0, 500);
+    else delete o.description;
+    if (o.kind !== 'sfx' && o.kind !== 'voice') delete o.kind;
   }
   return {
     format: 'audioworld-course',
@@ -450,6 +455,9 @@ coursesRouter.get(
     if (!course) return;
     const points = await Points.listByCourse(course.id);
     const bundle = buildBundle(course, points);
+    // Carry each clip's library name + kind, so an imported course's sounds keep their names.
+    const meta = await Uploads.metaFor(bundle.assets.map((a) => a.filename));
+    for (const a of bundle.assets) Object.assign(a, meta.get(a.filename));
     const safe = (course.name || 'course').replace(/[^\w.-]+/g, '_').slice(0, 60) || 'course';
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${safe}.audioworld"`);
@@ -488,6 +496,7 @@ coursesRouter.post(
       writeFileSync(join(UPLOAD_DIR, name), Buffer.from(asset.data, 'base64'));
       writtenFiles.push(name);
       urlMap.set(asset.url, `/uploads/${name}`);
+      if (asset.description || asset.kind) await Uploads.setMeta(name, asset.description ?? '', asset.kind ?? null);
     }
 
     // If any part fails mid-import, roll back so we don't leave a half-imported course

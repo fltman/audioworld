@@ -450,6 +450,9 @@ export interface CourseBundleAsset {
   mime: string;
   /** base64-encoded file bytes. */
   data: string;
+  /** The clip's name in the sound library and its kind, so they survive the move. */
+  description?: string;
+  kind?: ClipKind;
 }
 
 /**
