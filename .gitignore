@@ -20,3 +20,8 @@ _old_scaffold/
 
 # Generated audio for the Svinö Halloween course (rebuilt by scripts/svino-halloween)
 scripts/svino-halloween/audio/
+scripts/kalmar-demo/audio/
+scripts/admin-film/out/
+
+# The admin film is ~70 MB: built by scripts/admin-film, copied to the server on deploy
+admin/public/docs/film/*.mp4

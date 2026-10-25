@@ -128,6 +128,13 @@ the image model (default `google/gemini-3-pro-image`; images are saved as WebP).
 course and author — pick one to carry on, **New** starts another — and before each reply the assistant is told what
 you changed in the editor since its last one (edited, new and deleted points, course texts, route, zones, guides).
 
+### Help (admin)
+
+**Help** in the top bar is the full authoring documentation, in Swedish: every button, field and tool, a getting
+started guide, concepts, tips, FAQ and a glossary. The **?** in each panel opens the matching section. The docs are
+Markdown in `admin/src/docs/` (one file per section, listed in `admin/src/docs/index.ts`), and any heading can be
+linked as `#help/<section>/<anchor>`.
+
 ### Try it on a real phone
 
 GPS + compass require a **secure context**. Expose the client over HTTPS (e.g. an ngrok/Cloudflare tunnel to
@@ -151,6 +158,35 @@ audioworld/
 npm run typecheck    # typecheck every workspace
 npm run build:shared # rebuild the shared package (needed after editing shared/src)
 npm run db:down      # stop PostgreSQL
+```
+
+### Demo walk: "Kalmar i lurarna" (Destination Kalmar)
+
+`scripts/kalmar-demo/` builds a walk from Kalmar Turistcenter through Kvarnholmen to Kalmar slott (~2.3 km,
+~40 min) that explains AudioWorld as you walk it: a guide, Lova, explains each concept as you meet it, and Kalmar
+figures demonstrate it. Every point type and most point settings are in it: the radius, a circling sound, follow
+(orbit and chase), height and a looping sound with a pause, a directional sound, flags, a path with stops that waits
+for the listener, a tunnel zone with occlusion, a jumpscare, a hidden point, an exclusive choice of ways, several next
+sounds, stand-still and flee-on-move, a triggered path with Doppler, global timing and language variants. Each point's
+facts start with `KONCEPT:` so the admin shows what it demonstrates.
+
+```bash
+ELEVENLABS_API_KEY=… node scripts/kalmar-demo/render.mjs     # voices + effects → audio/out (cached)
+node scripts/kalmar-demo/build.mjs kalmar-demo.audioworld scripts/kalmar-demo/cover.webp
+```
+
+Then import the file in the admin (⚙️ Settings → **⭱ Import**) and publish it.
+
+### Admin film
+
+`scripts/admin-film/` records the Swedish instruction film about the admin: a scripted browser builds a small walk
+and goes through the demo walk while Lova narrates. It needs the dev stack running, the demo walk imported and an
+admin account; output goes to `scripts/admin-film/out/` (mp4, WebVTT captions, chapters). One scene can be
+re-recorded on its own after a UI change.
+
+```bash
+npm i --no-save playwright@1.56.1
+FILM_EMAIL=… FILM_PASSWORD=… ELEVENLABS_API_KEY=… node scripts/admin-film/record.mjs [scene-id …]
 ```
 
 ## Roadmap
